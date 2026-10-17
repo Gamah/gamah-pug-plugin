@@ -276,6 +276,18 @@ public partial class Gpp
         foreach (var player in Utilities.GetPlayers().Where(p => p.IsValid && !p.IsHLTV)) Send(player, panel);
     }
 
+    // Ruler only. Send() clips each line to HudWidth, which is exactly the number the ruler exists to
+    // check - clipping here would hide the wrap that is being measured.
+    internal static void BroadcastRaw(string alert, List<string> panel)
+    {
+        string body = string.Join("\n", panel.Take(HudLines));
+        foreach (var player in Utilities.GetPlayers().Where(p => p.IsValid && !p.IsHLTV))
+        {
+            player.PrintToCenterAlert(alert);
+            player.PrintToCenter(body);
+        }
+    }
+
     // Four lines of eighty, bottom-anchored: anything past that pushes the first line off the top, so the
     // panel is clipped here rather than by the client.
     private static void Send(CCSPlayerController player, List<string> panel)

@@ -231,6 +231,12 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
                     ? $"Keeping {size} bots on the server for a test run."
                     : "Bots off.");
                 break;
+            case "ruler":
+                HudRulerProbe(arg);
+                break;
+            case "rulerspace":
+                HudSpaceProbe();
+                break;
             case "hudsize":
                 HudSizeProbe();
                 break;
