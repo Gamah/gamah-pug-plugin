@@ -232,6 +232,10 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
                     ? $"Keeping {size} bots on the server for a test run."
                     : "Bots off.");
                 break;
+            case "preview":
+                if (arg == "stop") { StopPreview(); StopHud(); Reply(command, "Preview stopped."); }
+                else HudPreview();
+                break;
             case "ruler":
                 HudRulerProbe(arg, size);
                 break;

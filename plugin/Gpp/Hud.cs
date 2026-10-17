@@ -237,7 +237,7 @@ public partial class Gpp
     // between cells and a hard stop at the budget is uglier in theory and holds together in practice.
     private const string CellGap = "   ";
 
-    private static List<string> Columns(IEnumerable<string> cells, int perRow = 0)
+    internal static List<string> Columns(IEnumerable<string> cells, int perRow = 0)
     {
         var lines = new List<string>();
         var line = new StringBuilder();
@@ -283,7 +283,7 @@ public partial class Gpp
     // The alert box takes four lines like the panel does, and stacking the state down them beats running
     // it along one line and letting the box wrap wherever it likes - a wrapped alert broke mid-word and
     // cost a line anyway. Each part is clipped on its own so a long name cannot push the clock off.
-    private static string Alert(params string?[] parts)
+    internal static string Alert(params string?[] parts)
     {
         var lines = parts
             .Where(part => !string.IsNullOrWhiteSpace(part))
