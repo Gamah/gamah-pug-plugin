@@ -260,7 +260,7 @@ public partial class Gpp
             return;
         }
 
-        string header = $"Undrafted ({_available.Count}) - pick with !<number>:";
+        string header = $"Undrafted ({_available.Count}) - pick with !1, !2, ...:";
         var lines = new List<string>();
         for (int i = 0; i < _available.Count; i++)
         {
@@ -313,12 +313,12 @@ public partial class Gpp
 
         var captain = PlayerBySteamId(CurrentCaptain());
         Prompt($"{Colorize("{green}")}{Name(CurrentCaptain())}{Colorize("{default}")} picks ({_available.Count} left).",
-            "!<number>", $"{Name(CurrentCaptain())} only");
+            "pick now - !1, !2, ...", $"{Name(CurrentCaptain())} only");
         // With the HUD up the captains already have the list on screen; chat only repeats it without one.
         if (!Config.Hud)
         {
             PrintAvailable();
-            captain?.PrintToChat(Prefix() + $"Your pick: {Colorize("{green}")}!<number>{Colorize("{default}")} - !players to list again");
+            captain?.PrintToChat(Prefix() + $"Your pick: {Colorize("{green}")}!1, !2, ...{Colorize("{default}")} - !players to list again");
         }
 
         // A bot captain has no way to type !draft, so its pick is the timeout. Waiting out the full clock

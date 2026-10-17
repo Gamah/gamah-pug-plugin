@@ -88,8 +88,10 @@ public partial class Gpp
         var tally = new int[_ballot.Count];
         foreach (var index in _votes.Values) tally[index]++;
 
+        // "!1 - Dust2" rather than "1 Dust2": the number on its own left people typing the map name, or
+        // "vote 1". Carrying the bang in every cell means the list *is* the instruction.
         var cells = _ballot.Select((map, index) =>
-            $"{index + 1} {map.Label}{(tally[index] > 0 ? " " + new string('*', Math.Min(tally[index], 5)) : "")}").ToList();
+            $"!{index + 1} - {map.Label}{(tally[index] > 0 ? " " + new string('*', Math.Min(tally[index], 5)) : "")}").ToList();
         int pages = Math.Max(1, (cells.Count + VotePageSize - 1) / VotePageSize);
         int page = pages > 1 ? (_hudTicks / VotePageSeconds) % pages : 0;
         var panel = Columns(cells.Skip(page * VotePageSize).Take(VotePageSize), 3);
@@ -108,8 +110,8 @@ public partial class Gpp
         string votes = $" - {_votes.Count}/{HumanPlayers().Count} votes";
         string of = pages > 1 ? $" - page {page + 1}/{pages}" : "";
         Paint(player, voted
-            ? $"MAP VOTE - {_voteSecondsLeft}s - change it with !<number>{votes}{of}"
-            : $"MAP VOTE - {_voteSecondsLeft}s - VOTE NOW - TYPE !<number>{votes}{of}", panel);
+            ? $"MAP VOTE - {_voteSecondsLeft}s - change it below{votes}{of}"
+            : $"VOTE NOW! - {_voteSecondsLeft}s{votes}{of}", panel);
     }
 
     private void PaintKnife(CCSPlayerController player)
@@ -138,7 +140,7 @@ public partial class Gpp
         ulong onClock = CurrentCaptain();
         string clock = _pickSecondsLeft > 0 ? $" - {_pickSecondsLeft}s" : "";
 
-        var cells = _available.Select((steamId, index) => $"{index + 1} {Name(steamId)}").ToList();
+        var cells = _available.Select((steamId, index) => $"!{index + 1} - {Name(steamId)}").ToList();
         int pages = Math.Max(1, (cells.Count + PickPageSize - 1) / PickPageSize);
         int page = pages > 1 ? (_hudTicks / PickPageSeconds) % pages : 0;
         var panel = Columns(cells.Skip(page * PickPageSize).Take(PickPageSize), 3);
@@ -152,7 +154,7 @@ public partial class Gpp
         string of = pages > 1 ? $" - page {page + 1}/{pages}" : "";
         Paint(player,
             Id(player) == onClock
-                ? $"YOUR PICK{clock} - TYPE !<number>{of}"
+                ? $"PICK NOW!{clock}{of}"
                 : $"CAPTAIN {Name(onClock)} IS PICKING{clock}{of}",
             panel);
     }
@@ -283,7 +285,7 @@ public partial class Gpp
             .ToList();
         if (layouts.Count == 0) layouts = ['a', 'b', 'c', 'd'];
 
-        var cells = SampleNames.Select((name, index) => $"{index + 1} {name}").ToList();
+        var cells = SampleNames.Select((name, index) => $"!{index + 1} - {name}").ToList();
         int step = 0;
 
         Announce($"Pick list probe: {string.Join(" ", layouts.Select(char.ToUpperInvariant))}, {ProbeSeconds}s each.");
@@ -316,13 +318,13 @@ public partial class Gpp
         {
             case 'a':
                 // All twelve at once, four across. Fits the budget exactly and nothing moves.
-                return ["A - YOUR PICK 30s - !<number>", .. Columns(cells, 4)];
+                return ["A - PICK NOW! 30s", .. Columns(cells, 4)];
 
             case 'b':
             {
                 // Six at a time, two rows of three, a new page every three seconds.
                 int page = (tick / 3) % 2;
-                return [$"B - YOUR PICK 30s - !<number> - page {page + 1}/2",
+                return [$"B - PICK NOW! 30s - page {page + 1}/2",
                     .. Columns(cells.Skip(page * 6).Take(6), 3)];
             }
 
@@ -330,7 +332,7 @@ public partial class Gpp
             {
                 // Four at a time on one row, a new page every two seconds.
                 int page = (tick / 2) % 3;
-                return [$"C - YOUR PICK 30s - !<number> - page {page + 1}/3",
+                return [$"C - PICK NOW! 30s - page {page + 1}/3",
                     .. Columns(cells.Skip(page * 4).Take(4), 4)];
             }
 
@@ -340,7 +342,7 @@ public partial class Gpp
                 var rows = Columns(cells, 3);
                 int offset = (tick / 2) % rows.Count;
                 var window = Enumerable.Range(0, 3).Select(i => rows[(offset + i) % rows.Count]);
-                return ["D - YOUR PICK 30s - !<number> - scrolling", .. window];
+                return ["D - PICK NOW! 30s - scrolling", .. window];
             }
         }
     }
@@ -368,7 +370,7 @@ public partial class Gpp
                     Send(player,
                     [
                         $"CENTER for {player.PlayerName} - {left}s",
-                        "1 Ada        2 Baz        3 Cosmo",
+                        "!1 - Ada     !2 - Baz     !3 - Cosmo",
                         "4 ScoobyOG.  5 Voltzmann  6 Crasswater",
                     ]);
                 }
@@ -388,7 +390,7 @@ public partial class Gpp
             "B line 3 - 2 de_inferno   *",
             "B line 4 - 3 de_nuke",
             "B line 5 - 4 de_ancient",
-            "B line 6 - type !<number>");
+            "B line 6 - vote with !1, !2, ...");
         string longText = "C " + string.Join("\n",
             Enumerable.Range(1, 12).Select(i => $"line {i:00} 123456789 123456789 123456789 12345"));
 

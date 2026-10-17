@@ -58,7 +58,7 @@ public partial class Gpp
         // two really do need everybody standing still.
         StartHud();
 
-        Prompt($"Map vote - {_voteSecondsLeft}s.", "!<number>", Everybody);
+        Prompt($"Map vote - {_voteSecondsLeft}s.", "vote now - !1, !2, ...", Everybody);
         // The ballot goes to chat even with the HUD on. The centre panel is drawn from the player's own
         // pawn, and force_spectate has just moved everybody to spectator, so the overlay reaches nobody
         // during a vote - which is how a vote ran with no map list on anyone's screen.
@@ -84,12 +84,12 @@ public partial class Gpp
     {
         if (_ballot.Count > BallotChatLimit)
         {
-            Announce($"{_ballot.Count} maps on the ballot - the list is on your screen - type !<number>");
+            Announce($"{_ballot.Count} maps on the ballot - the list is on your screen, vote with !1, !2, ...");
             return;
         }
         for (int i = 0; i < _ballot.Count; i++)
         {
-            Announce($"{Colorize("{green}")}{i + 1}{Colorize("{default}")} - {_ballot[i].Label}");
+            Announce($"{Colorize("{green}")}!{i + 1}{Colorize("{default}")} - {_ballot[i].Label}");
         }
     }
 
