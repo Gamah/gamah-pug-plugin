@@ -1,0 +1,19 @@
+[project]
+name = "gpp-bot"
+version = "0.1.0"
+description = "Optional Discord companion for the Gamah's Pug Plugin CS2 plugin: links Steam accounts and moves drafted teams into voice channels."
+requires-python = ">=3.11"
+dependencies = [
+    "discord.py>=2.4.0",
+    "aiohttp>=3.9.0",
+]
+
+[project.scripts]
+gpp-bot = "gpp_bot.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["gpp_bot*"]

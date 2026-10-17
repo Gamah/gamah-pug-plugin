@@ -1,0 +1,94 @@
+{
+  "ConfigVersion": 1,
+  "flow": "vote_then_draft",
+  "players_per_team": 0,
+  "min_players": 4,
+  "vote_seconds": 90,
+  "pick_seconds": 30,
+  "pick_order": "alternate",
+  "force_spectate": true,
+  "auto_load_match": true,
+  "match_config_dir": "MatchZy",
+  "knife_round": true,
+  "whitelist": false,
+  "discord": {
+    "base_url": "",
+    "token": "",
+    "move_on_handoff": true,
+    "return_on_match_end": true,
+    "timeout_seconds": 5
+  },
+  "admin_flag": "@css/config",
+  "chat_prefix": " [{green}GPP{default}]",
+  "map_pool": [
+    {
+      "name": "cs_office"
+    },
+    {
+      "name": "cs_assault",
+      "workshop_id": "3070594412",
+      "display": "Assault"
+    },
+    {
+      "name": "de_dust2"
+    },
+    {
+      "name": "de_mirage"
+    },
+    {
+      "name": "de_inferno"
+    },
+    {
+      "name": "de_nuke"
+    },
+    {
+      "name": "de_ancient"
+    },
+    {
+      "name": "de_anubis"
+    },
+    {
+      "name": "de_train"
+    },
+    {
+      "name": "de_overpass"
+    },
+    {
+      "name": "de_vertigo"
+    },
+    {
+      "name": "de_cache"
+    },
+    {
+      "name": "de_cbble",
+      "workshop_id": "3329387648",
+      "display": "Cobblestone2018"
+    },
+    {
+      "name": "de_tuscan",
+      "workshop_id": "3267671493",
+      "display": "Tuscan"
+    },
+    {
+      "name": "de_season",
+      "workshop_id": "3073892687",
+      "display": "Season"
+    },
+    {
+      "name": "de_agency",
+      "workshop_id": "3339983232",
+      "display": "Agency"
+    },
+    {
+      "name": "cs_militia",
+      "workshop_id": "3070593234",
+      "display": "Militia"
+    }
+  ],
+  "hud": true,
+  "min_ready": 2,
+  "ballot_size": 0,
+  "captain_knife": true,
+  "captain_knife_seconds": 60,
+  "count_bots": false
+}

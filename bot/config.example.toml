@@ -1,0 +1,37 @@
+# Copy to config.toml and fill in. config.toml is gitignored - it holds two secrets.
+
+[discord]
+# Bot token from the Discord developer portal. Never commit this.
+token = ""
+
+# The one guild the bot serves. Right-click the server -> Copy Server ID (needs Developer Mode on).
+guild_id = ""
+
+# Three voice channels, by ID. Right-click a channel -> Copy Channel ID.
+#
+# These may overlap. Setting warmup_channel_id to the same ID as team_a_channel_id means the room
+# gathers in what is also Team A's channel, so only Team B has to move at the handoff - half the
+# disruption. Setting all three the same disables moving in practice, since nobody ever has anywhere
+# to go.
+warmup_channel_id = ""
+team_a_channel_id = ""
+team_b_channel_id = ""
+
+# Team A is the CT side (GPP's team1), Team B is T. Swap if you would rather they read the other
+# way round; nothing else depends on it.
+
+[http]
+# Where the plugin reaches the bot. Bind to localhost if the bot and the game server share a box.
+host = "127.0.0.1"
+port = 8787
+
+# Shared secret. Must match "token" in the plugin's discord config block. Requests without a matching
+# X-GPP-Token header are refused.
+token = ""
+
+[link]
+# How long a !link-discord code stays valid, in seconds.
+code_ttl_seconds = 600
+
+# Where the SteamID -> Discord ID table lives. Deleting it unlinks everyone.
+database = "links.sqlite3"

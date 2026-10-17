@@ -1,0 +1,9 @@
+bin/
+obj/
+
+# bot
+__pycache__/
+*.pyc
+.venv/
+bot/config.toml
+*.sqlite3
