@@ -1,3 +1,4 @@
+using System.Text;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Timers;
@@ -19,7 +20,17 @@ namespace Gpp;
 public partial class Gpp
 {
     private const int HudLines = 4;
-    private const int HudWidth = 80;
+
+    // Characters, and the panel font is **proportional** - so these are deliberately pessimistic budgets,
+    // not measurements. The old 80 came from the hudsize probe run against narrow sample text; the first
+    // wide map name ("Cobblestone2018") pushed a line past the real limit and the engine wrapped it in the
+    // middle of the next cell. The alert line is drawn larger again and fits far less.
+    private const int HudWidth = 46;
+    private const int AlertWidth = 30;
+
+    // Longest a single cell may be before it is cut. A name nobody can read beats a line that wraps and
+    // takes the rest of the panel with it.
+    private const int CellWidth = 20;
 
     // Seconds the panel has been up, which is what pages the pick list.
     private int _hudTicks;
@@ -107,11 +118,11 @@ public partial class Gpp
             panel.Add(waiting.Count == 0 ? "everybody has voted" : $"still to vote: {Join(waiting)}");
         }
 
-        string votes = $" - {_votes.Count}/{HumanPlayers().Count} votes";
-        string of = pages > 1 ? $" - page {page + 1}/{pages}" : "";
+        string votes = $" {_votes.Count}/{HumanPlayers().Count}";
+        string of = pages > 1 ? $" p{page + 1}/{pages}" : "";
         Paint(player, voted
-            ? $"MAP VOTE - {_voteSecondsLeft}s - change it below{votes}{of}"
-            : $"VOTE NOW! - {_voteSecondsLeft}s{votes}{of}", panel);
+            ? $"VOTED {_voteSecondsLeft}s{votes}{of}"
+            : $"VOTE NOW! {_voteSecondsLeft}s{votes}{of}", panel);
     }
 
     private void PaintKnife(CCSPlayerController player)
@@ -138,7 +149,7 @@ public partial class Gpp
     private void PaintDraft(CCSPlayerController player)
     {
         ulong onClock = CurrentCaptain();
-        string clock = _pickSecondsLeft > 0 ? $" - {_pickSecondsLeft}s" : "";
+        string clock = _pickSecondsLeft > 0 ? $" {_pickSecondsLeft}s" : "";
 
         var cells = _available.Select((steamId, index) => $"!{index + 1} - {Name(steamId)}").ToList();
         int pages = Math.Max(1, (cells.Count + PickPageSize - 1) / PickPageSize);
@@ -151,11 +162,11 @@ public partial class Gpp
 
         // The page counter rides on the alert line with the rest of the state, so the centre panel spends
         // all four of its lines on names.
-        string of = pages > 1 ? $" - page {page + 1}/{pages}" : "";
+        string of = pages > 1 ? $" p{page + 1}/{pages}" : "";
         Paint(player,
             Id(player) == onClock
                 ? $"PICK NOW!{clock}{of}"
-                : $"CAPTAIN {Name(onClock)} IS PICKING{clock}{of}",
+                : $"{Name(onClock)} IS PICKING{clock}{of}",
             panel);
     }
 
@@ -224,16 +235,29 @@ public partial class Gpp
     }
 
     // Lay cells out in rows of `perRow`, padded so the columns line up in a fixed-width HUD font.
-    private static List<string> Columns(IEnumerable<string> cells, int perRow)
+    // Pack cells onto as few lines as fit, never splitting one. The old version padded each cell to a
+    // fixed character width and grouped a fixed number per row, which only lines up in a monospace font -
+    // this panel is not one, so the columns drifted and long cells spilled into a wrap. Three spaces
+    // between cells and a hard stop at the budget is uglier in theory and holds together in practice.
+    private static List<string> Columns(IEnumerable<string> cells, int perRow = 0)
     {
-        var list = cells.ToList();
-        if (list.Count == 0) return [];
-        int width = Math.Min(HudWidth / perRow, list.Max(cell => cell.Length) + 2);
-        return list
-            .Select((cell, index) => (cell, index))
-            .GroupBy(entry => entry.index / perRow)
-            .Select(row => string.Join("", row.Select(entry => entry.cell.PadRight(width))).TrimEnd())
-            .ToList();
+        var lines = new List<string>();
+        var line = new StringBuilder();
+
+        foreach (var raw in cells)
+        {
+            string cell = raw.Length > CellWidth ? raw[..(CellWidth - 1)] + "\u2026" : raw;
+            if (line.Length > 0 && line.Length + 3 + cell.Length > HudWidth)
+            {
+                lines.Add(line.ToString());
+                line.Clear();
+            }
+            if (line.Length > 0) line.Append("   ");
+            line.Append(cell);
+        }
+
+        if (line.Length > 0) lines.Add(line.ToString());
+        return lines;
     }
 
     // Two channels, both addressed to one player at a time (ClientPrint takes a slot, so every message
@@ -243,7 +267,7 @@ public partial class Gpp
     // content instead of spending one on the instruction.
     private static void Paint(CCSPlayerController player, string alert, List<string> panel)
     {
-        player.PrintToCenterAlert(alert.Length > HudWidth ? alert[..HudWidth] : alert);
+        player.PrintToCenterAlert(alert.Length > AlertWidth ? alert[..AlertWidth] : alert);
         Send(player, panel);
     }
 
