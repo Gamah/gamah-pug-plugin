@@ -25,18 +25,19 @@ public partial class Gpp
     private const int RulerRepeats = 20;
     private const int RulerHoldSeconds = 20;
 
-    // Two characters a page: four lines, two of which are the scale. The set spans the extremes and
-    // covers the shapes that actually turn up in map names and player names.
+    // Three characters a page. The first line is always forty pipes, which is the scale: the pipe
+    // advance came out at exactly 4px, so every other width can be expressed in pipe units and two
+    // screenshots taken at different resolutions still compare.
     private static readonly Dictionary<string, string[]> RulerPages = new()
     {
-        ["a"] = ["i", "l"],
-        ["b"] = ["I", "1"],
-        ["c"] = ["a", "e"],
-        ["d"] = ["o", "s"],
-        ["e"] = ["m", "w"],
-        ["f"] = ["M", "W"],
-        ["g"] = ["0", "8"],
-        ["h"] = ["-", "!"],
+        ["a"] = ["i", "l", "I"],
+        ["b"] = ["a", "e", "o"],
+        ["c"] = ["s", "r", "t"],
+        ["d"] = ["m", "w", "n"],
+        ["e"] = ["M", "W", "A"],
+        ["f"] = ["0", "8", "1"],
+        ["g"] = ["-", "!", "."],
+        ["h"] = ["C", "S", "T"],
     };
 
     private CounterStrikeSharp.API.Modules.Timers.Timer? _rulerTimer;
@@ -52,9 +53,9 @@ public partial class Gpp
             return;
         }
 
-        if (!RulerPages.ContainsKey(page) && page != "space")
+        if (!RulerPages.ContainsKey(page) && page != "space" && page != "wrap")
         {
-            Announce($"Ruler pages: {string.Join(" ", RulerPages.Keys)} space. "
+            Announce($"Ruler pages: {string.Join(" ", RulerPages.Keys)} space wrap. "
                 + $"Each holds {RulerHoldSeconds}s - screenshot it. !pug ruler stop ends one early.");
             foreach (var (key, chars) in RulerPages) Announce($"  {key}: {string.Join(" and ", chars)}");
             return;
@@ -71,17 +72,35 @@ public partial class Gpp
                 "|" + new string(' ', RulerRepeats) + "|",
                 "|" + new string(' ', RulerRepeats * 2) + "|",
             }
-            : new List<string>
-            {
-                new string('|', 40),
-                "||",
-                string.Concat(Enumerable.Repeat(RulerPages[page][0], RulerRepeats)),
-                string.Concat(Enumerable.Repeat(RulerPages[page][1], RulerRepeats)),
-            };
+            : page == "wrap"
+                // Where does the panel actually break a line? Four runs of pipes, climbing past the
+                // budget: whichever is the first to appear on two rows is the limit, read straight off
+                // in pipe units. Nothing else measures this - a line that fits tells you nothing except
+                // that the limit is somewhere above it.
+                ? new List<string>
+                {
+                    new string('|', 44),
+                    new string('|', 52),
+                    new string('|', 60),
+                    new string('|', 68),
+                }
+                : new List<string>
+                {
+                    new string('|', 40),
+                    string.Concat(Enumerable.Repeat(RulerPages[page][0], RulerRepeats)),
+                    string.Concat(Enumerable.Repeat(RulerPages[page][1], RulerRepeats)),
+                    string.Concat(Enumerable.Repeat(RulerPages[page][2], RulerRepeats)),
+                };
 
-        string label = page == "space"
-            ? $"RULER SPACE - {RulerRepeats} then {RulerRepeats * 2}"
-            : $"RULER {page.ToUpperInvariant()} - {string.Join(" ", RulerPages[page])} x{RulerRepeats}";
+        // Deliberately three lines: this is also the test of whether the alert box honours a newline,
+        // which the four-line vote and pick headers now depend on. If this comes out as one run, they
+        // need a different separator.
+        string label = page switch
+        {
+            "space" => $"RULER\nSPACE\n{RulerRepeats} then {RulerRepeats * 2}",
+            "wrap" => "RULER\nWRAP\n44 52 60 68",
+            _ => $"RULER\n{page.ToUpperInvariant()}\n{string.Join(" ", RulerPages[page])} x{RulerRepeats}",
+        };
 
         int left = RulerHoldSeconds;
         StopRuler();
