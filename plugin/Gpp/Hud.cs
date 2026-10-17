@@ -118,11 +118,12 @@ public partial class Gpp
             panel.Add(waiting.Count == 0 ? "everybody has voted" : $"still to vote: {Join(waiting)}");
         }
 
-        string votes = $" {_votes.Count}/{HumanPlayers().Count}";
-        string of = pages > 1 ? $" p{page + 1}/{pages}" : "";
-        Paint(player, voted
-            ? $"VOTED {_voteSecondsLeft}s{votes}{of}"
-            : $"VOTE NOW! {_voteSecondsLeft}s{votes}{of}", panel);
+        string? of = pages > 1 ? $"page {page + 1}/{pages}" : null;
+        Paint(player, Alert(
+            voted ? "VOTED" : "VOTE NOW!",
+            $"{_voteSecondsLeft}s",
+            $"{_votes.Count}/{HumanPlayers().Count} votes",
+            of), panel);
     }
 
     private void PaintKnife(CCSPlayerController player)
@@ -131,10 +132,10 @@ public partial class Gpp
         string clock = _duelArmed ? $"{_knifeSecondsLeft}s" : "starting";
         ulong other = Id(player) == _captain1 ? _captain2 : _captain1;
 
-        Paint(player,
-            duelling
-                ? $"KNIFE {Name(other)} FOR FIRST PICK - {clock}"
-                : $"CAPTAINS ARE KNIFING FOR FIRST PICK - {clock}",
+        Paint(player, Alert(
+            duelling ? "KNIFE FOR FIRST PICK" : "CAPTAINS ARE KNIFING",
+            duelling ? $"vs {Name(other)}" : null,
+            clock),
             duelling
                 ? ["first blood takes first pick", "nobody else can join in"]
                 : [$"{Name(_captain1)} vs {Name(_captain2)}", WhySpectating(Id(player))]);
@@ -149,7 +150,7 @@ public partial class Gpp
     private void PaintDraft(CCSPlayerController player)
     {
         ulong onClock = CurrentCaptain();
-        string clock = _pickSecondsLeft > 0 ? $" {_pickSecondsLeft}s" : "";
+        string? clock = _pickSecondsLeft > 0 ? $"{_pickSecondsLeft}s" : null;
 
         var cells = _available.Select((steamId, index) => $"!{index + 1} - {Name(steamId)}").ToList();
         int pages = Math.Max(1, (cells.Count + PickPageSize - 1) / PickPageSize);
@@ -162,12 +163,12 @@ public partial class Gpp
 
         // The page counter rides on the alert line with the rest of the state, so the centre panel spends
         // all four of its lines on names.
-        string of = pages > 1 ? $" p{page + 1}/{pages}" : "";
-        Paint(player,
-            Id(player) == onClock
-                ? $"PICK NOW!{clock}{of}"
-                : $"{Name(onClock)} IS PICKING{clock}{of}",
-            panel);
+        string? of = pages > 1 ? $"page {page + 1}/{pages}" : null;
+        Paint(player, Alert(
+            Id(player) == onClock ? "PICK NOW!" : $"{Name(onClock)} IS PICKING",
+            clock,
+            $"{_available.Count} left",
+            of), panel);
     }
 
     // Being stuck in spectator with no explanation is the complaint behind half of this overlay, so every
@@ -267,8 +268,20 @@ public partial class Gpp
     // content instead of spending one on the instruction.
     private static void Paint(CCSPlayerController player, string alert, List<string> panel)
     {
-        player.PrintToCenterAlert(alert.Length > AlertWidth ? alert[..AlertWidth] : alert);
+        player.PrintToCenterAlert(alert);
         Send(player, panel);
+    }
+
+    // The alert box takes four lines like the panel does, and stacking the state down them beats running
+    // it along one line and letting the box wrap wherever it likes - a wrapped alert broke mid-word and
+    // cost a line anyway. Each part is clipped on its own so a long name cannot push the clock off.
+    private static string Alert(params string?[] parts)
+    {
+        var lines = parts
+            .Where(part => !string.IsNullOrWhiteSpace(part))
+            .Select(part => part!.Length > AlertWidth ? part[..AlertWidth] : part)
+            .Take(HudLines);
+        return string.Join("\n", lines);
     }
 
     private static void Broadcast(List<string> panel)

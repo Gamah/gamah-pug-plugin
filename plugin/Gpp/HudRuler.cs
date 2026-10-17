@@ -8,94 +8,102 @@ namespace Gpp;
 // The panel font is proportional and CS2 ships it as stratum2.uifont, an obfuscated container rather
 // than a readable TTF, so the advance widths cannot be read off disk. They can be measured through the
 // renderer instead: print a line that is nothing but twenty copies of one character, screenshot it, and
-// the rendered width divided by twenty is that character's advance. Two reference lines on each page
-// pin the scale - "||" for the zero point and a line of forty pipes for the panel's usable width.
+// the rendered width divided by twenty is that character's advance. Two reference lines on every page
+// pin the scale - a bare "||" for the pipe's own width and forty pipes for the panel's usable width -
+// so a page is self-contained and pages shot at different resolutions still compare.
 //
-// !pug ruler [a|b|c|d]   one page every four seconds, or a single page if named.
+//   !pug ruler            list the pages
+//   !pug ruler b          hold page b on screen for twenty seconds
 //
-// This is a measuring tool, not a feature. It is here rather than in a scratch build because the widths
-// it produces are supposed to be re-measured after a CS2 update, and a tool nobody can find does not
-// get re-run.
+// One page at a time, held by a 1Hz redraw: PrintToCenter is transient, so a single print fades before
+// anyone can take a screenshot. Twenty seconds is enough to alt-tab and still catch it.
+//
+// This is a measuring tool, not a feature. It lives here rather than in a scratch build because the
+// widths it produces want re-measuring after a CS2 update, and a tool nobody can find never gets re-run.
 public partial class Gpp
 {
     private const int RulerRepeats = 20;
-    private const int RulerPageSeconds = 4;
+    private const int RulerHoldSeconds = 20;
 
-    // Four characters a page, chosen to span the extremes and to cover the shapes that actually appear in
-    // map names and player names. Page d measures the space, which cannot be seen on its own: the pipes
-    // are the visible edges and "||" on the same page is what gets subtracted back off.
-    private static readonly Dictionary<char, string[]> RulerPages = new()
+    // Two characters a page: four lines, two of which are the scale. The set spans the extremes and
+    // covers the shapes that actually turn up in map names and player names.
+    private static readonly Dictionary<string, string[]> RulerPages = new()
     {
-        ['a'] = ["i", "l", "I", "1"],
-        ['b'] = ["a", "e", "o", "s"],
-        ['c'] = ["m", "w", "M", "W"],
-        ['d'] = ["0", "8", "-", "!"],
+        ["a"] = ["i", "l"],
+        ["b"] = ["I", "1"],
+        ["c"] = ["a", "e"],
+        ["d"] = ["o", "s"],
+        ["e"] = ["m", "w"],
+        ["f"] = ["M", "W"],
+        ["g"] = ["0", "8"],
+        ["h"] = ["-", "!"],
     };
 
     private CounterStrikeSharp.API.Modules.Timers.Timer? _rulerTimer;
 
-    internal void HudRulerProbe(string order)
+    internal void HudRulerProbe(string page)
     {
-        var pages = string.IsNullOrWhiteSpace(order)
-            ? RulerPages.Keys.ToList()
-            : order.Where(RulerPages.ContainsKey).ToList();
-        if (pages.Count == 0) pages = RulerPages.Keys.ToList();
+        page = page.Trim().ToLowerInvariant();
 
-        Announce($"Ruler: pages {string.Join(" ", pages)}, {RulerPageSeconds}s each. "
-            + $"Screenshot each page. Every line is {RulerRepeats} copies of one character.");
-
-        int step = 0;
-        _rulerTimer?.Kill();
-        _rulerTimer = AddTimer(1.0f, () =>
+        if (page == "stop")
         {
-            int index = step / RulerPageSeconds;
-            step++;
+            StopRuler();
+            Announce("Ruler stopped.");
+            return;
+        }
 
-            if (index >= pages.Count)
-            {
-                _rulerTimer?.Kill();
-                _rulerTimer = null;
-                StopHud();
-                Announce("Ruler done.");
-                return;
-            }
+        if (!RulerPages.ContainsKey(page) && page != "space")
+        {
+            Announce($"Ruler pages: {string.Join(" ", RulerPages.Keys)} space. "
+                + $"Each holds {RulerHoldSeconds}s - screenshot it. !pug ruler stop ends one early.");
+            foreach (var (key, chars) in RulerPages) Announce($"  {key}: {string.Join(" and ", chars)}");
+            return;
+        }
 
-            char page = pages[index];
-            var chars = RulerPages[page];
-
-            // Two of the four lines are the scale, so a page is self-contained: whoever measures it does
-            // not need to line it up against a different screenshot taken at a different resolution.
-            var lines = new List<string>
+        // The space has no ink, so it is measured as a gap between fences rather than as a run: twenty
+        // spaces between two pipes, and forty between two more, so the pipes cancel out of the
+        // difference and the space's advance falls out of it.
+        var lines = page == "space"
+            ? new List<string>
             {
                 new string('|', 40),
                 "||",
-            };
-            lines.AddRange(chars.Take(2).Select(c => string.Concat(Enumerable.Repeat(c, RulerRepeats))));
-
-            BroadcastRaw($"RULER {char.ToUpperInvariant(page)} - {string.Join(" ", chars.Take(2))}", lines);
-
-            // The other two characters ride the second half of the page's dwell, so four characters fit a
-            // page without the panel ever holding more than four lines.
-            if (step % RulerPageSeconds == 2)
-            {
-                var more = new List<string> { new string('|', 40), "||" };
-                more.AddRange(chars.Skip(2).Select(c => string.Concat(Enumerable.Repeat(c, RulerRepeats))));
-                BroadcastRaw($"RULER {char.ToUpperInvariant(page)} - {string.Join(" ", chars.Skip(2))}", more);
+                "|" + new string(' ', RulerRepeats) + "|",
+                "|" + new string(' ', RulerRepeats * 2) + "|",
             }
+            : new List<string>
+            {
+                new string('|', 40),
+                "||",
+                string.Concat(Enumerable.Repeat(RulerPages[page][0], RulerRepeats)),
+                string.Concat(Enumerable.Repeat(RulerPages[page][1], RulerRepeats)),
+            };
+
+        string label = page == "space"
+            ? $"RULER SPACE - {RulerRepeats} then {RulerRepeats * 2}"
+            : $"RULER {page.ToUpperInvariant()} - {string.Join(" ", RulerPages[page])} x{RulerRepeats}";
+
+        int left = RulerHoldSeconds;
+        StopRuler();
+        _rulerTimer = AddTimer(1.0f, () =>
+        {
+            if (--left <= 0)
+            {
+                StopRuler();
+                StopHud();
+                Announce("Ruler page done.");
+                return;
+            }
+            BroadcastRaw(label, lines);
         }, TimerFlags.REPEAT);
+
+        BroadcastRaw(label, lines);
+        Announce($"{label} - holding {RulerHoldSeconds}s. Screenshot it.");
     }
 
-    // The space has no ink, so it is measured as the gap between two pipes: twenty spaces fenced by a
-    // pipe at each end, against a bare "||" for the pipes' own width.
-    internal void HudSpaceProbe()
+    private void StopRuler()
     {
-        BroadcastRaw("RULER SPACE - fenced 20, then bare", new List<string>
-        {
-            new string('|', 40),
-            "||",
-            "|" + new string(' ', RulerRepeats) + "|",
-            "|" + new string(' ', RulerRepeats * 2) + "|",
-        });
-        Announce("Space page is up for as long as the HUD holds it. Screenshot it.");
+        _rulerTimer?.Kill();
+        _rulerTimer = null;
     }
 }

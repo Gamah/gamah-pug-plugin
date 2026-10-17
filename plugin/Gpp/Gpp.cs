@@ -234,9 +234,6 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
             case "ruler":
                 HudRulerProbe(arg);
                 break;
-            case "rulerspace":
-                HudSpaceProbe();
-                break;
             case "hudsize":
                 HudSizeProbe();
                 break;
