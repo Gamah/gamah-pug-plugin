@@ -136,6 +136,30 @@ These are command hooks, not a contract: a MatchZy release that renames a comman
 rejects, leaves the flag wrong. `!pug status` prints what GPP believes, `!pug clear` resets it, and
 `force` works regardless.
 
+## HUD widths
+
+The centre panel font is proportional and CS2 ships it as `stratum2.uifont`, an obfuscated container
+rather than a readable TTF, so the glyph advances cannot be read off disk. `!pug ruler` measures them
+through the renderer instead: it prints twenty copies of one glyph with a forty-pipe run as the scale,
+you screenshot it, and `ink = N*advance - sidebearing` gives the advance. Measured 2026-10-17, every
+one of them a whole number of pixels:
+
+| glyph | advance | | glyph | advance |
+| --- | --- | --- | --- | --- |
+| space `\|` `i` `l` | 4 | | `w` `A` | 11 |
+| `a` `e` | 8 | | `M` | 12 |
+| `o` `n` `0`-`9` | 9 | | `m` `W` | 14 |
+
+Digits are tabular, so every one is 9. The widest glyph is 3.5x the narrowest, which is why counting
+characters never worked: a line holds 125 `i` or 35 `m`.
+
+`hud_line_budget` (default 340) is the usable width of a line in those units, and it is a setting
+rather than a constant because **it depends on the viewer's resolution and HUD scale, not on the
+font**. A ruler run clipped at ~500 units; a screenshot of the same client at a different resolution
+wrapped a line measuring 348, with three separate strings from it coming out at a consistent 1.27x the
+ruler scale. Same font, same ratios, different size relative to the box. 340 sits below the widest
+line observed to fit. Raise it if the panel looks empty and your players all run one resolution.
+
 ## Warmup money
 
 `warmup_money` (default 16000) tops every player's account back up once a second for as long as

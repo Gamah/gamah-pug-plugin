@@ -34,6 +34,7 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
     public void OnConfigParsed(GppConfig config)
     {
         Config = config;
+        if (Config.HudLineBudget > 0) HudMetrics.LineBudget = Config.HudLineBudget;
         if (Config.PlayersPerTeam < 0) Config.PlayersPerTeam = 0;
         if (Config.MinPlayers < 2) Config.MinPlayers = 2;
         Config.MapPool = Config.MapPool.Where(m => !string.IsNullOrWhiteSpace(m.Name) || m.IsWorkshop).ToList();

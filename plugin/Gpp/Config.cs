@@ -127,6 +127,12 @@ public class GppConfig : BasePluginConfig
     // mp_maxmoney and mp_startmoney only set what you are given, not what you keep. 0 turns it off.
     [JsonPropertyName("warmup_money")] public int WarmupMoney { get; set; } = 16000;
 
+    // Usable width of one centre-panel line, in the glyph units HudMetrics measures in. Depends on the
+    // viewer's resolution and HUD scale, not on the font, so it is a setting rather than a constant.
+    // 340 is below the widest line measured to fit. Raise it if your players all run one resolution and
+    // the panel looks empty; lower it if lines still wrap. !pug ruler re-measures.
+    [JsonPropertyName("hud_line_budget")] public int HudLineBudget { get; set; } = 340;
+
     [JsonPropertyName("admin_flag")] public string AdminFlag { get; set; } = "@css/config";
 
     [JsonPropertyName("chat_prefix")] public string ChatPrefix { get; set; } = " [{green}GPP{default}]";

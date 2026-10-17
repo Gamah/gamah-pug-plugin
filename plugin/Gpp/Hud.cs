@@ -21,16 +21,11 @@ public partial class Gpp
 {
     private const int HudLines = 4;
 
-    // Characters, and the panel font is **proportional** - so these are deliberately pessimistic budgets,
-    // not measurements. The old 80 came from the hudsize probe run against narrow sample text; the first
-    // wide map name ("Cobblestone2018") pushed a line past the real limit and the engine wrapped it in the
-    // middle of the next cell. The alert line is drawn larger again and fits far less.
-    private const int HudWidth = 46;
+    // The panel font is proportional, so widths come from HudMetrics, which holds advances measured
+    // through the renderer rather than a character count. The alert box is drawn in a larger face that
+    // has not been measured, so it keeps a conservative character cap - its lines are short now that the
+    // state is stacked down four of them.
     private const int AlertWidth = 30;
-
-    // Longest a single cell may be before it is cut. A name nobody can read beats a line that wraps and
-    // takes the rest of the panel with it.
-    private const int CellWidth = 20;
 
     // Seconds the panel has been up, which is what pages the pick list.
     private int _hudTicks;
@@ -240,21 +235,34 @@ public partial class Gpp
     // fixed character width and grouped a fixed number per row, which only lines up in a monospace font -
     // this panel is not one, so the columns drifted and long cells spilled into a wrap. Three spaces
     // between cells and a hard stop at the budget is uglier in theory and holds together in practice.
+    private const string CellGap = "   ";
+
     private static List<string> Columns(IEnumerable<string> cells, int perRow = 0)
     {
         var lines = new List<string>();
         var line = new StringBuilder();
+        int width = 0;
+        int gap = HudMetrics.Width(CellGap);
 
         foreach (var raw in cells)
         {
-            string cell = raw.Length > CellWidth ? raw[..(CellWidth - 1)] + "\u2026" : raw;
-            if (line.Length > 0 && line.Length + 3 + cell.Length > HudWidth)
+            string cell = HudMetrics.Clip(raw, HudMetrics.CellBudget);
+            int cellWidth = HudMetrics.Width(cell);
+
+            if (line.Length > 0 && width + gap + cellWidth > HudMetrics.LineBudget)
             {
                 lines.Add(line.ToString());
                 line.Clear();
+                width = 0;
             }
-            if (line.Length > 0) line.Append("   ");
+
+            if (line.Length > 0)
+            {
+                line.Append(CellGap);
+                width += gap;
+            }
             line.Append(cell);
+            width += cellWidth;
         }
 
         if (line.Length > 0) lines.Add(line.ToString());
@@ -307,7 +315,7 @@ public partial class Gpp
     {
         var lines = panel
             .Where(line => !string.IsNullOrEmpty(line))
-            .Select(line => line.Length > HudWidth ? line[..HudWidth] : line)
+            .Select(line => HudMetrics.Clip(line, HudMetrics.LineBudget))
             .Take(HudLines);
         player.PrintToCenter(string.Join("\n", lines));
     }
