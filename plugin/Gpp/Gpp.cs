@@ -232,7 +232,7 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
                     : "Bots off.");
                 break;
             case "ruler":
-                HudRulerProbe(arg);
+                HudRulerProbe(arg, size);
                 break;
             case "hudsize":
                 HudSizeProbe();

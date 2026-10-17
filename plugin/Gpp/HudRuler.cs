@@ -42,7 +42,7 @@ public partial class Gpp
 
     private CounterStrikeSharp.API.Modules.Timers.Timer? _rulerTimer;
 
-    internal void HudRulerProbe(string page)
+    internal void HudRulerProbe(string page, int from = 0)
     {
         page = page.Trim().ToLowerInvariant();
 
@@ -77,13 +77,7 @@ public partial class Gpp
                 // budget: whichever is the first to appear on two rows is the limit, read straight off
                 // in pipe units. Nothing else measures this - a line that fits tells you nothing except
                 // that the limit is somewhere above it.
-                ? new List<string>
-                {
-                    new string('|', 44),
-                    new string('|', 52),
-                    new string('|', 60),
-                    new string('|', 68),
-                }
+                ? WrapRun(from <= 0 ? 44 : from)
                 : new List<string>
                 {
                     new string('|', 40),
@@ -98,7 +92,7 @@ public partial class Gpp
         string label = page switch
         {
             "space" => $"RULER\nSPACE\n{RulerRepeats} then {RulerRepeats * 2}",
-            "wrap" => "RULER\nWRAP\n44 52 60 68",
+            "wrap" => $"RULER\nWRAP\n{string.Join(" ", WrapCounts(from <= 0 ? 44 : from))}",
             _ => $"RULER\n{page.ToUpperInvariant()}\n{string.Join(" ", RulerPages[page])} x{RulerRepeats}",
         };
 
@@ -119,6 +113,14 @@ public partial class Gpp
         BroadcastRaw(label, lines);
         Announce($"{label} - holding {RulerHoldSeconds}s. Screenshot it.");
     }
+
+    // Four runs a page, climbing by an eighth of the start so the steps stay proportionate however far
+    // up the scale you have had to go. !pug ruler wrap 120 picks up where the last page gave out.
+    private static int[] WrapCounts(int from) =>
+        [from, from + from / 8, from + from / 4, from + (from * 3) / 8];
+
+    private static List<string> WrapRun(int from) =>
+        WrapCounts(from).Select(n => new string('|', n)).ToList();
 
     private void StopRuler()
     {
