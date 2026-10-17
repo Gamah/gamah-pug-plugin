@@ -18,6 +18,7 @@
     "return_on_match_end": true,
     "timeout_seconds": 5
   },
+  "warmup_money": 16000,
   "admin_flag": "@css/config",
   "chat_prefix": " [{green}GPP{default}]",
   "map_pool": [

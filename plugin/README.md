@@ -14,7 +14,8 @@ the logic is reviewed, nothing more.
 | `!pug vote` | admin | Map vote only |
 | `!pug draft` | admin | Draft only |
 | `!pug captains` | admin | Reroll captains, before any pick is made |
-| `!pug cancel` | admin | Abandon the running vote or draft |
+| `!pug stop` | admin | **Nuke everything.** Ends the MatchZy match, clears bots, drops every phase, frees spectators and lands in a held warmup. Works from any state |
+| `!pug cancel` | admin | Abandon the running vote or draft, and nothing else |
 | `!pug clear` | admin | Forget a match we think MatchZy has loaded (ends nothing) |
 | `!pug status` | admin | What phase it is in |
 | `!pug flow <vote_then_draft\|draft_then_veto>` | admin | Switch flow until the next plugin load |
@@ -134,6 +135,12 @@ does expose console commands, so GPP follows them:
 These are command hooks, not a contract: a MatchZy release that renames a command, or a config file it
 rejects, leaves the flag wrong. `!pug status` prints what GPP believes, `!pug clear` resets it, and
 `force` works regardless.
+
+## Warmup money
+
+`warmup_money` (default 16000) tops every player's account back up once a second for as long as
+warmup is running. `mp_maxmoney` and `mp_startmoney` only set what you are *given*, not what you keep,
+so without this the first rifle and a couple of nades empties a wallet mid-warmup. 0 turns it off.
 
 ## Discord bot
 

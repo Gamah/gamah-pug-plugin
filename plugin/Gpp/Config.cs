@@ -123,6 +123,10 @@ public class GppConfig : BasePluginConfig
     // and nothing is ever sent anywhere - the plugin runs exactly as it did before the bot existed.
     [JsonPropertyName("discord")] public DiscordConfig Discord { get; set; } = new();
 
+    // Money every player is topped back up to, once a second, for as long as warmup is running.
+    // mp_maxmoney and mp_startmoney only set what you are given, not what you keep. 0 turns it off.
+    [JsonPropertyName("warmup_money")] public int WarmupMoney { get; set; } = 16000;
+
     [JsonPropertyName("admin_flag")] public string AdminFlag { get; set; } = "@css/config";
 
     [JsonPropertyName("chat_prefix")] public string ChatPrefix { get; set; } = " [{green}GPP{default}]";

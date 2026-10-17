@@ -53,6 +53,7 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         HookReadyGate();
         HookCaptainKnife();
         HookFunCommands();
+        StartWarmupMoney();
         RegisterListener<Listeners.OnMapStart>(OnMapStart);
         RegisterListener<Listeners.OnClientDisconnect>(OnClientDisconnect);
     }
@@ -153,8 +154,8 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         });
     }
 
-    [ConsoleCommand("css_pug", "GPP admin command: start | vote | draft | captains | cancel | clear | status | flow | bots <n> | hudsize | hudboth | hudlist [abcd]")]
-    [CommandHelper(minArgs: 0, usage: "<start|vote|draft|captains|cancel|clear|status|flow|hudsize|hudlist>")]
+    [ConsoleCommand("css_pug", "GPP admin command: start | vote | draft | captains | stop | cancel | clear | status | flow | bots <n> | hudsize | hudboth | hudlist [abcd]")]
+    [CommandHelper(minArgs: 0, usage: "<start|vote|draft|captains|stop|cancel|clear|status|flow|hudsize|hudlist>")]
     public void OnPugCommand(CCSPlayerController? player, CommandInfo command)
     {
         if (!IsAdmin(player))
@@ -203,6 +204,10 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
                 break;
             case "cancel":
                 AfterTick(() => Cancel("An admin cancelled it."));
+                break;
+            case "stop":
+            case "reset":
+                AfterTick(() => StopEverything("An admin stopped it."));
                 break;
             case "flow":
                 if (arg is "vote_then_draft" or "draft_then_veto")
