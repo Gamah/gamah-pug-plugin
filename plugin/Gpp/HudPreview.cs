@@ -108,10 +108,17 @@ public partial class Gpp
 
         steps.Add((
             "ready gate",
-            Alert("TYPE .ready IN CHAT TO START"),
+            Alert("TYPE .ready IN CHAT", "4/10 ready"),
             ["teams are set on Cobblestone2018",
-             "the match starts when enough of you have readied",
-             .. Columns(PreviewNames.Take(8))]));
+             "still to ready:",
+             .. Columns(PreviewNames.Take(6))]));
+
+        steps.Add((
+            "ready gate, already readied",
+            Alert("YOU ARE READY", "9/10 ready"),
+            ["teams are set on Cobblestone2018",
+             "still to ready:",
+             .. Columns(PreviewNames.Take(1))]));
 
         return steps;
     }

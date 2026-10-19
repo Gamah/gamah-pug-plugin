@@ -207,6 +207,8 @@ public partial class Gpp
     {
         _readyHudTimer?.Kill();
         _readyHudTimer = null;
+        // The ready roster is only here to drive this panel once the gate has stopped sweeping it.
+        _roster.Clear();
         Clear();
     }
 
@@ -218,14 +220,23 @@ public partial class Gpp
             return;
         }
 
-        var roster = _roster.Keys.Where(steamId => !IsBotId(steamId)).Select(Name).ToList();
+        // Bots cannot ready up, so they are neither counted nor named.
+        var roster = _roster.Keys.Where(steamId => !IsBotId(steamId)).ToList();
+        var unready = roster.Where(steamId => !_readied.Contains(steamId)).Select(Name).ToList();
+        int ready = roster.Count - unready.Count;
+
         foreach (var player in HumanPlayers())
         {
-            Paint(player, "TYPE .ready IN CHAT TO START",
+            bool drafted = _roster.ContainsKey(Id(player));
+            bool mine = _readied.Contains(Id(player));
+
+            Paint(player, Alert(
+                !drafted ? "MATCH STARTING" : mine ? "YOU ARE READY" : "TYPE .ready IN CHAT",
+                roster.Count > 0 ? $"{ready}/{roster.Count} ready" : null),
             [
                 $"teams are set on {_readyHudMap}",
-                "the match starts when enough of you have readied",
-                .. Columns(roster, 4),
+                unready.Count == 0 ? "everybody is ready - starting" : "still to ready:",
+                .. Columns(unready, 4),
             ]);
         }
     }
