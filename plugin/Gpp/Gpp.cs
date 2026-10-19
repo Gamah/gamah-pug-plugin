@@ -280,10 +280,13 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
                 else
                 {
                     // !pug panel [percent of screen] [distance] [height above the crosshair]
-                    float percent = command.ArgCount > 2 && float.TryParse(command.ArgByIndex(2), out float p) ? p : 0;
-                    float distance = command.ArgCount > 3 && float.TryParse(command.ArgByIndex(3), out float d) ? d : 0;
-                    float up = command.ArgCount > 4 && float.TryParse(command.ArgByIndex(4), out float u) ? u : 0;
-                    AfterTick(() => WorldPanelDemo(player, percent, distance, up));
+                    int shift = arg == "fixed" ? 1 : 0;
+                    float percent = command.ArgCount > 2 + shift && float.TryParse(command.ArgByIndex(2 + shift), out float p) ? p : 0;
+                    float distance = command.ArgCount > 3 + shift && float.TryParse(command.ArgByIndex(3 + shift), out float d) ? d : 0;
+                    float up = command.ArgCount > 4 + shift && float.TryParse(command.ArgByIndex(4 + shift), out float u) ? u : 0;
+                    // "!pug panel fixed ..." plants it in the room instead of following your view.
+                    bool follow = arg != "fixed";
+                    AfterTick(() => WorldPanelDemo(player, percent, distance, up, follow));
                 }
                 break;
             case "scroll":
