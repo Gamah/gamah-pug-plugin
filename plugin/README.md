@@ -32,6 +32,7 @@ not yet run with ten people on it.
 | `!pug idle` | admin | Put the idle-server panel up on demand, for working on it |
 | `!pug preview` | admin | Play every panel in order, 15s each, without running a pug. `!pug preview stop` ends it |
 | `!pug sides <gap> [toe-in] [back]` | admin | Move the two team boards live. `!pug sides auto` hands the derived numbers back |
+| `!pug discord 1\|3` | admin | Whether the Discord hold shows the two team boards or just the one panel |
 | `!reload` / `!restart` / `!skip` | everyone | The three answers to the idle-server panel. They do nothing when it is not up |
 | `!pug restart` | admin | Restart the whole server after a warning and a countdown |
 | `!<number>` | everyone | **The main one.** Votes for that map during a vote, makes that pick during a draft. Silent outside both |

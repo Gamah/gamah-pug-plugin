@@ -296,6 +296,16 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
                 if (arg == "stop") { StopPreview(); StopHud(); Reply(command, "Preview stopped."); }
                 else HudPreview();
                 break;
+            case "sides":
+                // Where the two team boards sit. Derived from how wide the boards are; this is for
+                // moving them by eye on a client the numbers were not measured on.
+                Reply(command, SetSides(arg,
+                    command.ArgCount > 3 ? command.ArgByIndex(3) : "",
+                    command.ArgCount > 4 ? command.ArgByIndex(4) : ""));
+                break;
+            case "discord":
+                Reply(command, SetOpeningBoards(arg));
+                break;
             case "scroll":
                 ScrollProbe();
                 break;
