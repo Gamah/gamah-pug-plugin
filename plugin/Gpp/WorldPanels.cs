@@ -225,6 +225,8 @@ public partial class Gpp
     {
         string left = LeftBoard();
         string right = RightBoard();
+        string winner = TeamName(WinningCaptain());
+        string loser = TeamName(WinningCaptain() == _captain1 ? _captain2 : _captain1);
 
         foreach (var player in HumanPlayers())
         {
@@ -234,14 +236,23 @@ public partial class Gpp
             string panel = WorldLayout.MainPanel(
                 mine ? "type .stay or .switch" : $"{Name(WinningCaptain())} is picking the side",
                 [
-                    WorldLayout.Section.Of($"{SideName(_knifeSide)} won the knife round",
-                        mine ? ".stay keeps this side, .switch takes the other" : "waiting on their call"),
+                    WorldLayout.Section.Of($"{WorldLayout.Clip(winner)} won the knife round",
+                        $"they are on {SideName(_knifeSide)} right now"),
+                    WorldLayout.Section.Of("WHAT THE TWO DO",
+                        $".stay     {WorldLayout.Clip(winner)} starts {SideName(_knifeSide)}",
+                        $".switch   {WorldLayout.Clip(winner)} starts {SideName(OtherSide(_knifeSide))}"),
+                    WorldLayout.Section.Of("NEXT",
+                        mine ? "the match goes live the moment you pick" : $"{WorldLayout.Clip(loser)} takes whatever is left",
+                        "then everybody moves in Discord"),
                 ],
                 WorldLayout.Footer(_matchMap),
                 _hudTicks);
             WorldShow(player, panel, left, right);
         }
     }
+
+    private static CsTeam OtherSide(CsTeam side) =>
+        side == CsTeam.CounterTerrorist ? CsTeam.Terrorist : CsTeam.CounterTerrorist;
 
     // --- the last panel: move in Discord ------------------------------------------------------------
 
@@ -316,10 +327,15 @@ public partial class Gpp
         {
             string panel = WorldLayout.MainPanel("server restarting",
                 [
-                    WorldLayout.Section.Of(_restartWhy),
-                    WorldLayout.Section.Of("reconnect in about a minute -", "the server comes back on its own"),
+                    WorldLayout.Section.Of("WHY", _restartWhy),
+                    WorldLayout.Section.Of("WHAT HAPPENS",
+                        "the server goes down and comes back on its own.",
+                        "nothing else needs doing and nobody needs to tell an admin."),
+                    WorldLayout.Section.Of("WHEN IT IS BACK",
+                        $"reconnect to the same address - {Server.MapName} will be",
+                        "loaded and the warmup held open the way it is now."),
                 ],
-                $"{_restartSecondsLeft}s",
+                WorldLayout.Footer($"{_restartSecondsLeft}s"),
                 _hudTicks);
             WorldShow(player, panel);
         }

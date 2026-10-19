@@ -246,7 +246,11 @@ public partial class Gpp
 
             ("side choice", left => (WorldLayout.MainPanel("type .stay or .switch",
             [
-                WorldLayout.Section.Of("CT won the knife round", ".stay keeps this side, .switch takes the other"),
+                WorldLayout.Section.Of("team ada won the knife round", "they are on CT right now"),
+                WorldLayout.Section.Of("WHAT THE TWO DO",
+                    ".stay     team ada starts CT", ".switch   team ada starts T"),
+                WorldLayout.Section.Of("NEXT",
+                    "the match goes live the moment you pick", "then everybody moves in Discord"),
             ], WorldLayout.Footer("mirage"), _hudTicks),
                 BoardAt("A", teamA[0], teamA.Skip(1).ToList(), 4),
                 BoardAt("B", teamB[0], teamB.Skip(1).ToList(), 4))),
@@ -263,30 +267,6 @@ public partial class Gpp
                 WorldLayout.Section.Of("!reload   - load de_mirage again", "!restart  - restart the server", "!skip     - leave it as it is"),
             ], "type one of them in chat", _hudTicks), null, null)),
         };
-
-        // The four mounts, at the end, each holding the same three boards so the only thing that changes
-        // is how they track the view. Turn your head during these: what is being judged is the lag and
-        // the swing, not the text.
-        //
-        // These are steps rather than a command to type, so the whole thing is one !pug preview from
-        // beginning to end. The anchor is put back to whatever the schema probe chose when the gallery
-        // finishes.
-        foreach (var mount in new[] { "orient", "attachment", "pawn", "teleport" })
-        {
-            string which = mount;
-            steps.Add(($"mount: {which} - turn your head", left =>
-            {
-                UseAnchor(which);
-                return (WorldLayout.MainPanel($"mount: {which}",
-                [
-                    WorldLayout.Section.Of("turn your head, look up, look down.",
-                        "the boards should stay where they are relative to you."),
-                    WorldLayout.Section.Of(MountNote(which)),
-                ], WorldLayout.Footer($"{left}s"), _hudTicks),
-                    BoardAt("A", teamA[0], teamA.Skip(1).ToList(), 4),
-                    BoardAt("B", teamB[0], teamB.Skip(1).ToList(), 4));
-            }));
-        }
 
         Announce($"Gallery: {steps.Count} panels, {PreviewSeconds}s each, "
             + $"about {(steps.Count * PreviewSeconds) / 60}m{(steps.Count * PreviewSeconds) % 60:00}s. "
@@ -306,7 +286,6 @@ public partial class Gpp
             {
                 StopPreview();
                 ClearWorldPanels();
-                RestoreProbedAnchor();
                 Announce("Gallery done - which numbers were wrong?");
                 return;
             }

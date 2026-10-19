@@ -46,18 +46,20 @@ public partial class Gpp
 
     private readonly Dictionary<int, ViewerPanel> _panels = [];
 
-    // How the panel keeps up with the view, best first. Which one is in use is decided once at load by
-    // Probe() and logged, because "the panel is in the wrong place" and "the panel is lagging" are
-    // different bugs and the log has to say which mechanism was drawing.
+    // How the boards keep up with the view.
     //
-    // Orient:   point_orient parented to the pawn, aimed down its eyeline, with the panel parented to
-    //           the orient. Position and rotation then ride the client's own prediction of its pawn, so
-    //           there is nothing to interpolate and nothing to send per tick.
-    // Pawn:     panel parented to the pawn. Translation is predicted; the facing is not, so the panel is
-    //           re-squared only when the eyes have turned past AimTolerance.
-    // Teleport: moved every tick, which is what the prototype did. Always works, always trails by about
-    //           a tenth of a second.
-    private enum Follow { Orient, Attachment, Pawn, Teleport }
+    // Orient:   a point_orient parented to the pawn and aimed down its eyeline, with the boards
+    //           parented to that. Position and rotation then ride the client's own prediction of its
+    //           pawn, so there is nothing to interpolate and nothing to send per tick.
+    // Teleport: moved by the server every tick. Always works, always trails about a tenth of a second
+    //           behind the camera, and only ever used if point_orient leaves the schema the way the
+    //           viewmodel did.
+    //
+    // Two other mounts were built and compared on a 4K client, 2026-10-19, and both are gone: parenting
+    // the orient to a look attachment on the player model was indistinguishable from the plain orient,
+    // which means these models do not carry the attachment, and parenting the boards straight to the
+    // pawn swings them about on every turn because the pawn's rotation is the body yaw.
+    private enum Follow { Orient, Teleport }
 
     private Follow _follow = Follow.Teleport;
 
@@ -79,7 +81,8 @@ public partial class Gpp
 
     // Centre to centre between the middle board and a side board. !pug sides overrides it, for when the
     // derived number still looks wrong in front of a real client; !pug sides auto hands it back.
-    private float SideGap => _sideGapOverride ?? WorldGeometry.SideGap();
+    private float SideGap => _sideGapOverride
+        ?? (Config.HudSideGap > 0f ? Config.HudSideGap : WorldGeometry.SideGap());
 
     private float? _sideGapOverride;
     private float _sideToeIn = 22f;      // degrees each side board turns inward to face the viewer
@@ -101,49 +104,12 @@ public partial class Gpp
     // read 2026-10-19 - the 0-on-missing return is an implementation detail, not a documented contract.]
     private void ProbeFollow()
     {
-        if (Schema.GetClassSize("CPointOrient") > 0
+        _follow = Schema.GetClassSize("CPointOrient") > 0
             && Schema.GetSchemaOffset("CPointOrient", "m_nGoalDirection") > 0
             && Schema.GetSchemaOffset("CPointOrient", "m_hTarget") > 0
-            && Schema.GetSchemaOffset("CPointOrient", "m_bActive") > 0)
-        {
-            _follow = Follow.Orient;
-        }
-        else if (Schema.GetClassSize("CBaseEntity") > 0)
-        {
-            _follow = Follow.Pawn;
-        }
-        else
-        {
-            _follow = Follow.Teleport;
-        }
-
-        // An explicit hud_anchor overrides the probe - that is what makes it possible to stand in front
-        // of all four of them in one session and say which one looks right. It cannot pick a tier the
-        // schema will not support: asking for one that failed the probe is logged and ignored.
-        if (!string.IsNullOrWhiteSpace(Config.HudAnchor))
-        {
-            var wanted = Config.HudAnchor.Trim().ToLowerInvariant() switch
-            {
-                "orient" => Follow.Orient,
-                "attachment" => Follow.Attachment,
-                "pawn" => Follow.Pawn,
-                "teleport" => Follow.Teleport,
-                _ => (Follow?)null,
-            };
-            if (wanted == null)
-            {
-                Logger.LogWarning("hud_anchor \"{Anchor}\" is not a thing - using {Tier}.", Config.HudAnchor, _follow);
-            }
-            else if ((wanted == Follow.Orient || wanted == Follow.Attachment) && _follow != Follow.Orient)
-            {
-                Logger.LogWarning("hud_anchor \"{Anchor}\" needs point_orient, which this build does not have - using {Tier}.",
-                    Config.HudAnchor, _follow);
-            }
-            else
-            {
-                _follow = wanted.Value;
-            }
-        }
+            && Schema.GetSchemaOffset("CPointOrient", "m_bActive") > 0
+                ? Follow.Orient
+                : Follow.Teleport;
 
         Logger.LogInformation("World panel follow tier: {Tier}. point_orient size {Size}, m_nGoalDirection at {Offset}.",
             _follow, Schema.GetClassSize("CPointOrient"), Schema.GetSchemaOffset("CPointOrient", "m_nGoalDirection"));
@@ -250,7 +216,7 @@ public partial class Gpp
         // Centred, all three. The rule at the bottom of each board is what fixes its width now, so
         // justification only decides where the words sit inside a box that is already the right size -
         // and the probe measured CENTER as the one that puts that box on the crosshair.
-        entity.JustifyHorizontal = _probeJustify ?? PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER;
+        entity.JustifyHorizontal = PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER;
         entity.JustifyVertical = PointWorldTextJustifyVertical_t.POINT_WORLD_TEXT_JUSTIFY_VERTICAL_CENTER;
         // The text is drawn in the entity's own plane, so without a roll of 90 it lies flat like a rug.
         // Auto-reorient does not help, because a flat panel's up axis is the wrong one.
@@ -288,7 +254,7 @@ public partial class Gpp
             return;
         }
 
-        if (_follow == Follow.Orient || _follow == Follow.Attachment)
+        if (_follow == Follow.Orient)
         {
             var orient = EnsureOrient(player, panel, pawn);
             if (orient != null)
@@ -303,13 +269,12 @@ public partial class Gpp
                 });
                 return;
             }
-            // The factory went away under us: carry on at the next tier down rather than drawing nothing.
-            Logger.LogWarning("point_orient would not spawn - the world panel is falling back to pawn parenting.");
-            _follow = Follow.Pawn;
+            // The factory went away under us: fall back to moving the boards by hand rather than
+            // drawing nothing at all.
+            Logger.LogWarning("point_orient would not spawn - the world panel is moving the boards itself.");
+            _follow = Follow.Teleport;
         }
 
-        slot.Text.AcceptInput("SetParent", pawn, null, "!activator");
-        panel.ParentedTo = (int)pawn.Index;
         Square(slot, which, pawn.AbsOrigin, pawn.EyeAngles, EyeHeight(pawn));
         panel.AimedAt = pawn.EyeAngles.Y;
     }
@@ -328,14 +293,9 @@ public partial class Gpp
         // Aimed down the pawn's eyeline, which is what carries the boards' facing without the server
         // sending an angle every tick.
         orient.GoalDirection = PointOrientGoalDirectionType_t.eEyesForward;
-        // ePreserveUpAxis holds the orient's up axis at the sky, which keeps the boards upright through
-        // a pitch without Square() having to take the pitch back out of the roll.
-        orient.Constraint = Config.HudOrientConstraint.Trim().ToLowerInvariant() == "preserveupaxis"
-            ? PointOrientConstraint_t.ePreserveUpAxis
-            : PointOrientConstraint_t.eNone;
-        // A rate-limited orient trails a fast flick, which reads as the boards swinging out and catching
-        // up. 0 leaves whatever the engine defaults to.
-        if (Config.HudOrientTurnRate > 0f) orient.MaxTurnRate = Config.HudOrientTurnRate;
+        // Unconstrained: Square() takes the pitch back out of the roll itself, and ePreserveUpAxis would
+        // be a second thing doing the same job in a different frame.
+        orient.Constraint = PointOrientConstraint_t.eNone;
         orient.DispatchSpawn();
         orient.Teleport(new Vector(pawn.AbsOrigin!.X, pawn.AbsOrigin.Y, pawn.AbsOrigin.Z + EyeHeight(pawn)), null, null);
 
@@ -344,14 +304,7 @@ public partial class Gpp
         // is a head bone, which tracks where somebody is actually looking. Whether this server's player
         // models carry the attachment is not knowable from here - a name the model does not have makes
         // SetParentAttachmentMaintainOffset do nothing, and it stays parented at the origin.
-        if (_follow == Follow.Attachment && !string.IsNullOrWhiteSpace(Config.HudAnchorAttachment))
-        {
-            orient.AcceptInput("SetParentAttachmentMaintainOffset", pawn, null, Config.HudAnchorAttachment);
-        }
-        else
-        {
-            orient.AcceptInput("SetParent", pawn, null, "!activator");
-        }
+        orient.AcceptInput("SetParent", pawn, null, "!activator");
         orient.AcceptInput("SetTarget", pawn, null, "!activator");
 
         panel.Orient = orient;
@@ -415,7 +368,7 @@ public partial class Gpp
             return;
         }
 
-        if (_follow == Follow.Orient || _follow == Follow.Attachment)
+        if (_follow == Follow.Orient)
         {
             // Parented and riding the orient, so there is normally nothing to do. The check is for the
             // one case that cannot be seen from here: a freeze taken while the orient was still turning,
@@ -439,11 +392,6 @@ public partial class Gpp
         }
 
         var eyes = pawn.EyeAngles;
-        if (_follow == Follow.Pawn && !float.IsNaN(panel.AimedAt) && Math.Abs(Delta(eyes.Y, panel.AimedAt)) <= AimTolerance)
-        {
-            return;
-        }
-
         for (int which = 0; which < panel.Boards.Length; which++)
         {
             Square(panel.Boards[which], (Board)which, pawn.AbsOrigin, eyes, EyeHeight(pawn));
@@ -574,160 +522,4 @@ public partial class Gpp
     // one back afterwards rather than leaving the server on whatever it showed last.
     private Follow? _probedFollow;
 
-    // Used by the gallery: switch mount without saying anything in chat, and without the guards that
-    // exist for a human typing it - a step that cannot work on this build is still worth showing, as
-    // itself, so the difference is visible.
-    internal void UseAnchor(string mode)
-    {
-        _probedFollow ??= _follow;
-        var wanted = mode switch
-        {
-            "orient" => Follow.Orient,
-            "attachment" => Follow.Attachment,
-            "pawn" => Follow.Pawn,
-            _ => Follow.Teleport,
-        };
-        if (wanted == _follow) return;
-        if ((wanted == Follow.Orient || wanted == Follow.Attachment) && Schema.GetClassSize("CPointOrient") <= 0) return;
-
-        _follow = wanted;
-        Rehang();
-    }
-
-    internal void RestoreProbedAnchor()
-    {
-        if (_probedFollow == null || _probedFollow == _follow) return;
-        _follow = _probedFollow.Value;
-        _probedFollow = null;
-        Rehang();
-    }
-
-    // One line per mount, so the panel itself says what is being looked at rather than the owner having
-    // to hold four descriptions in their head while turning round.
-    private string MountNote(string mode) => mode switch
-    {
-        "orient" => "point_orient on the pawn: position and facing both predicted by your own client.",
-        "attachment" => $"the same, hung from the model's \"{Config.HudAnchorAttachment}\" attachment."
-            + " If this looks identical to orient, the model has no such attachment.",
-        "pawn" => "parented to the player model: the body yaw, which snaps and lags behind your aim.",
-        _ => "no parent at all - moved by the server every tick, so it trails about a tenth of a second.",
-    };
-
-    // !pug probe - which justification actually centres a board, and whether the padding is what moves
-    // it off.
-    //
-    // The middle board sits left of the crosshair and walks further left as its content widens. Both of
-    // those are what a block anchored at its right edge does, but JustifyHorizontal is set to CENTER
-    // before the entity spawns, so something between that field and the screen disagrees - the text
-    // plane is built with a roll of 90 and a yaw a quarter turn behind the viewer's, and which way its
-    // own horizontal axis runs is not something the schema says.
-    //
-    // So: four boards, five seconds each, one of them centred. Nothing here is a guess that ships - it
-    // is the measurement that decides which one does.
-    private int _probeStep;
-
-    internal void JustifyProbe(CCSPlayerController? player)
-    {
-        if (player == null || !player.IsValid)
-        {
-            Logger.LogInformation("!pug probe draws in front of a player - run it in game.");
-            return;
-        }
-
-        ClearWorldPanels();
-        _probeStep = 0;
-        Announce("Justify probe: 4 boards, 5s each. Say which number sits on your crosshair.");
-
-        _probeTimer?.Kill();
-        _probeTimer = AddTimer(1.0f, () =>
-        {
-            int index = _probeStep / 5;
-            bool first = _probeStep % 5 == 0;
-            _probeStep++;
-
-            if (index >= 4)
-            {
-                // Out of the tick before killing the timer, the way every other probe in this plugin
-                // does it: CSS walks its timer vector by index and a kill from inside a tick corrupts
-                // the walk.
-                AfterTick(() =>
-                {
-                    _probeTimer?.Kill();
-                    _probeTimer = null;
-                    _probeJustify = null;
-                    ClearWorldPanels();
-                    Announce("Probe done. Which number was centred - 1, 2, 3 or 4?");
-                });
-                return;
-            }
-
-            var (name, justify, padded) = index switch
-            {
-                0 => ("1 CENTER, padded wide", PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER, true),
-                1 => ("2 CENTER, no padding", PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER, false),
-                2 => ("3 LEFT, padded wide", PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_LEFT, true),
-                _ => ("4 RIGHT, padded wide", PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_RIGHT, true),
-            };
-
-            if (first)
-            {
-                Announce(name);
-                _probeJustify = justify;
-                ClearWorldPanels();
-            }
-
-            string body = "XXXX   " + name + "   XXXX\n\nthe X's mark the edges of the text.\n"
-                + "this board should sit on your crosshair.";
-            ShowWorldPanel(player, padded
-                ? WorldLayout.Fixed(body, 12, WorldLayout.MainBoardWidth)
-                : body);
-        }, CounterStrikeSharp.API.Modules.Timers.TimerFlags.REPEAT);
-    }
-
-    // Which justification the probe is currently drawing with; SpawnBoard reads it so the probe does not
-    // need a spawn path of its own.
-    private PointWorldTextJustifyHorizontal_t? _probeJustify;
-
-    // !pug anchor [orient|attachment|pawn|teleport] [attachment name]
-    //
-    // Config is read at plugin load, so comparing four anchors through Gpp.json is four reloads and a
-    // lost sense of what the last one looked like. This switches live: every panel up is torn down and
-    // hung again from the new anchor, which is exactly what happens at a phase change anyway.
-    internal string SetAnchor(string mode, string attachment)
-    {
-        if (string.IsNullOrWhiteSpace(mode))
-        {
-            return $"Anchor is {_follow}"
-                + (_follow == Follow.Attachment ? $" on \"{Config.HudAnchorAttachment}\"" : "")
-                + $". point_orient {(Schema.GetClassSize("CPointOrient") > 0 ? "is" : "is NOT")} in this build's schema.";
-        }
-
-        var wanted = mode.Trim().ToLowerInvariant() switch
-        {
-            "orient" => Follow.Orient,
-            "attachment" or "attach" => Follow.Attachment,
-            "pawn" or "model" => Follow.Pawn,
-            "teleport" or "follow" => Follow.Teleport,
-            _ => (Follow?)null,
-        };
-        if (wanted == null) return "Anchor is one of: orient, attachment, pawn, teleport.";
-
-        if ((wanted == Follow.Orient || wanted == Follow.Attachment) && Schema.GetClassSize("CPointOrient") <= 0)
-        {
-            return "point_orient is not in this build's schema - orient and attachment cannot work here.";
-        }
-
-        if (!string.IsNullOrWhiteSpace(attachment)) Config.HudAnchorAttachment = attachment;
-        _follow = wanted.Value;
-
-        // Torn down rather than re-parented: an entity's offset from its parent is frozen when it is
-        // parented, so moving a live panel between anchors means unpicking exactly the state that is
-        // hardest to see. A fresh panel is one spawn per viewer and no doubt about what it is hanging
-        // from.
-        int rehung = Rehang();
-
-        return $"Anchor is now {_follow}"
-            + (_follow == Follow.Attachment ? $" on \"{Config.HudAnchorAttachment}\"" : "")
-            + $", {rehung} viewer(s) rehung.";
-    }
 }

@@ -296,23 +296,6 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
                 if (arg == "stop") { StopPreview(); StopHud(); Reply(command, "Preview stopped."); }
                 else HudPreview();
                 break;
-            case "anchor":
-                // What the world panel hangs from, switched live so four of them can be compared
-                // standing in the same spot. "orient" is the default; see Config.HudAnchor.
-                Reply(command, SetAnchor(arg, command.ArgCount > 3 ? command.ArgByIndex(3) : ""));
-                break;
-            case "probe":
-                AfterTick(() => JustifyProbe(player));
-                break;
-            case "sides":
-                // Where the two team boards sit, tuned on screen rather than guessed at.
-                Reply(command, SetSides(arg,
-                    command.ArgCount > 3 ? command.ArgByIndex(3) : "",
-                    command.ArgCount > 4 ? command.ArgByIndex(4) : ""));
-                break;
-            case "discord":
-                Reply(command, SetOpeningBoards(arg));
-                break;
             case "scroll":
                 ScrollProbe();
                 break;
