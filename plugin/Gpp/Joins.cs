@@ -98,9 +98,16 @@ public partial class Gpp
             player.ChangeTeam(side);
         }
 
+        // A team change does not hand back a pawn in the same frame, so the respawn waits for one. The
+        // draft sweep calls this again a second later if it still has not taken.
         var pawn = player.PlayerPawn.Value;
-        if (pawn == null || !pawn.IsValid || pawn.Health <= 0)
+        if (pawn != null && pawn.IsValid && pawn.Health > 0) return;
+
+        Server.NextFrame(() =>
         {
+            if (!player.IsValid) return;
+            var now = player.PlayerPawn.Value;
+            if (now != null && now.IsValid && now.Health > 0) return;
             try
             {
                 player.Respawn();
@@ -109,7 +116,7 @@ public partial class Gpp
             {
                 Logger.LogWarning("Could not respawn {Name} for the draft: {Message}", player.PlayerName, exception.Message);
             }
-        }
+        });
     }
 
     // Hands spectator back to the player. This used to put them on CsTeam.None - the unassigned slot a

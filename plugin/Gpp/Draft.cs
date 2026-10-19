@@ -239,10 +239,43 @@ public partial class Gpp
         // are behind them by the time they look up. Re-applied every second because being picked moves
         // a player to their team, and being moved spawns them again with movement back on.
         _lockTimer?.Kill();
-        _lockTimer = AddTimer(1.0f, () => LockDrafters(true), TimerFlags.REPEAT);
+        _lockTimer = AddTimer(1.0f, KeepDraftersStill, TimerFlags.REPEAT);
     }
 
     private CounterStrikeSharp.API.Modules.Timers.Timer? _lockTimer;
+
+    // Once a second for the whole draft: everybody on a team, alive, and standing still.
+    //
+    // Doing it once at the start does not hold. ChangeTeam does not hand back a pawn in the same frame,
+    // so the respawn that followed it had nothing to respawn - which is how somebody moved out of
+    // spectator was still spectating a bot a minute later. Being picked moves a player again, and that
+    // move spawns them with movement back on. So this is a sweep rather than a step: it fixes whatever
+    // it finds, every second, until the draft ends.
+    private void KeepDraftersStill()
+    {
+        int side = 0;
+        foreach (var player in HumanPlayers())
+        {
+            if (player.IsBot) continue;
+
+            if (player.Team != CsTeam.CounterTerrorist && player.Team != CsTeam.Terrorist)
+            {
+                PutOnTheField(player, side++ % 2 == 0 ? CsTeam.CounterTerrorist : CsTeam.Terrorist);
+                continue;
+            }
+
+            var pawn = player.PlayerPawn.Value;
+            if (pawn == null || !pawn.IsValid || pawn.Health <= 0)
+            {
+                PutOnTheField(player, player.Team);
+                continue;
+            }
+
+            if (pawn.MoveType == MoveType_t.MOVETYPE_NONE) continue;
+            pawn.MoveType = MoveType_t.MOVETYPE_NONE;
+            Utilities.SetStateChanged(pawn, "CBaseEntity", "m_MoveType");
+        }
+    }
 
     // Everybody in the draft held still, or let go. Movement only - they can still look around, which is
     // what the boards follow.
