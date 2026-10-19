@@ -130,4 +130,35 @@ public class WorldLayoutTests
         Assert.DoesNotContain("\n\n\n", panel);
         Assert.Equal(5, WorldLayout.LineCount(panel));
     }
+
+    [Fact]
+    public void BoardsAreAlwaysTheSameSize()
+    {
+        // The whole point of the fixed boards: an empty team and a full one are the same block, so the
+        // furniture does not move while the draft runs.
+        string empty = WorldLayout.TeamBoard("A", ["Ada  (c)"]);
+        string full = WorldLayout.TeamBoard("A", ["Ada  (c)", .. Names.Take(9)]);
+
+        Show("team board, first pick", empty);
+        Show("team board, full", full);
+        Assert.Equal(WorldLayout.TeamBoardLines, WorldLayout.LineCount(empty));
+        Assert.Equal(WorldLayout.LineCount(empty), WorldLayout.LineCount(full));
+        Assert.Equal(WorldLayout.TeamSlots + 2, WorldLayout.LineCount(full));
+    }
+
+    [Fact]
+    public void MainPanelIsAlwaysTwelveLines()
+    {
+        string shortest = WorldLayout.MainPanel("everybody is ready", [WorldLayout.Section.Of("here we go")], "mirage", 0);
+        string longest = WorldLayout.MainPanel("your pick",
+            [WorldLayout.Section.List(WorldLayout.Grid(Names.Select((n, i) => WorldLayout.Cell(i + 1, n))))],
+            "30s", 0);
+
+        Show("main, nearly empty", shortest);
+        Assert.Equal(WorldLayout.PanelLines, WorldLayout.LineCount(shortest));
+        Assert.Equal(WorldLayout.PanelLines, WorldLayout.LineCount(longest));
+        // The footer is the bottom line of both, so the clock does not wander up the screen when a list
+        // gets short.
+        Assert.EndsWith("mirage", shortest.Split('\n')[^1]);
+    }
 }

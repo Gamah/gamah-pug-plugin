@@ -39,12 +39,9 @@ public partial class Gpp
     // appearing under a captain *is* the feedback that the pick landed - nothing else has to announce it.
     private string TeamBoard(string label, ulong captain, List<ulong> team)
     {
-        var names = new List<string> { WorldLayout.Clip(Name(captain)) + "  (c)" };
-        names.AddRange(team.Where(steamId => steamId != captain).Select(steamId => WorldLayout.Clip(Name(steamId))));
-
-        return WorldLayout.Panel($"team {label}",
-            [WorldLayout.Section.List(names)],
-            null, _hudTicks);
+        var names = new List<string> { Name(captain) + "  (c)" };
+        names.AddRange(team.Where(steamId => steamId != captain).Select(Name));
+        return WorldLayout.TeamBoard(label, names);
     }
 
     private string TeamALabel() => "A";
@@ -64,7 +61,7 @@ public partial class Gpp
         foreach (var player in HumanPlayers())
         {
             bool mine = _volunteers.Contains(Id(player));
-            string panel = WorldLayout.Panel(
+            string panel = WorldLayout.MainPanel(
                 mine ? "you are up for captain" : "want to captain?",
                 [
                     WorldLayout.Section.Of(volunteers.Count == 0
@@ -101,7 +98,7 @@ public partial class Gpp
         foreach (var player in voters)
         {
             string panel = _votes.TryGetValue(Id(player), out int mine)
-                ? WorldLayout.Panel($"you voted {_ballot[mine].Label}",
+                ? WorldLayout.MainPanel($"you voted {_ballot[mine].Label}",
                     [
                         WorldLayout.Section.Of($"{_votes.Count}/{voters.Count} VOTED - WAITING ON"),
                         WorldLayout.Section.List(WorldLayout.Grid(missing.Select(WorldLayout.Clip))),
@@ -109,7 +106,7 @@ public partial class Gpp
                     ],
                     WorldLayout.Footer("!1-!9 changes your vote", $"{_voteSecondsLeft}s"),
                     _hudTicks)
-                : WorldLayout.Panel("pick a map",
+                : WorldLayout.MainPanel("pick a map",
                     [WorldLayout.Section.List(WorldLayout.Grid(ballot))],
                     WorldLayout.Footer("type the number in chat", $"{_voteSecondsLeft}s"),
                     _hudTicks);
@@ -137,7 +134,7 @@ public partial class Gpp
 
         foreach (var player in HumanPlayers())
         {
-            string panel = WorldLayout.Panel("waiting for players",
+            string panel = WorldLayout.MainPanel("waiting for players",
                 [
                     WorldLayout.Section.Of($"{back}/{_expectedRoster.Count} BACK - STILL TO CONNECT"),
                     WorldLayout.Section.List(WorldLayout.Grid(missing.Select(WorldLayout.Clip))),
@@ -171,7 +168,7 @@ public partial class Gpp
             string title = Id(player) == onClock
                 ? "your pick - type the number"
                 : $"{Name(onClock)} is picking";
-            WorldShow(player, WorldLayout.Panel(title, body, footer, _hudTicks), left, right);
+            WorldShow(player, WorldLayout.MainPanel(title, body, footer, _hudTicks), left, right);
         }
     }
 
@@ -197,7 +194,7 @@ public partial class Gpp
             bool drafted = _roster.ContainsKey(Id(player));
             bool mine = _readied.Contains(Id(player));
 
-            string panel = WorldLayout.Panel(
+            string panel = WorldLayout.MainPanel(
                 !drafted ? "match starting" : mine ? "you are ready" : "type .ready in chat",
                 [
                     WorldLayout.Section.Of(unready.Count == 0
@@ -223,7 +220,7 @@ public partial class Gpp
             bool mine = Id(player) == WinningCaptain()
                 || (!Config.Match.SideChoiceCaptainOnly && player.Team == _knifeSide);
 
-            string panel = WorldLayout.Panel(
+            string panel = WorldLayout.MainPanel(
                 mine ? "type .stay or .switch" : $"{Name(WinningCaptain())} is picking the side",
                 [
                     WorldLayout.Section.Of($"{SideName(_knifeSide)} won the knife round",
@@ -256,7 +253,7 @@ public partial class Gpp
         foreach (var player in HumanPlayers())
         {
             bool mine = _openingReady.Contains(Id(player));
-            string panel = WorldLayout.Panel(lines[0],
+            string panel = WorldLayout.MainPanel(lines[0],
                 [
                     WorldLayout.Section.Of(lines[1], lines[2]),
                     WorldLayout.Section.Of(waiting.Count == 0 ? "everybody is in" : "STILL MOVING"),
@@ -287,7 +284,7 @@ public partial class Gpp
     {
         foreach (var player in HumanPlayers())
         {
-            string panel = WorldLayout.Panel("idle server - fix it",
+            string panel = WorldLayout.MainPanel("idle server - fix it",
                 [
                     WorldLayout.Section.Of($"the server has been idle for {Describe(_idleWas)},",
                         "which makes the first round behave oddly"),
@@ -306,7 +303,7 @@ public partial class Gpp
     {
         foreach (var player in HumanPlayers())
         {
-            string panel = WorldLayout.Panel("server restarting",
+            string panel = WorldLayout.MainPanel("server restarting",
                 [
                     WorldLayout.Section.Of(_restartWhy),
                     WorldLayout.Section.Of("reconnect in about a minute -", "the server comes back on its own"),

@@ -152,10 +152,90 @@ internal static class WorldLayout
         return string.Join('\n', lines);
     }
 
+    // The middle board, always the same block: twelve lines and one width, whatever is in it. The footer
+    // is pinned to the bottom line rather than left to float up under short content, so the clock is
+    // always in the same place on the screen.
+    internal static string MainPanel(string title, IEnumerable<Section> sections, string? footer, int ticks)
+    {
+        var rows = Panel(title, sections, footer, ticks).Split('\n').ToList();
+        if (rows.Count < PanelLines && !string.IsNullOrEmpty(footer))
+        {
+            string last = rows[^1];
+            rows.RemoveAt(rows.Count - 1);
+            while (rows.Count < PanelLines - 1) rows.Add("");
+            rows.Add(last);
+        }
+        return Fixed(string.Join('\n', rows), PanelLines, MainBoardWidth);
+    }
+
     // The clock and the count that sit in the footer of nearly every panel. Seconds first because it is
     // the number people look for.
     internal static string Footer(params string?[] parts) =>
         string.Join("        ", parts.Where(part => !string.IsNullOrEmpty(part)));
 
     internal static int LineCount(string panel) => panel.Count(c => c == '\n') + 1;
+
+    // --- fixed-size boards --------------------------------------------------------------------------
+    //
+    // The boards are furniture: they stay the same size and the text moves inside them. A panel that
+    // grows and shrinks with its content reads as the panel itself moving, which is the thing the eye
+    // follows instead of the words - and with three boards side by side, two of them resizing as picks
+    // land is worse again.
+    //
+    // So every board is padded out to a fixed number of lines and a fixed width before it is sent. The
+    // width is padded in *measured* units rather than characters, because the font is proportional:
+    // twenty spaces after "Ada" and twenty after "WWW" are not the same board.
+    internal const int TeamSlots = 10;          // a 10v10, which is the biggest pug this is sized for
+    internal const int TeamBoardLines = 12;     // label, a blank, and the ten slots
+    internal const int TeamBoardWidth = 150;    // HudMetrics units; the side boards are narrow columns
+    internal const int MainBoardWidth = 460;    // the middle board, where the lists live
+
+    // Pads a composed panel to exactly `lines` tall and `width` wide. The width is held by one padded
+    // line rather than by padding them all: the background box is sized from the widest line, so one is
+    // enough and the rest stay as they were written.
+    internal static string Fixed(string panel, int lines, int width)
+    {
+        var rows = panel.Split('\n').ToList();
+
+        // Widen whichever line is already the widest, so nothing is re-flowed by the padding.
+        int widest = 0;
+        for (int row = 0; row < rows.Count; row++)
+        {
+            if (HudMetrics.Width(rows[row]) > HudMetrics.Width(rows[widest])) widest = row;
+        }
+        rows[widest] = Pad(rows[widest], width);
+
+        while (rows.Count < lines) rows.Add("");
+        if (rows.Count > lines) rows = [.. rows.Take(lines)];
+        return string.Join('\n', rows);
+    }
+
+    // Spaces until the line measures at least `width`. A space is the narrowest glyph there is, so this
+    // lands within one space of the target rather than exactly on it - which is as close as a
+    // proportional font gets without an entity per column.
+    private static string Pad(string line, int width)
+    {
+        int have = HudMetrics.Width(line);
+        if (have >= width) return line;
+        int spaces = (width - have) / HudMetrics.Width(' ');
+        return line + new string(' ', Math.Max(0, spaces));
+    }
+
+    // One team's board: the label, then ten slots that are there from the first pick whether or not
+    // anybody is standing in them. A board that grows as picks land changes size ten times a draft;
+    // a board with the gaps already in it shows how many picks are still to come.
+    internal static string TeamBoard(string label, IEnumerable<string> names)
+    {
+        var filled = names.Select(Clip).ToList();
+        var slots = new List<string>();
+        for (int slot = 0; slot < TeamSlots; slot++)
+        {
+            slots.Add(slot < filled.Count ? filled[slot] : "-");
+        }
+
+        // Composed here rather than through Panel(): Panel puts a blank line after every block, which on
+        // a board that is exactly as tall as its content pushed the last slot off the bottom and left the
+        // truncation marker in its place.
+        return Fixed($"TEAM {label.ToUpperInvariant()}\n\n" + string.Join('\n', slots), TeamBoardLines, TeamBoardWidth);
+    }
 }

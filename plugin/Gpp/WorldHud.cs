@@ -80,10 +80,14 @@ public partial class Gpp
     //
     // All three are tunable live with !pug sides, because the only way to judge them is to stand in
     // front of them, and a redeploy per guess is the slow version of that.
-    private float _sideGap = 62f;        // units to each side of the middle board's centre
-    private float _sideToeIn = 28f;      // degrees each side board turns inward to face the viewer
+    // Tightened on 2026-10-19 after looking at them: 62 units apart with narrow boards read as three
+    // separate things on separate walls. Close enough to touch is fine; touching is not a requirement.
+    private float _sideGap = 40f;        // units to each side of the middle board's centre
+    private float _sideToeIn = 22f;      // degrees each side board turns inward to face the viewer
     private float _sideBack = 0f;        // units further away than the middle board, if they want it
-    private const float PanelScreenPercent = 75f;
+    // Dropped from 75 on 2026-10-19: with three boards across, type that size left the side boards at the
+    // edge of the view and nothing room to breathe. Everything is one size, so this is the one knob.
+    private const float PanelScreenPercent = 62f;
     private const float PanelUpOffset = 9f;
 
     private static float PanelScale()

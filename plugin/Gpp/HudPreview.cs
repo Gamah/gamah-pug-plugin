@@ -151,21 +151,27 @@ public partial class Gpp
         // Boards grow over the step for the same reason: the whole idea of the side boards is that a
         // name leaves the middle and lands under a captain.
         string BoardAt(string label, string captain, List<string> team, int filled) =>
-            WorldLayout.Panel($"team {label}",
-                [WorldLayout.Section.List([WorldLayout.Clip(captain) + "  (c)",
-                    .. team.Take(Math.Clamp(filled, 0, team.Count)).Select(WorldLayout.Clip)])],
-                null, _hudTicks);
+            WorldLayout.TeamBoard(label,
+                [captain + "  (c)", .. team.Take(Math.Clamp(filled, 0, team.Count))]);
 
         var steps = new List<(string Name, Func<int, (string Main, string? Left, string? Right)> Boards)>
         {
-            ("captain sign-up", left => (WorldLayout.Panel("want to captain?",
-            [
-                WorldLayout.Section.Of($"IN:  {string.Join("  ", teamA.Take(2).Select(WorldLayout.Clip))}"),
-                WorldLayout.Section.Of("STILL TO ANSWER"),
-                WorldLayout.Section.List(WorldLayout.Grid(Dwindling(PreviewNames.Skip(2), left))),
-            ], WorldLayout.Footer("type !captain", $"{left}s"), _hudTicks), null, null)),
+            // Both halves move: the list of people who have not answered shrinks, and the line of people
+            // who have grows by the same name. Watching one of them move and the other sit still is what
+            // made this look broken.
+            ("captain sign-up", left =>
+            {
+                var quiet = Dwindling(PreviewNames.Skip(2), left);
+                var answered = PreviewNames.Skip(2).Except(quiet).Prepend(teamA[0]).Prepend(teamB[0]);
+                return (WorldLayout.MainPanel("want to captain?",
+                [
+                    WorldLayout.Section.Of($"IN:  {string.Join("  ", answered.Select(WorldLayout.Clip))}"),
+                    WorldLayout.Section.Of("STILL TO ANSWER"),
+                    WorldLayout.Section.List(WorldLayout.Grid(quiet)),
+                ], WorldLayout.Footer("type !captain", $"{left}s"), _hudTicks), null, null);
+            }),
 
-            ("map vote, not voted yet", left => (WorldLayout.Panel("pick a map",
+            ("map vote, not voted yet", left => (WorldLayout.MainPanel("pick a map",
             [
                 WorldLayout.Section.List(WorldLayout.Grid(ballot)),
             ], WorldLayout.Footer("type the number in chat", $"{left}s"), _hudTicks), null, null)),
@@ -173,18 +179,25 @@ public partial class Gpp
             ("map vote, already voted", left =>
             {
                 var missing = Dwindling(PreviewNames.Skip(2), left);
-                return (WorldLayout.Panel("you voted mirage",
+                // The tally moves as the votes land, and the lead changes hands once on the way - which
+                // is the thing to watch, because it is the only part of the panel that tells somebody
+                // their vote did anything.
+                int cast = PreviewNames.Length - missing.Count;
+                string leading = cast < 4
+                    ? $"mirage {new string('*', Math.Max(1, cast))}"
+                    : $"nuke {new string('*', cast - 2)}    mirage {new string('*', Math.Min(3, cast))}";
+                return (WorldLayout.MainPanel("you voted mirage",
                 [
-                    WorldLayout.Section.Of($"{PreviewNames.Length - missing.Count}/{PreviewNames.Length} VOTED - WAITING ON"),
+                    WorldLayout.Section.Of($"{cast}/{PreviewNames.Length} VOTED - WAITING ON"),
                     WorldLayout.Section.List(WorldLayout.Grid(missing)),
-                    WorldLayout.Section.Of("LEADING", "mirage ***    nuke **"),
+                    WorldLayout.Section.Of("LEADING", leading),
                 ], WorldLayout.Footer("!1-!9 changes your vote", $"{left}s"), _hudTicks), null, null);
             }),
 
             ("waiting to reconnect", left =>
             {
                 var missing = Dwindling(PreviewNames.Skip(2), left);
-                return (WorldLayout.Panel("waiting for players",
+                return (WorldLayout.MainPanel("waiting for players",
                 [
                     WorldLayout.Section.Of($"{PreviewNames.Length - missing.Count}/{PreviewNames.Length} BACK - STILL TO CONNECT"),
                     WorldLayout.Section.List(WorldLayout.Grid(missing)),
@@ -196,7 +209,7 @@ public partial class Gpp
             ("draft, picks landing", left =>
             {
                 int picked = PreviewSeconds - left;
-                return (WorldLayout.Panel(left % 4 < 2 ? "your pick - type the number" : "Ada is picking",
+                return (WorldLayout.MainPanel(left % 4 < 2 ? "your pick - type the number" : "Ada is picking",
                 [
                     WorldLayout.Section.List(WorldLayout.Grid(pool.Skip(picked))),
                 ], WorldLayout.Footer($"{left}s", $"{Math.Max(0, pool.Count - picked)} still to pick"), _hudTicks),
@@ -207,7 +220,7 @@ public partial class Gpp
             ("ready", left =>
             {
                 var unready = Dwindling(PreviewNames.Skip(2), left);
-                return (WorldLayout.Panel("type .ready in chat",
+                return (WorldLayout.MainPanel("type .ready in chat",
                 [
                     WorldLayout.Section.Of($"{PreviewNames.Length - unready.Count}/{PreviewNames.Length} READY - STILL TO READY"),
                     WorldLayout.Section.List(WorldLayout.Grid(unready)),
@@ -216,7 +229,7 @@ public partial class Gpp
                     BoardAt("B", teamB[0], teamB.Skip(1).ToList(), 4));
             }),
 
-            ("side choice", left => (WorldLayout.Panel("type .stay or .switch",
+            ("side choice", left => (WorldLayout.MainPanel("type .stay or .switch",
             [
                 WorldLayout.Section.Of("CT won the knife round", ".stay keeps this side, .switch takes the other"),
             ], WorldLayout.Footer("mirage"), _hudTicks),
@@ -229,7 +242,7 @@ public partial class Gpp
 
             ("move in discord, 1 board", left => (OpeningPreview(left), null, null)),
 
-            ("idle server", left => (WorldLayout.Panel("idle server - fix it",
+            ("idle server", left => (WorldLayout.MainPanel("idle server - fix it",
             [
                 WorldLayout.Section.Of("the server has been idle for 3 hours,", "which makes the first round behave oddly"),
                 WorldLayout.Section.Of("!reload   - load de_mirage again", "!restart  - restart the server", "!skip     - leave it as it is"),
@@ -249,7 +262,7 @@ public partial class Gpp
             steps.Add(($"mount: {which} - turn your head", left =>
             {
                 UseAnchor(which);
-                return (WorldLayout.Panel($"mount: {which}",
+                return (WorldLayout.MainPanel($"mount: {which}",
                 [
                     WorldLayout.Section.Of("turn your head, look up, look down.",
                         "the boards should stay where they are relative to you."),
@@ -293,7 +306,7 @@ public partial class Gpp
     private string OpeningPreview(int left)
     {
         var lines = MatchRules.OpeningLines(3);
-        return WorldLayout.Panel(lines[0],
+        return WorldLayout.MainPanel(lines[0],
         [
             WorldLayout.Section.Of(lines[1], lines[2]),
             WorldLayout.Section.Of("STILL MOVING"),
