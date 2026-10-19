@@ -48,7 +48,7 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
     {
         NeverKickAnyone();
         KeepMatchZyAsleep();
-        AllowUnlimitedZeus();
+        AllowUnlimitedWarmupBuys();
 
         HookMatchZy();
         HookJoins();
@@ -128,20 +128,21 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         Server.ExecuteCommand("matchzy_autostart_mode 0");
     }
 
-    // Warmup hands out unlimited money, so a one-per-round zeus reads as a bug. MatchZy/warmup.cfg and
-    // sleep.cfg set this to -1, but live.cfg puts it back to 1 and that outlives the match, so assert it
-    // wherever the server lands back in an idle warmup. Matches are unaffected: live.cfg runs after this
-    // and returns the competitive limit of one.
-    private static void AllowUnlimitedZeus()
+    // Warmup hands out unlimited money, so a per-round buy cap reads as a bug - it is what stops a fifth
+    // zeus, and dying does not clear it because warmup is one long round. mp_weapons_allow_zeus is only a
+    // 0/1 toggle; the cap is mp_weapons_allow_typecount, which defaults to 5 and which neither sleep.cfg
+    // nor live.cfg sets, so it sits at the default unless something asserts it. Lifted here wherever the
+    // server lands back in an idle warmup; the match config asks for 5 again at the handoff.
+    private static void AllowUnlimitedWarmupBuys()
     {
-        Server.ExecuteCommand("mp_weapons_allow_zeus -1");
+        Server.ExecuteCommand("mp_weapons_allow_zeus 1;mp_weapons_allow_typecount -1");
     }
 
     private void OnMapStart(string mapName)
     {
         NeverKickAnyone();
         KeepMatchZyAsleep();
-        AllowUnlimitedZeus();
+        AllowUnlimitedWarmupBuys();
         ClearFunEffects();
 
         if (!_draftPendingMapChange) return;

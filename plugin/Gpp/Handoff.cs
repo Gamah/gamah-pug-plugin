@@ -58,6 +58,9 @@ public partial class Gpp
                 // Uneven teams are the point: the engine must not even the sides up or refuse a join.
                 ["mp_autoteambalance"] = "0",
                 ["mp_limitteams"] = "0",
+                // Warmup lifts the per-round buy cap (see AllowUnlimitedWarmupBuys) and no MatchZy config
+                // puts it back, so a match has to ask for the engine default itself.
+                ["mp_weapons_allow_typecount"] = "5",
             },
             ["team1"] = TeamObject(_captain1, _team1),
             ["team2"] = TeamObject(_captain2, _team2),
