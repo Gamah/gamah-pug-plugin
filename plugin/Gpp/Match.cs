@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
+using CounterStrikeSharp.API.Core.Attributes.Registration;
 using CounterStrikeSharp.API.Modules.Cvars;
 using CounterStrikeSharp.API.Modules.Timers;
 using CounterStrikeSharp.API.Modules.Utils;
@@ -275,7 +276,16 @@ public partial class Gpp
         return (alive, health);
     }
 
-    // .stay / .switch, from a player on the winning side or from an admin.
+    [ConsoleCommand("css_stay", "Keep the side you won the knife round on")]
+    public void OnStayCommand(CCSPlayerController? player, CounterStrikeSharp.API.Modules.Commands.CommandInfo command) =>
+        AfterTick(() => ChooseSide(player == null || !player.IsValid ? null : PlayerBySteamId(Id(player)), stay: true));
+
+    [ConsoleCommand("css_switch", "Take the other side after the knife round")]
+    [ConsoleCommand("css_swap", "Take the other side after the knife round")]
+    public void OnSwitchCommand(CCSPlayerController? player, CounterStrikeSharp.API.Modules.Commands.CommandInfo command) =>
+        AfterTick(() => ChooseSide(player == null || !player.IsValid ? null : PlayerBySteamId(Id(player)), stay: false));
+
+    // .stay / .switch, from a player on the winning side or from the console.
     internal void ChooseSide(CCSPlayerController? player, bool stay)
     {
         if (_matchPhase != MatchPhase.SideChoice)
