@@ -198,6 +198,7 @@ public partial class Gpp
         // somebody readies - and seeing your own name with a cross next to it is harder to ignore than
         // being absent from a list.
         var marked = roster.Select(steamId => (_readied.Contains(steamId) ? "+ " : "X ") + Name(steamId));
+        var absent = AbsentRoster();
 
         string left = LeftBoard();
         string right = RightBoard();
@@ -212,6 +213,9 @@ public partial class Gpp
                 [
                     WorldLayout.Section.Of($"{ready}/{roster.Count} READY"),
                     new([.. WorldLayout.Slots(marked, WorldLayout.TeamSlots, 2)]),
+                    // Named, not waited on: the match can start without them, and the room decides
+                    // whether to hold for somebody who has gone.
+                    WorldLayout.Section.Of(absent.Count == 0 ? null : $"NOT HERE: {string.Join("  ", absent.Select(WorldLayout.Clip))}"),
                 ],
                 WorldLayout.Footer(_readyHudMap, drafted ? null : "you are not in this match"),
                 _hudTicks);

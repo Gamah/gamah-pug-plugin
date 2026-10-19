@@ -47,8 +47,22 @@ public partial class Gpp
         _gateTimer = null;
     }
 
-    // Bots play the match but cannot type, so they are neither counted nor named.
-    private List<ulong> ReadyRoster() => _roster.Keys.Where(steamId => !IsBotId(steamId)).ToList();
+    // Who the ready gate is actually about: the drafted players who are here and can type. Bots play the
+    // match but cannot ready, and somebody who has left cannot either.
+    //
+    // Counting a player who is not connected means a pug waits forever on somebody who has gone home,
+    // with no way past it but an admin - which is what "my .ready did nothing" was. They are named on
+    // the panel so the room can decide whether to wait for them, and that decision belongs to the room
+    // rather than to a gate that cannot be argued with.
+    private List<ulong> ReadyRoster() => _roster.Keys
+        .Where(steamId => !IsBotId(steamId) && PlayerBySteamId(steamId) != null)
+        .ToList();
+
+    // Drafted, human, and not here. The panel names them; nothing waits on them.
+    internal List<string> AbsentRoster() => _roster.Keys
+        .Where(steamId => !IsBotId(steamId) && PlayerBySteamId(steamId) == null)
+        .Select(Name)
+        .ToList();
 
     internal int ReadyCount() => ReadyRoster().Count(_readied.Contains);
 
@@ -147,14 +161,16 @@ public partial class Gpp
             return;
         }
 
-        // The gate: everybody has to be in place before the first ready counts for anything.
+        // The sweep puts whoever is here on the side they were drafted to and spawns them. It used to be
+        // a gate as well - any name it returned refused the ready outright - so one player who had left
+        // for good held a whole pug, and everybody else's .ready did nothing at all with no way past it
+        // but an admin. It reports now, and readiness is counted over the people who are actually here.
         var missing = SweepRoster();
         if (missing.Count > 0)
         {
             string who = string.Join(", ", missing);
-            if (player != null && player.IsValid) player.PrintToChat(Prefix() + $"Not yet - waiting on {who}.");
-            else Logger.LogInformation("Ready held: {Who}", who);
-            return;
+            if (player != null && player.IsValid) player.PrintToChat(Prefix() + $"Still out: {who}.");
+            else Logger.LogInformation("Readying with players out: {Who}", who);
         }
         StopReadyPhase();
 
