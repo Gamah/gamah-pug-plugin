@@ -394,10 +394,14 @@ public partial class Gpp
 
         // Credit goes last or it is not read. With the Discord hold on, the last thing printed at
         // go-live is that hold, so the credit waits for it to finish and lands when play starts.
-        if (Config.Match.OpeningPauseSeconds <= 0) AnnounceCredit();
+        if (Config.Match.OpeningPauseSeconds <= 0) AnnounceCreditLast();
     }
 
     // The last two lines in chat when a match starts.
+    // A second behind whatever else is being said, so it is the last thing in chat whichever order the
+    // engine and the plugin got their lines out in - the point of it is to be the line still on screen.
+    internal void AnnounceCreditLast() => AddTimer(1.0f, AnnounceCredit);
+
     internal void AnnounceCredit()
     {
         // Without the [GPP] prefix the rest of the plugin's chat carries: the line says who it is from

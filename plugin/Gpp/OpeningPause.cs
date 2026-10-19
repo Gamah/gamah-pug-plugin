@@ -63,7 +63,7 @@ public partial class Gpp
 
         // Play is actually starting, so this is the last thing in chat - which is the point of it.
         // Not when the hold was cut short because the match stopped being live.
-        if (_matchPhase == MatchPhase.Live) AnnounceCredit();
+        if (_matchPhase == MatchPhase.Live) AnnounceCreditLast();
     }
 
     // Everyone playing, which during a match is everyone on a side - not the drafted roster, because
