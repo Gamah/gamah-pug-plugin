@@ -42,6 +42,22 @@ public partial class Gpp
         internal int ParentedTo;               // pawn index they were parented to, 0 for none
 
         internal IEnumerable<Slot> Live => Boards.Where(board => board.Text != null && board.Text.IsValid);
+
+        // What CheckTransmit needs, kept as a plain array rather than rebuilt by LINQ: that hook runs
+        // once per viewer per frame, so on a ten-man it is a hundred passes a frame and every
+        // allocation in it is paid a hundred times.
+        internal CEntityInstance[] Entities = [];
+
+        internal void Rebuild()
+        {
+            var live = new List<CEntityInstance>(4);
+            foreach (var board in Boards)
+            {
+                if (board.Text != null && board.Text.IsValid) live.Add(board.Text);
+            }
+            if (Orient != null && Orient.IsValid) live.Add(Orient);
+            Entities = [.. live];
+        }
     }
 
     private readonly Dictionary<int, ViewerPanel> _panels = [];
@@ -120,7 +136,7 @@ public partial class Gpp
     // per-player too.
     private void WorldPanelTransmit(CCheckTransmitInfoList infos)
     {
-        if (Retired || _panels.Count == 0) return;
+        if (Retired || _panels.Count < 2) return;
 
         foreach (var (info, receiver) in infos)
         {
@@ -128,8 +144,7 @@ public partial class Gpp
             foreach (var (slot, panel) in _panels)
             {
                 if (slot == receiver.Slot) continue;
-                foreach (var board in panel.Live) info.TransmitEntities.Remove(board.Text!);
-                if (panel.Orient != null && panel.Orient.IsValid) info.TransmitEntities.Remove(panel.Orient);
+                foreach (var entity in panel.Entities) info.TransmitEntities.Remove(entity);
             }
         }
     }
@@ -171,6 +186,7 @@ public partial class Gpp
             if (slot.Text != null && slot.Text.IsValid) slot.Text.Remove();
             slot.Text = null;
             slot.Sent = "";
+            panel.Rebuild();
             return;
         }
 
@@ -226,6 +242,7 @@ public partial class Gpp
         panel.Boards[(int)which].Text = entity;
 
         Hang(player, panel, which);
+        panel.Rebuild();
         return true;
     }
 
@@ -309,6 +326,7 @@ public partial class Gpp
 
         panel.Orient = orient;
         panel.ParentedTo = (int)pawn.Index;
+        panel.Rebuild();
         return orient;
     }
 

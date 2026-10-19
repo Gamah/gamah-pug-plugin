@@ -64,6 +64,11 @@ public partial class Gpp
         _repaintTimer = AddTimer(RepaintSeconds, () =>
         {
             if (_repaint == null) return;
+            // Ten redraws a second exist to beat PrintToCenter's fade and to move a scrolling line.
+            // World text does neither: it holds what it was last given until it is told otherwise, and
+            // nothing scrolls. Composing thirty boards ten times a second instead of once was costing
+            // frames on a full server - measured as 17ms frames during a ten-man draft, 2026-10-19.
+            if (WorldStyle) return;
             HudLayout.BumpPaintTick();
             _repaint.Invoke();
         }, TimerFlags.REPEAT);
