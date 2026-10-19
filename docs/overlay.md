@@ -100,6 +100,31 @@ everybody's face with no plugin left to clear it. `SweepStrayPanels` runs on map
 `point_worldtext` or `point_orient` left behind by a crash or a bad deploy. A respawn means a new pawn,
 which means the old parent is gone - `KeepUp` notices and rehangs.
 
+## What a pug looks like to the overlay
+
+Learned by running one with bots on 2026-10-19, and none of it was obvious from the code.
+
+- **A player's camera is their own pawn or nothing.** Following whoever a spectator was watching looks
+  like it works and does not: the boards hang on that player and go where they go, so the spectator sees
+  nothing while the plugin believes it has drawn them a panel. That also silently swallowed the fallback
+  meant to cover them.
+- **Anyone without a pawn gets a centre-screen alert instead** - two lines, no pawn needed. In the draft
+  it is `<captain> IS PICKING` / `YOU SPAWN WHEN PICKED`. The alert box clips at about thirty characters
+  rather than wrapping, so a longer line loses its end.
+- **The draft keeps everybody alive and frozen** rather than holding the pool in spectator, because a
+  held spectator has no camera the server can read. A sweep runs once a second: anybody off-team gets a
+  team, anybody dead gets spawned, anybody who can move is frozen. Doing it once at the start does not
+  hold - `ChangeTeam` does not hand back a pawn in the same frame, and being picked moves a player again
+  and spawns them with movement back on.
+- **The captain duel kills everyone who is not in it**, so the round is restarted when it ends. Without
+  that the losing captain spends the whole draft dead, watching somebody else's camera, with no pick
+  list - one of the two people who most needs it.
+- **Both knife rounds draw no boards and two lines of alert instead.** A board is a solid object in
+  front of the face and a knife round is the one part of a pug that is aim.
+- **Ten redraws a second is a centre-panel habit.** World text holds what it was given, so composing
+  thirty boards ten times a second cost 17ms server frames on a ten-man. `CheckTransmit` runs once per
+  viewer per frame - a hundred passes a frame on a ten-man - so nothing in it may allocate.
+
 ## Open
 
 **The boards still come out different sizes** (observed 2026-10-19, after the rule and the filler marks
@@ -117,3 +142,20 @@ the toe-in has been approximating by hand.
 Worth re-checking after that, because they share a cause: whether a board that is toed in reads as
 narrower than the middle one simply because it is turned away, and whether the toe-in should be exactly
 the angle the board sits at rather than a number that was picked by eye.
+
+**Teams came out 4v6 once** (2026-10-19), after a draft that announced itself as 5v5. Not chased. The
+leftover-fill at the end of the draft and the ready phase's roster sweep both move people, and bot
+identity churn across a map change makes a test roster unreliable, so it may not reproduce with humans.
+
+**The boards are still different sizes** - see the arc fix above. Unchanged.
+
+**`css_stay` over rcon does nothing**, with no log line, while the match sits in side choice. The thirty
+second timer covers the case it was being used for, and a real captain typing `.stay` in chat has not
+been tried, so it is not known whether this is an rcon routing problem or a command one.
+
+**The knife starts within twenty seconds of a map change**, while people are still loading - a map
+change does not disconnect anyone, so the reconnect wait sees everybody immediately. A captain who loads
+slowly can lose first pick without seeing the duel.
+
+**Pinned captains are dropped when a match ends**, so `css_pug captains` has to be re-sent if a pug is
+started over.
