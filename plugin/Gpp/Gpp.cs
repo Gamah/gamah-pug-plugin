@@ -279,9 +279,11 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
                 if (arg == "stop") AfterTick(StopWorldPanel);
                 else
                 {
-                    float distance = command.ArgCount > 2 && float.TryParse(command.ArgByIndex(2), out float d) ? d : 0;
-                    float font = command.ArgCount > 3 && float.TryParse(command.ArgByIndex(3), out float f) ? f : 0;
-                    AfterTick(() => WorldPanelDemo(player, distance, font));
+                    // !pug panel [percent of screen] [distance] [height above the crosshair]
+                    float percent = command.ArgCount > 2 && float.TryParse(command.ArgByIndex(2), out float p) ? p : 0;
+                    float distance = command.ArgCount > 3 && float.TryParse(command.ArgByIndex(3), out float d) ? d : 0;
+                    float up = command.ArgCount > 4 && float.TryParse(command.ArgByIndex(4), out float u) ? u : 0;
+                    AfterTick(() => WorldPanelDemo(player, percent, distance, up));
                 }
                 break;
             case "scroll":
