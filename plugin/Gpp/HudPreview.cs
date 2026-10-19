@@ -185,10 +185,14 @@ public partial class Gpp
 
                 // Votes spread over the real map pool and climb as they land, which is what somebody who
                 // has already voted is actually watching.
+                // Votes pile onto a few maps rather than spreading one each - which is what a real vote
+                // looks like, and the only version that shows a map with four stars next to one with
+                // two. The lead changes hands on the way, because that is the moment worth watching.
                 var tally = Config.MapPool.Select((map, index) => (map.Label, Votes: 0)).ToList();
+                int[] favourites = [1, 3, 0, 1, 3, 1, 0, 5, 3, 1, 3, 0, 5, 1, 3, 0, 1, 3, 5, 1];
                 for (int vote = 0; vote < cast && tally.Count > 0; vote++)
                 {
-                    int on = (vote * 3) % tally.Count;
+                    int on = favourites[vote % favourites.Length] % tally.Count;
                     tally[on] = (tally[on].Label, tally[on].Votes + 1);
                 }
                 var cells = tally.Where(entry => entry.Votes > 0)

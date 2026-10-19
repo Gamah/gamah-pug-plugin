@@ -219,4 +219,23 @@ public class WorldLayoutTests
             Assert.Equal(HudMetrics.Width(WorldLayout.Rule(WorldLayout.MainBoardWidth)), Widest(panel));
         }
     }
+
+    // What the widest line any board can hold actually measures, printed so the board widths are set
+    // from a measurement rather than a guess. If this grows past MainBoardWidth the boards start
+    // breathing again, which is what NoPanelEverChangesSize fails on.
+    [Fact]
+    public void WidestLineIsPrinted()
+    {
+        var pool = Names.Concat(Names).Take(18).Select((name, i) => WorldLayout.Cell(i + 1, name));
+        int draft = WorldLayout.Grid(pool).Max(HudMetrics.Width);
+        int ballot = WorldLayout.Grid(Maps.Select((m, i) => WorldLayout.Cell(i + 1, m))).Max(HudMetrics.Width);
+        int names = WorldLayout.Grid(Names.Select(WorldLayout.Clip)).Max(HudMetrics.Width);
+        int team = Names.Select(WorldLayout.Clip).Max(HudMetrics.Width);
+
+        _out.WriteLine($"draft grid  {draft}");
+        _out.WriteLine($"ballot grid {ballot}");
+        _out.WriteLine($"name grid   {names}");
+        _out.WriteLine($"team name   {team}");
+        _out.WriteLine($"MainBoardWidth {WorldLayout.MainBoardWidth}, TeamBoardWidth {WorldLayout.TeamBoardWidth}");
+    }
 }

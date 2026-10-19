@@ -80,9 +80,21 @@ public partial class Gpp
     //
     // All three are tunable live with !pug sides, because the only way to judge them is to stand in
     // front of them, and a redeploy per guess is the slow version of that.
-    // Tightened on 2026-10-19 after looking at them: 62 units apart with narrow boards read as three
-    // separate things on separate walls. Close enough to touch is fine; touching is not a requirement.
-    private float _sideGap = 40f;        // units to each side of the middle board's centre
+    // Where the side boards sit is worked out from how wide the boards actually are, not from a number
+    // somebody liked the look of. Half the middle board, plus half a side board, plus a margin - which
+    // is the smallest gap that cannot overlap, whatever the text size or the distance is set to.
+    //
+    // A board's width in world units is its width in HudMetrics units times two pixels a unit times the
+    // panel scale. The two is the only empirical part: measured off a 4K screenshot, where a board of
+    // 900 HudMetrics units came out 95 world units wide. [SOURCE: measured 2026-10-19.]
+    private const float PixelsPerMetric = 2f;
+
+    private static float BoardWorldWidth(int metrics) => metrics * PixelsPerMetric * PanelScale();
+
+    private float SideGap => _sideGapOverride
+        ?? ((BoardWorldWidth(WorldLayout.MainBoardWidth) + BoardWorldWidth(WorldLayout.TeamBoardWidth)) / 2f) + 8f;
+
+    private float? _sideGapOverride;     // !pug sides, for when the derived number still looks wrong
     private float _sideToeIn = 22f;      // degrees each side board turns inward to face the viewer
     private float _sideBack = 0f;        // units further away than the middle board, if they want it
     // Dropped from 75 on 2026-10-19: with three boards across, type that size left the side boards at the
@@ -259,12 +271,10 @@ public partial class Gpp
         entity.DepthOffset = 0f;
         // The side boards are justified towards the middle one so the gap between the three stays the
         // gap you set, whatever length the names on them happen to be.
-        entity.JustifyHorizontal = _probeJustify ?? which switch
-        {
-            Board.Left => PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_RIGHT,
-            Board.Right => PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_LEFT,
-            _ => PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER,
-        };
+        // Centred, all three. The rule at the bottom of each board is what fixes its width now, so
+        // justification only decides where the words sit inside a box that is already the right size -
+        // and the probe measured CENTER as the one that puts that box on the crosshair.
+        entity.JustifyHorizontal = _probeJustify ?? PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER;
         entity.JustifyVertical = PointWorldTextJustifyVertical_t.POINT_WORLD_TEXT_JUSTIFY_VERTICAL_CENTER;
         // The text is drawn in the entity's own plane, so without a roll of 90 it lies flat like a rug.
         // Auto-reorient does not help, because a flat panel's up axis is the wrong one.
@@ -391,7 +401,7 @@ public partial class Gpp
     {
         if (slot.Text == null || !slot.Text.IsValid) return;
 
-        float sideways = which switch { Board.Left => -_sideGap, Board.Right => _sideGap, _ => 0f };
+        float sideways = which switch { Board.Left => -SideGap, Board.Right => SideGap, _ => 0f };
         float toeIn = which switch { Board.Left => _sideToeIn, Board.Right => -_sideToeIn, _ => 0f };
         float away = PanelDistance + (which == Board.Main ? 0f : _sideBack);
 
@@ -573,12 +583,14 @@ public partial class Gpp
     // them. Nothing here is knowable from a schema: it is whether a glance to the left lands on a team.
     internal string SetSides(string gap, string toeIn, string back)
     {
-        if (float.TryParse(gap, out float parsedGap)) _sideGap = Math.Clamp(parsedGap, 0f, 400f);
+        if (float.TryParse(gap, out float parsedGap)) _sideGapOverride = Math.Clamp(parsedGap, 0f, 400f);
+        else if (gap == "auto") _sideGapOverride = null;
         if (float.TryParse(toeIn, out float parsedToe)) _sideToeIn = Math.Clamp(parsedToe, -90f, 90f);
         if (float.TryParse(back, out float parsedBack)) _sideBack = Math.Clamp(parsedBack, -60f, 400f);
 
         int rehung = Rehang();
-        return $"Side boards: gap {_sideGap:F0}, toe-in {_sideToeIn:F0} degrees, {_sideBack:F0} further back"
+        return $"Side boards: gap {SideGap:F0}{(_sideGapOverride == null ? " (derived)" : "")},"
+            + $" toe-in {_sideToeIn:F0} degrees, {_sideBack:F0} further back"
             + $" - {rehung} viewer(s) rehung.";
     }
 

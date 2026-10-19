@@ -18,13 +18,19 @@ internal static class WorldLayout
     // and ten, so this is a ceiling rather than a target.
     internal const int PanelLines = 12;
 
+    // The rule that holds the board's width takes the bottom line, so everything a panel composes has
+    // to fit in the eleven above it.
+    internal const int BodyLines = PanelLines - 1;
+
     // Names are clipped, not wrapped: at twelve characters it is still obvious who it is, and a column
     // that stays where it was is worth more than the last three letters of somebody's tag.
     internal const int NameWidth = 12;
 
-    // Three across is what eighteen names were judged on. Four fits more but clips harder, and the
-    // panel is allowed to be tall.
-    internal const int PerRow = 3;
+    // Two across, not three. Three columns of twelve-character names made the middle board two thirds
+    // of the screen wide, which left no room either side of it for the team boards - and the boards had
+    // four blank lines underneath doing nothing. Eighteen names, the pool of a twenty-man pug once the
+    // captains are out of it, is nine rows of two: exactly the height there is.
+    internal const int PerRow = 2;
 
     // Columns are space-padded against a proportional font, so they line up to about a space. Exact
     // columns would need one entity per column; approximately-aligned cells read fine.
@@ -111,14 +117,26 @@ internal static class WorldLayout
     {
         var blocks = sections.Where(section => section.Lines.Count > 0).ToList();
 
-        // Everything except the pageable list: title, its blank line, the blank line before the footer
-        // and the footer itself, plus a blank line between each pair of blocks.
-        int fixedLines = 2 + blocks.Where(block => !block.Pageable).Sum(block => block.Lines.Count)
-            + Math.Max(0, blocks.Count - 1)
-            + (string.IsNullOrEmpty(footer) ? 0 : 2);
+        // How much room the list has: the title, the footer and any block that is not the list, with no
+        // separator blanks counted - those are spacing, and spacing is what gets dropped first when a
+        // panel is tall. Counting them here paged a list that would otherwise have fitted exactly.
+        // The list that pages is the longest one, not the first. A panel with two lists on it - who has
+        // answered and who has not - paged the short one and let the long one run off the bottom, which
+        // is how the sign-up panel lost half the room it was nagging.
+        int paged = -1;
+        for (int block = 0; block < blocks.Count; block++)
+        {
+            if (blocks[block].Pageable && (paged < 0 || blocks[block].Lines.Count > blocks[paged].Lines.Count))
+            {
+                paged = block;
+            }
+        }
 
-        int room = Math.Max(1, PanelLines - fixedLines);
-        var paged = blocks.FindIndex(block => block.Pageable);
+        int fixedLines = 1
+            + blocks.Where((block, index) => index != paged).Sum(block => block.Lines.Count)
+            + (string.IsNullOrEmpty(footer) ? 0 : 1);
+
+        int room = Math.Max(1, BodyLines - fixedLines);
 
         int page = 0, pages = 1;
         if (paged >= 0 && blocks[paged].Lines.Count > room)
@@ -129,25 +147,32 @@ internal static class WorldLayout
             blocks[paged] = blocks[paged] with { Lines = [.. rows.Skip(page * room).Take(room)] };
         }
 
+        // A blank line between blocks is the first thing to give up when a panel is tall: it is spacing,
+        // and the alternative is paging a list that somebody has to read all of.
+        int tall = 1 + blocks.Sum(block => block.Lines.Count) + blocks.Count
+            + (string.IsNullOrEmpty(footer) ? 0 : 1);
+        bool spaced = tall <= BodyLines;
+
         var text = new StringBuilder(title.ToUpperInvariant()).Append('\n');
         foreach (var block in blocks)
         {
-            text.Append('\n').AppendJoin('\n', block.Lines).Append('\n');
+            if (spaced) text.Append('\n');
+            text.AppendJoin('\n', block.Lines).Append('\n');
         }
 
         string tail = pages > 1
             ? string.IsNullOrEmpty(footer) ? $"page {page + 1}/{pages}" : $"{footer}        page {page + 1}/{pages}"
             : footer ?? "";
-        if (tail.Length > 0) text.Append('\n').Append(tail);
+        if (tail.Length > 0) text.Append(spaced ? "\n" : "").Append(tail);
 
         // A panel whose fixed sections alone overrun the budget is a caller bug - the tests assert every
         // real panel's worst case fits - but it must not take the title off the top of the view, because
         // the title is the instruction. So the last resort drops lines from the bottom of the body and
         // says it did.
         var lines = text.ToString().Split('\n');
-        if (lines.Length > PanelLines)
+        if (lines.Length > BodyLines)
         {
-            return string.Join('\n', lines.Take(PanelLines - 1)) + "\n...";
+            return string.Join('\n', lines.Take(BodyLines - 1)) + "\n...";
         }
         return string.Join('\n', lines);
     }
@@ -160,11 +185,11 @@ internal static class WorldLayout
         var rows = Panel(title, sections, footer, ticks).Split('\n').ToList();
         // The footer sits on the last line above the rule, so the clock is in the same place on every
         // panel whatever is above it.
-        if (rows.Count < PanelLines - 1 && !string.IsNullOrEmpty(footer))
+        if (rows.Count < BodyLines && !string.IsNullOrEmpty(footer))
         {
             string last = rows[^1];
             rows.RemoveAt(rows.Count - 1);
-            while (rows.Count < PanelLines - 2) rows.Add("");
+            while (rows.Count < BodyLines - 1) rows.Add("");
             rows.Add(last);
         }
         return Fixed(string.Join('\n', rows), PanelLines, MainBoardWidth);
@@ -194,8 +219,13 @@ internal static class WorldLayout
     // asserted in the tests, because a board whose content outgrows its target stops being a fixed size
     // and starts breathing again. MainBoardWidth is a three-column grid of twelve-character names;
     // TeamBoardWidth is one clipped name plus room for the label.
-    internal const int TeamBoardWidth = 260;
-    internal const int MainBoardWidth = 900;
+    // Both measured rather than guessed: the widest line either board can hold, plus headroom. The old
+    // 900 was a number picked out of the air, and the middle board was two thirds of the screen wide
+    // with nothing in most of it - which is why the team boards had nowhere to sit.
+    // Widest lines, 2026-10-19: an eighteen-name draft grid 279, a seventeen-map ballot 224, a clipped
+    // name 126. WidestLineIsPrinted in the tests reprints them.
+    internal const int TeamBoardWidth = 180;
+    internal const int MainBoardWidth = 320;
 
     // Pads a composed panel to exactly `lines` tall and `width` wide, padding whichever line is widest
     // so nothing already written gets re-flowed.
