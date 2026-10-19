@@ -81,6 +81,23 @@ internal static class MatchRules
         return safe.Length > 0 ? new string(safe) : $"gpp-{matchId}";
     }
 
+    // Who has to move in Discord at the start of round one: the side that lost the knife round. The
+    // winners picked the side they wanted and stay where they are.
+    public static int MovingSide(int knifeWinner) => knifeWinner == CtTeam ? TTeam
+        : knifeWinner == TTeam ? CtTeam
+        : 0;
+
+    // .switch moves both teams across, so anything tracked as "this side" moves with them.
+    public static int OtherSide(int side) => side == CtTeam ? TTeam : side == TTeam ? CtTeam : 0;
+
+    // The three lines of the round-one panel, which are shouted on purpose.
+    public static string[] OpeningLines(int side) =>
+    [
+        side == CtTeam ? "COUNTER-TERRORISTS" : side == TTeam ? "TERRORISTS" : "EVERYONE",
+        "STFU AND MOVE",
+        "IN DISCORD",
+    ];
+
     // mp_teamname_1/2 take the raw rest of the console line, so a team name is letters, digits and the one
     // underscore and nothing else - a quote or a semicolon in a player's name would otherwise be part of
     // the command.

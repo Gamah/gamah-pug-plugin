@@ -93,6 +93,14 @@ public partial class Gpp
         RegisterEventHandler<EventRoundStart>((_, _) =>
         {
             StartPendingDemo();
+
+            // Round one, freeze time: hold it while the losing side sorts out Discord. Not from GoLive
+            // itself, because the restart it runs has not happened yet at that point.
+            if (_matchPhase == MatchPhase.Live && !_openingDone && (GameRules()?.TotalRoundsPlayed ?? 1) == 0)
+            {
+                _openingDone = true;
+                AfterTick(StartOpeningPause);
+            }
             return HookResult.Continue;
         });
 
@@ -184,10 +192,12 @@ public partial class Gpp
         _matchStartedAt = DateTime.UtcNow;
         _team1Side = CsTeam.CounterTerrorist;
         _knifeDone = false;
+        _moveSide = SideOf(2);
         _team1Name = TeamName(_captain1);
         _team2Name = TeamName(_captain2);
         ResetPauses();
         ClearStats();
+        _openingDone = false;
 
         // Nobody starts a round with a warped camera or a spun view.
         ClearFunEffects();
@@ -250,6 +260,8 @@ public partial class Gpp
 
         _knifeDone = true;
         _knifeSide = winner;
+        // The losers move in Discord: the winners picked the side they wanted and stay where they are.
+        _moveSide = (CsTeam)MatchRules.MovingSide((int)winner);
         _matchPhase = MatchPhase.SideChoice;
 
         // Back to a held warmup while they decide, so the next round does not start without them.
@@ -266,6 +278,9 @@ public partial class Gpp
 
     // Set once the knife round has been played, so a ready check after it does not start another one.
     private bool _knifeDone;
+
+    // Set once round one's opening pause has been done, so it is not run again at every restart.
+    private bool _openingDone;
 
     private (int alive, int health) SideStanding(CsTeam side)
     {
@@ -327,6 +342,7 @@ public partial class Gpp
             // because nothing else tracks who team1 is once they are not on CT any more.
             Server.ExecuteCommand("mp_swapteams");
             _team1Side = _team1Side == CsTeam.CounterTerrorist ? CsTeam.Terrorist : CsTeam.CounterTerrorist;
+            _moveSide = (CsTeam)MatchRules.OtherSide((int)_moveSide);
             Announce($"{chooser} switches sides.");
         }
 
@@ -362,10 +378,10 @@ public partial class Gpp
         ExecPhaseCfg(Config.Match.LiveCfg, LiveFallback, "Live");
 
         // live.cfg ends the warmup; the restart is what starts round 1 with everyone's money and score at
-        // zero. mp_match_end_restart reloads the map when the match is over, which is what puts the server
-        // back to a clean warmup without anybody having to.
+        // zero. mp_match_end_restart stays *off*: a map reload at the end of a match drops everybody back
+        // through a loading screen for no reason. FinishMatch opens a warmup instead, in place.
         Server.ExecuteCommand("mp_ignore_round_win_conditions 0;mp_restartgame 1;mp_warmup_end;"
-            + "mp_match_end_restart true");
+            + "mp_match_end_restart false");
 
         StartDemoAfterRestart(LiveRestartSeconds);
         RecordMatchStart();
@@ -423,11 +439,17 @@ public partial class Gpp
         ReturnDiscordTeams();
         StopMatchHud();
 
-        // mp_match_end_restart reloads the map, which is where the idle warmup comes from; OnMapStart
-        // execs warmup.cfg again. Until then nothing is live and nothing is being asked of anyone.
         _matchPhase = MatchPhase.None;
         _knifeSide = CsTeam.None;
         ResetPauses();
+
+        // Straight back into a held warmup, on the same map, with everybody where they are. Nobody is
+        // moved, nothing is reloaded: people carry on buying and shooting while the next pug is called.
+        // The scoreboard keeps the final score until the next match restarts the game, which is the
+        // right thing for the five minutes afterwards when everyone is arguing about it.
+        ExecWarmupCfg();
+        Server.ExecuteCommand("mp_ignore_round_win_conditions 0;mp_warmup_start;"
+            + "mp_warmuptime 9999;mp_warmup_pausetimer 1");
     }
 
     // An admin ending a match that is still going: .endmatch, !pug stop. The engine is told to stop

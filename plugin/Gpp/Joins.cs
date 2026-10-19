@@ -87,10 +87,11 @@ public partial class Gpp
         player.ChangeTeam(CsTeam.Spectator);
     }
 
-    // Hands spectator back to the player. CsTeam.None is the unassigned slot the engine puts a fresh
-    // connection in, which is what makes the team-select menu come up; a player left in Spectator proper
-    // has to find it themselves, and most do not. Only players the pug moved are touched - anyone who
-    // chose to spectate stays where they are.
+    // Hands spectator back to the player. This used to put them on CsTeam.None - the unassigned slot a
+    // fresh connection sits in - because that makes the team-select menu come up by itself. It also puts
+    // them in no team section at all, which is how people went missing from the scoreboard. Spectator
+    // proper costs them pressing M and keeps them on it. Only players the pug moved are touched; anyone
+    // who chose to spectate stays where they are.
     private void ReleaseHeldSpectators()
     {
         if (_heldInSpectator.Count == 0) return;
@@ -99,7 +100,6 @@ public partial class Gpp
         {
             if (player.IsBot || !_heldInSpectator.Contains(Id(player))) continue;
             if (player.Team != CsTeam.Spectator) continue;
-            player.ChangeTeam(CsTeam.None);
             player.PrintToChat(Prefix() + "You are free to pick a team again - press M.");
         }
         _heldInSpectator.Clear();

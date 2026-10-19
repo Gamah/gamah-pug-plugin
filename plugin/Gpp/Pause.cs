@@ -157,6 +157,15 @@ public partial class Gpp
 
     internal void AskToUnpause(CCSPlayerController? player)
     {
+        // Round one's Discord pause is not a team pause and does not need both sides: anyone who is
+        // already where they need to be can say so.
+        if (OpeningPauseRunning)
+        {
+            string who = player != null && player.IsValid ? player.PlayerName : "An admin";
+            EndOpeningPause($"{who} says they are ready.");
+            return;
+        }
+
         if (!_paused)
         {
             Tell(player, "The match is not paused.");

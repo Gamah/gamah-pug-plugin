@@ -181,3 +181,53 @@ public class TeamNameTests
     [Fact]
     public void NameWithNothingUsableStillHasAName() => Assert.Equal("team", MatchRules.TeamName("☆☆"));
 }
+
+// Round one's thirty seconds of held freeze time, telling the side that lost the knife to get into
+// their Discord channel. Which side that is survives a .switch, which moves both teams across.
+public class OpeningPauseTests
+{
+    [Fact]
+    public void TheKnifeLoserMoves()
+    {
+        Assert.Equal(MatchRules.TTeam, MatchRules.MovingSide(MatchRules.CtTeam));
+        Assert.Equal(MatchRules.CtTeam, MatchRules.MovingSide(MatchRules.TTeam));
+    }
+
+    // A knife round that was never played leaves no winner; nobody is named rather than the wrong side.
+    [Fact]
+    public void NoKnifeWinnerNamesNobody() => Assert.Equal(0, MatchRules.MovingSide(0));
+
+    [Fact]
+    public void SwitchingSidesMovesTheSideThatHasToMove()
+    {
+        int moving = MatchRules.MovingSide(MatchRules.CtTeam);      // T lost, T moves
+        Assert.Equal(MatchRules.CtTeam, MatchRules.OtherSide(moving));
+        Assert.Equal(moving, MatchRules.OtherSide(MatchRules.OtherSide(moving)));
+    }
+
+    [Fact]
+    public void ThePanelIsThreeShoutedLines()
+    {
+        var ct = MatchRules.OpeningLines(MatchRules.CtTeam);
+        var t = MatchRules.OpeningLines(MatchRules.TTeam);
+
+        Assert.Equal(["COUNTER-TERRORISTS", "STFU AND MOVE", "IN DISCORD"], ct);
+        Assert.Equal(["TERRORISTS", "STFU AND MOVE", "IN DISCORD"], t);
+        Assert.All(ct, line => Assert.Equal(line.ToUpperInvariant(), line));
+    }
+
+    // The alert box is the thing it is drawn in: three lines, each inside the character cap.
+    [Fact]
+    public void ThePanelFitsTheAlertBox()
+    {
+        foreach (int side in new[] { MatchRules.CtTeam, MatchRules.TTeam, 0 })
+        {
+            var lines = MatchRules.OpeningLines(side);
+            string alert = HudLayout.Alert(lines[0], lines[1], lines[2]);
+
+            Assert.Equal(3, alert.Split('\n').Length);
+            Assert.All(alert.Split('\n'),
+                line => Assert.True(line.Length <= HudLayout.AlertWidth, line));
+        }
+    }
+}

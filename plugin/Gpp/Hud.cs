@@ -19,14 +19,23 @@ namespace Gpp;
 // built to that budget, so the countdown and the list are always the part that survives.
 public partial class Gpp
 {
-    private const int HudLines = 4;
+    // The layout itself lives in HudLayout, which has no CounterStrikeSharp in it so that Gpp.Tests can
+    // run every panel's worst case through the real code rather than an approximation of it.
+    private const int HudLines = HudLayout.PanelLines;
+
+    internal static List<string> Columns(IEnumerable<string> cells, int perRow = 0) =>
+        HudLayout.Columns(cells);
+
+    internal static string Alert(params string?[] parts) => HudLayout.Alert(parts);
+
+    private static string TwoLine(string title, params string?[] state) => HudLayout.TwoLine(title, state);
+
+    internal static void BumpPaintTick() => HudLayout.BumpPaintTick();
 
     // The panel font is proportional, so widths come from HudMetrics, which holds advances measured
     // through the renderer rather than a character count. The alert box is drawn in a larger face that
     // has not been measured, so it keeps a conservative character cap - its lines are short now that the
     // state is stacked down four of them.
-    private const int AlertWidth = 30;
-
     // Seconds the panel has been up, which is what pages the pick list.
     private int _hudTicks;
 
@@ -60,7 +69,7 @@ public partial class Gpp
     private void HudTick()
     {
         _hudTicks++;
-        _paintTick++;
+        HudLayout.BumpPaintTick();
         if (_phase == PugPhase.Idle || (_phase == PugPhase.Draft && _pickIndex >= _pickOrder.Count))
         {
             StopHud();
@@ -101,15 +110,6 @@ public partial class Gpp
         pages = Math.Max(1, (lines.Count + ListLines - 1) / ListLines);
         page = pages > 1 ? (ticks / PageSeconds) % pages : 0;
         return lines.Skip(page * ListLines).Take(ListLines).ToList();
-    }
-
-    // The alert box is exactly two lines in every phase: what is happening, and the state. It used to be
-    // one line per part, which meant it grew a third line whenever a clock or a page counter appeared and
-    // shrank again when it went - and the whole box jumps when it does.
-    private static string TwoLine(string title, params string?[] state)
-    {
-        string line = string.Join("  ", state.Where(part => !string.IsNullOrWhiteSpace(part)));
-        return Alert(title, line.Length > 0 ? line : " ");
     }
 
     private void PaintVote(CCSPlayerController player)
@@ -220,7 +220,7 @@ public partial class Gpp
 
     private void ReadyHudTick()
     {
-        _paintTick++;
+        HudLayout.BumpPaintTick();
         if (--_readyHudSecondsLeft <= 0)
         {
             // Five minutes of a panel nobody has acted on is a panel nobody is reading. The phase stays
@@ -277,7 +277,7 @@ public partial class Gpp
 
     private void MatchHudTick()
     {
-        _paintTick++;
+        HudLayout.BumpPaintTick();
         bool wanted = _matchPhase == MatchPhase.Knife
             || _matchPhase == MatchPhase.SideChoice
             || (_matchPhase == MatchPhase.Live && _paused);
@@ -324,75 +324,6 @@ public partial class Gpp
         }
     }
 
-    // A line too wide for the panel scrolls instead of being cut off with an ellipsis. Four lines of
-    // eighty is not a lot to say a map vote and nine names in, and "still to ready: Ada, Baz, Cosm…" is
-    // the part of the message that mattered.
-    //
-    // Driven by a paint counter rather than wall-clock time so every panel scrolls in step, and it holds
-    // still at each end for a couple of seconds - a line that starts moving the instant it appears is
-    // unreadable, and one that wraps round without a pause reads as a glitch.
-    private static int _paintTick;
-
-    internal static void BumpPaintTick() => _paintTick++;
-
-    private const int ScrollUnitsPerTick = 12;   // about one glyph per redraw
-    private const int ScrollHoldTicks = 3;
-
-    internal static string Scroll(string line, int budget, int tick)
-    {
-        int width = Width(line);
-        if (width <= budget) return line;
-
-        // One step per tick across the overflow, with a hold at both ends.
-        int steps = (width - budget + ScrollUnitsPerTick - 1) / ScrollUnitsPerTick;
-        int cycle = steps + (2 * ScrollHoldTicks);
-        int at = ((tick % cycle) + cycle) % cycle;
-        int step = Math.Clamp(at - ScrollHoldTicks, 0, steps);
-
-        return HudMetrics.Window(line, budget, step * ScrollUnitsPerTick, out _);
-    }
-
-    private static int Width(string text) => HudMetrics.Width(text);
-
-    // Lay cells out in rows of `perRow`, padded so the columns line up in a fixed-width HUD font.
-    // Pack cells onto as few lines as fit, never splitting one. The old version padded each cell to a
-    // fixed character width and grouped a fixed number per row, which only lines up in a monospace font -
-    // this panel is not one, so the columns drifted and long cells spilled into a wrap. Three spaces
-    // between cells and a hard stop at the budget is uglier in theory and holds together in practice.
-    private const string CellGap = "   ";
-
-    internal static List<string> Columns(IEnumerable<string> cells, int perRow = 0)
-    {
-        var lines = new List<string>();
-        var line = new StringBuilder();
-        int width = 0;
-        int gap = HudMetrics.Width(CellGap);
-
-        foreach (var raw in cells)
-        {
-            string cell = HudMetrics.Clip(raw, HudMetrics.CellBudget);
-            int cellWidth = HudMetrics.Width(cell);
-
-            if (line.Length > 0 && width + gap + cellWidth > HudMetrics.LineBudget)
-            {
-                lines.Add(line.ToString());
-                line.Clear();
-                width = 0;
-            }
-
-            if (line.Length > 0)
-            {
-                line.Append(CellGap);
-                width += gap;
-            }
-            line.Append(cell);
-            width += cellWidth;
-        }
-
-        if (line.Length > 0) lines.Add(line.ToString());
-        return lines;
-    }
-
     // Two channels, both addressed to one player at a time (ClientPrint takes a slot, so every message
     // already goes to exactly one person). Alert is the bigger of the two and carries the one line that
     // says what is happening and what this player types - with the countdown in it, so a clock is on
@@ -402,31 +333,6 @@ public partial class Gpp
     {
         player.PrintToCenterAlert(alert);
         Send(player, panel);
-    }
-
-    // The alert box takes four lines like the panel does, and stacking the state down them beats running
-    // it along one line and letting the box wrap wherever it likes - a wrapped alert broke mid-word and
-    // cost a line anyway. Each part is clipped on its own so a long name cannot push the clock off.
-    internal static string Alert(params string?[] parts)
-    {
-        var lines = parts
-            .Where(part => !string.IsNullOrWhiteSpace(part))
-            .Select(part => ScrollChars(part!, AlertWidth, _paintTick))
-            .Take(HudLines);
-        return string.Join("\n", lines);
-    }
-
-    // The alert box is drawn in a larger face nothing has measured, so it is held to a character count -
-    // and scrolls by characters for the same reason the panel scrolls by units.
-    private static string ScrollChars(string line, int width, int tick)
-    {
-        if (line.Length <= width) return line;
-
-        int steps = line.Length - width;
-        int cycle = steps + (2 * ScrollHoldTicks);
-        int at = ((tick % cycle) + cycle) % cycle;
-        int step = Math.Clamp(at - ScrollHoldTicks, 0, steps);
-        return line.Substring(step, width);
     }
 
     private static void Broadcast(List<string> panel)
@@ -450,11 +356,7 @@ public partial class Gpp
     // panel is clipped here rather than by the client.
     private static void Send(CCSPlayerController player, List<string> panel)
     {
-        var lines = panel
-            .Where(line => !string.IsNullOrEmpty(line))
-            .Select(line => Scroll(line, HudMetrics.LineBudget, _paintTick))
-            .Take(HudLines);
-        player.PrintToCenter(string.Join("\n", lines));
+        player.PrintToCenter(HudLayout.Panel(panel));
     }
 
     // A twelve-name pick list does not fit the four-line budget as one block, so this draws the same list

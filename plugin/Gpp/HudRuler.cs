@@ -22,6 +22,64 @@ namespace Gpp;
 // widths it produces want re-measuring after a CS2 update, and a tool nobody can find never gets re-run.
 public partial class Gpp
 {
+    // !pug wrap - where does this client actually wrap?
+    //
+    // hud_line_budget is the one number in the layout that is not a property of the font: it depends on
+    // the viewer's resolution and HUD scale, and 340 is a guess that sat below the widest line seen to
+    // fit on one client. A line at 339 units is then one bad guess away from the client wrapping it in
+    // the middle of a word, which is what "weird wraps" in a pick list is.
+    //
+    // So rather than guess again: four lines of known width, labelled with that width, one screenshot.
+    // Whichever is the last one that fits on a single line is the budget for that client, minus a little.
+    private static readonly int[] WrapWidths = [260, 290, 320, 350, 380, 410];
+
+    internal void WrapProbe()
+    {
+        Announce("Wrap probe: lines labelled with their width in HUD units. "
+            + "Screenshot it - the widest one that does NOT wrap is this client's budget.");
+
+        var lines = WrapWidths.Select(BuildWrapLine).ToList();
+        int step = 0;
+
+        _probeTimer?.Kill();
+        _probeTimer = AddTimer(1.0f, () =>
+        {
+            int page = (step / ProbeSeconds) % 2;
+            step++;
+            if (step > ProbeSeconds * 2)
+            {
+                _probeTimer?.Kill();
+                _probeTimer = null;
+                StopHud();
+                Announce($"Wrap probe done. Set hud_line_budget to the widest that fit "
+                    + $"(current: {HudMetrics.LineBudget}).");
+                return;
+            }
+            BroadcastRaw(Alert("WRAP PROBE", page == 0 ? "260 - 320" : "350 - 410"),
+                lines.Skip(page * 3).Take(3).ToList());
+        }, TimerFlags.REPEAT);
+    }
+
+    // "320|nnnnnn...n|" padded to exactly that many units, so what you see is what it measures.
+    private static string BuildWrapLine(int width)
+    {
+        string label = $"{width}|";
+        var line = new System.Text.StringBuilder(label);
+        int used = HudMetrics.Width(label) + HudMetrics.Width("|");
+        while (used + HudMetrics.Width('n') <= width)
+        {
+            line.Append('n');
+            used += HudMetrics.Width('n');
+        }
+        // Pad the last few units with the narrowest glyph there is, so the line lands on its number.
+        while (used + HudMetrics.Width('i') <= width)
+        {
+            line.Append('i');
+            used += HudMetrics.Width('i');
+        }
+        return line.Append('|').ToString();
+    }
+
     private const int RulerRepeats = 20;
     private const int RulerHoldSeconds = 20;
 

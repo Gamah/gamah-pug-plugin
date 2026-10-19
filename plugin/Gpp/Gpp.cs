@@ -237,6 +237,14 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
             case "endmatch":
                 AfterTick(() => AbandonMatch("An admin ended it."));
                 break;
+            case "go":
+                AfterTick(() => EndOpeningPause("An admin started it."));
+                break;
+            case "idle":
+                // Put the idle panel up on demand. Working on it otherwise means emptying the server and
+                // waiting out the threshold for every change to a line of text.
+                AfterTick(() => OpenIdlePrompt(TimeSpan.FromHours(10)));
+                break;
             case "keepmap":
                 AfterTick(() => CancelRestart("An admin kept the server up."));
                 break;
@@ -264,6 +272,9 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
             case "preview":
                 if (arg == "stop") { StopPreview(); StopHud(); Reply(command, "Preview stopped."); }
                 else HudPreview();
+                break;
+            case "wrap":
+                WrapProbe();
                 break;
             case "ruler":
                 HudRulerProbe(arg, size);

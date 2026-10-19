@@ -72,7 +72,7 @@ public partial class Gpp
         OpenIdlePrompt(idle);
     }
 
-    private void OpenIdlePrompt(TimeSpan idle)
+    internal void OpenIdlePrompt(TimeSpan idle)
     {
         _idleWas = idle;
         Logger.LogInformation("Server was empty for {Hours:F1}h - offering reload/restart/skip.", idle.TotalHours);
@@ -117,12 +117,14 @@ public partial class Gpp
         // The alert box explains; the lower panel carries what to type. Three lines up there because the
         // sentence does not fit two and the clock is the part people care about.
         string alert = Alert("IDLE SERVER FIX", "server has been idle for", Describe(_idleWas));
-        var panel = Columns(
-        [
+        // One per line, deliberately not through Columns: that packs cells onto as few lines as fit,
+        // which turned three choices into two lines of run-on text. Three choices, three lines.
+        var panel = new List<string>
+        {
             $"!reload - load {Server.MapName} again",
             "!restart - restart the server",
-            "!skip - leave it",
-        ]);
+            "!skip - leave it as it is",
+        };
 
         foreach (var player in HumanPlayers()) Paint(player, alert, panel);
     }
@@ -199,6 +201,8 @@ public partial class Gpp
     {
         if (idle.TotalHours >= 2) return $"{idle.TotalHours:F0} hours";
         if (idle.TotalHours >= 1) return "over an hour";
-        return $"{idle.TotalMinutes:F0} minutes";
+
+        int minutes = Math.Max(1, (int)Math.Round(idle.TotalMinutes));
+        return minutes == 1 ? "1 minute" : $"{minutes} minutes";
     }
 }

@@ -29,6 +29,7 @@ not yet run with ten people on it.
 | `!pug cancel` | admin | Abandon the running vote or draft, and nothing else |
 | `!pug status` | admin | What phase it is in, and the score if a match is live |
 | `!pug keepmap` | admin | Call off a restart that has just been announced |
+| `!pug idle` | admin | Put the idle-server panel up on demand, for working on it |
 | `!reload` / `!restart` / `!skip` | everyone | The three answers to the idle-server panel. They do nothing when it is not up |
 | `!pug restart` | admin | Restart the whole server after a warning and a countdown |
 | `!<number>` | everyone | **The main one.** Votes for that map during a vote, makes that pick during a draft. Silent outside both |

@@ -76,6 +76,11 @@ public class MatchSettings
     // the knife round is the one people expect, and a second one is another thing to wait for.
     [JsonPropertyName("ready_after_sides")] public bool ReadyAfterSides { get; set; } = false;
 
+    // Seconds of held freeze time at the start of round one, while the side that lost the knife moves
+    // into their Discord channel. 0 turns it off. The Discord bot moving people does not replace it: it
+    // cannot move somebody who has not joined voice yet.
+    [JsonPropertyName("opening_pause_seconds")] public int OpeningPauseSeconds { get; set; } = 30;
+
     [JsonPropertyName("pauses_enabled")] public bool PausesEnabled { get; set; } = true;
 
     // Technical pauses a side may call per match. 0 is unlimited.
