@@ -136,14 +136,14 @@ public class WorldLayoutTests
     {
         // The whole point of the fixed boards: an empty team and a full one are the same block, so the
         // furniture does not move while the draft runs.
-        string empty = WorldLayout.TeamBoard("A", ["Ada  (c)"]);
-        string full = WorldLayout.TeamBoard("A", ["Ada  (c)", .. Names.Take(9)]);
+        string empty = WorldLayout.TeamBoard("A", "Ada", [], WorldLayout.Align.Right);
+        string full = WorldLayout.TeamBoard("A", "Ada", Names.Take(9), WorldLayout.Align.Right);
 
         Show("team board, first pick", empty);
         Show("team board, full", full);
         Assert.Equal(WorldLayout.TeamBoardLines, WorldLayout.LineCount(empty));
         Assert.Equal(WorldLayout.LineCount(empty), WorldLayout.LineCount(full));
-        Assert.Equal(WorldLayout.TeamSlots + 2, WorldLayout.LineCount(full));
+        Assert.Equal(Widest(empty), Widest(full));
     }
 
     [Fact]
@@ -159,6 +159,58 @@ public class WorldLayoutTests
         Assert.Equal(WorldLayout.PanelLines, WorldLayout.LineCount(longest));
         // The footer is the bottom line of both, so the clock does not wander up the screen when a list
         // gets short.
-        Assert.EndsWith("mirage", shortest.Split('\n')[^1]);
+        Assert.EndsWith("mirage", shortest.Split('\n')[^1].TrimEnd());
+    }
+
+    private static int Widest(string panel) => panel.Split('\n').Max(HudMetrics.Width);
+
+    // Every panel in a pug, at its worst, measured: same height, same width, and the text centred in the
+    // same place. A board that is one space wider than the last one walks across the screen as it
+    // updates, which is exactly what "the centre panel is wandering to the left" was.
+    [Fact]
+    public void NoPanelEverChangesSize()
+    {
+        var pool = Names.Select((name, i) => WorldLayout.Cell(i + 1, name)).ToList();
+        var panels = new Dictionary<string, string>
+        {
+            ["sign-up"] = WorldLayout.MainPanel("want to captain?",
+            [
+                WorldLayout.Section.Of("IN"),
+                WorldLayout.Section.List(WorldLayout.Grid(Names.Take(2))),
+                WorldLayout.Section.Of("STILL TO ANSWER"),
+                WorldLayout.Section.List(WorldLayout.Grid(Names.Skip(2))),
+            ], WorldLayout.Footer("type !captain", "20s"), 0),
+
+            ["ballot"] = WorldLayout.MainPanel("pick a map",
+                [WorldLayout.Section.List(WorldLayout.Grid(Maps.Select((m, i) => WorldLayout.Cell(i + 1, m))))],
+                WorldLayout.Footer("type the number in chat", "28s"), 0),
+
+            ["draft"] = WorldLayout.MainPanel("your pick - type the number",
+                [WorldLayout.Section.List(WorldLayout.Grid(pool))],
+                WorldLayout.Footer("30s", "10 still to pick"), 0),
+
+            ["ready"] = WorldLayout.MainPanel("type .ready in chat",
+            [
+                WorldLayout.Section.Of("6/10 READY - STILL TO READY"),
+                WorldLayout.Section.List(WorldLayout.Grid(Names.Take(4))),
+            ], WorldLayout.Footer("mirage"), 0),
+
+            ["side choice"] = WorldLayout.MainPanel("type .stay or .switch",
+                [WorldLayout.Section.Of("CT won the knife round", ".stay keeps this side")],
+                WorldLayout.Footer("mirage"), 0),
+
+            ["restart"] = WorldLayout.MainPanel("server restarting",
+                [WorldLayout.Section.Of("an admin asked for it")], "10s", 0),
+        };
+
+        foreach (var (name, panel) in panels)
+        {
+            Show(name, panel);
+            Assert.Equal(WorldLayout.PanelLines, WorldLayout.LineCount(panel));
+            // Every one of them measures the same, which is only true while the widest line any panel
+            // can hold still fits inside MainBoardWidth. When that stops being true this fails rather
+            // than the boards quietly going back to breathing.
+            Assert.InRange(Widest(panel), WorldLayout.MainBoardWidth, WorldLayout.MainBoardWidth + HudMetrics.Width(' '));
+        }
     }
 }

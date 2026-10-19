@@ -37,12 +37,14 @@ public partial class Gpp
     //
     // They start as the two captains and grow a line per pick. A name leaving the middle panel and
     // appearing under a captain *is* the feedback that the pick landed - nothing else has to announce it.
-    private string TeamBoard(string label, ulong captain, List<ulong> team)
-    {
-        var names = new List<string> { Name(captain) + "  (c)" };
-        names.AddRange(team.Where(steamId => steamId != captain).Select(Name));
-        return WorldLayout.TeamBoard(label, names);
-    }
+    private string TeamBoard(string label, ulong captain, List<ulong> team, WorldLayout.Align align) =>
+        WorldLayout.TeamBoard(label, Name(captain),
+            team.Where(steamId => steamId != captain).Select(Name), align);
+
+    // The left board's text is justified towards the middle one, so its padding goes on the outside.
+    private string LeftBoard() => TeamBoard(TeamALabel(), _captain1, _team1, WorldLayout.Align.Right);
+
+    private string RightBoard() => TeamBoard(TeamBLabel(), _captain2, _team2, WorldLayout.Align.Left);
 
     private string TeamALabel() => "A";
 
@@ -58,15 +60,16 @@ public partial class Gpp
             .Select(player => player.PlayerName)
             .ToList();
 
+        // Both halves are grids rather than lines: a row of names that grows sideways runs out of board
+        // and starts clipping, while the board has eight spare lines underneath it doing nothing.
         foreach (var player in HumanPlayers())
         {
             bool mine = _volunteers.Contains(Id(player));
             string panel = WorldLayout.MainPanel(
                 mine ? "you are up for captain" : "want to captain?",
                 [
-                    WorldLayout.Section.Of(volunteers.Count == 0
-                        ? "nobody yet - captains get drawn at random"
-                        : $"IN:  {string.Join("  ", volunteers.Select(WorldLayout.Clip))}"),
+                    WorldLayout.Section.Of(volunteers.Count == 0 ? "nobody yet - captains drawn at random" : "IN"),
+                    WorldLayout.Section.List(WorldLayout.Grid(volunteers.Select(WorldLayout.Clip))),
                     WorldLayout.Section.Of(quiet.Count == 0 ? null : "STILL TO ANSWER"),
                     WorldLayout.Section.List(WorldLayout.Grid(quiet.Select(WorldLayout.Clip))),
                 ],
@@ -102,7 +105,8 @@ public partial class Gpp
                     [
                         WorldLayout.Section.Of($"{_votes.Count}/{voters.Count} VOTED - WAITING ON"),
                         WorldLayout.Section.List(WorldLayout.Grid(missing.Select(WorldLayout.Clip))),
-                        WorldLayout.Section.Of("LEADING", LeadingMaps(tally)),
+                        WorldLayout.Section.Of("VOTES"),
+                        new([.. WorldLayout.Grid(Tally(tally))]),
                     ],
                     WorldLayout.Footer("!1-!9 changes your vote", $"{_voteSecondsLeft}s"),
                     _hudTicks)
@@ -114,14 +118,16 @@ public partial class Gpp
         }
     }
 
-    private string LeadingMaps(int[] tally)
+    // Every map that has a vote, most first, as cells - so somebody who has voted watches the tally move
+    // rather than reading one line that says who is winning. The board has the room for it.
+    private List<string> Tally(int[] tally)
     {
-        int best = tally.Length == 0 ? 0 : tally.Max();
-        if (best == 0) return "no votes yet";
-        return string.Join("    ", _ballot
+        return _ballot
             .Select((map, index) => (map.Label, Votes: tally[index]))
-            .Where(entry => entry.Votes == best)
-            .Select(entry => $"{entry.Label} {new string('*', Math.Min(entry.Votes, 5))}"));
+            .Where(entry => entry.Votes > 0)
+            .OrderByDescending(entry => entry.Votes)
+            .Select(entry => $"{WorldLayout.Clip(entry.Label)} {new string('*', Math.Min(entry.Votes, 9))}")
+            .ToList();
     }
 
     // --- waiting for the room to come back after the map change -------------------------------------
@@ -137,7 +143,9 @@ public partial class Gpp
             string panel = WorldLayout.MainPanel("waiting for players",
                 [
                     WorldLayout.Section.Of($"{back}/{_expectedRoster.Count} BACK - STILL TO CONNECT"),
-                    WorldLayout.Section.List(WorldLayout.Grid(missing.Select(WorldLayout.Clip))),
+                    // Two columns, not three: there are ten lines spare and nobody is reading this one
+                    // in a hurry - it wants to be legible across the room, not compact.
+                    WorldLayout.Section.List(WorldLayout.Grid(missing.Select(WorldLayout.Clip), 2)),
                     WorldLayout.Section.Of(missing.Count == 0 ? "everybody is back - drafting now" : null),
                 ],
                 WorldLayout.Footer("drafting anyway in", $"{_waitSecondsLeft}s"),
@@ -160,8 +168,8 @@ public partial class Gpp
         var body = new List<WorldLayout.Section> { WorldLayout.Section.List(WorldLayout.Grid(pool)) };
         string footer = WorldLayout.Footer(clock, $"{UndraftedCount()} still to pick");
 
-        string left = TeamBoard(TeamALabel(), _captain1, _team1);
-        string right = TeamBoard(TeamBLabel(), _captain2, _team2);
+        string left = LeftBoard();
+        string right = RightBoard();
 
         foreach (var player in HumanPlayers())
         {
@@ -186,8 +194,8 @@ public partial class Gpp
         var unready = roster.Where(steamId => !_readied.Contains(steamId)).Select(Name).ToList();
         int ready = roster.Count - unready.Count;
 
-        string left = TeamBoard(TeamALabel(), _captain1, _team1);
-        string right = TeamBoard(TeamBLabel(), _captain2, _team2);
+        string left = LeftBoard();
+        string right = RightBoard();
 
         foreach (var player in HumanPlayers())
         {
@@ -212,8 +220,8 @@ public partial class Gpp
 
     private void WorldSidePanel()
     {
-        string left = TeamBoard(TeamALabel(), _captain1, _team1);
-        string right = TeamBoard(TeamBLabel(), _captain2, _team2);
+        string left = LeftBoard();
+        string right = RightBoard();
 
         foreach (var player in HumanPlayers())
         {
@@ -247,8 +255,8 @@ public partial class Gpp
         // Whether the team boards earn their place here is the open question: by now everybody knows who
         // they are playing with, and what matters is which voice channel to be in. _openingBoards is what
         // !pug discord switches, so both can be looked at on a screen rather than argued about.
-        string? left = _openingBoards ? TeamBoard(TeamALabel(), _captain1, _team1) : null;
-        string? right = _openingBoards ? TeamBoard(TeamBLabel(), _captain2, _team2) : null;
+        string? left = _openingBoards ? LeftBoard() : null;
+        string? right = _openingBoards ? RightBoard() : null;
 
         foreach (var player in HumanPlayers())
         {

@@ -165,7 +165,7 @@ internal static class WorldLayout
             while (rows.Count < PanelLines - 1) rows.Add("");
             rows.Add(last);
         }
-        return Fixed(string.Join('\n', rows), PanelLines, MainBoardWidth);
+        return Fixed(string.Join('\n', rows), PanelLines, MainBoardWidth, Align.Centre);
     }
 
     // The clock and the count that sit in the footer of nearly every panel. Seconds first because it is
@@ -186,56 +186,73 @@ internal static class WorldLayout
     // width is padded in *measured* units rather than characters, because the font is proportional:
     // twenty spaces after "Ada" and twenty after "WWW" are not the same board.
     internal const int TeamSlots = 10;          // a 10v10, which is the biggest pug this is sized for
-    internal const int TeamBoardLines = 12;     // label, a blank, and the ten slots
-    internal const int TeamBoardWidth = 150;    // HudMetrics units; the side boards are narrow columns
-    internal const int MainBoardWidth = 460;    // the middle board, where the lists live
+    internal const int TeamBoardLines = 12;     // label, captain, a blank, and the ten slots
 
-    // Pads a composed panel to exactly `lines` tall and `width` wide. The width is held by one padded
-    // line rather than by padding them all: the background box is sized from the widest line, so one is
-    // enough and the rest stay as they were written.
-    internal static string Fixed(string panel, int lines, int width)
+    // Both widths are in HudMetrics units and both are above the widest thing their board can hold -
+    // asserted in the tests, because a board whose content outgrows its target stops being a fixed size
+    // and starts breathing again. MainBoardWidth is a three-column grid of twelve-character names;
+    // TeamBoardWidth is one clipped name plus room for the label.
+    internal const int TeamBoardWidth = 260;
+    internal const int MainBoardWidth = 900;
+
+    // Which edge a board's text is justified to, which decides where its padding goes. Padding a
+    // centre-justified board on one side only moves the text: the block gets wider to the right, so the
+    // words walk to the left as the content changes. That was the middle panel wandering.
+    internal enum Align { Centre, Left, Right }
+
+    // Pads a composed panel to exactly `lines` tall and `width` wide, padding whichever line is widest
+    // so nothing already written gets re-flowed.
+    internal static string Fixed(string panel, int lines, int width, Align align = Align.Centre)
     {
         var rows = panel.Split('\n').ToList();
 
-        // Widen whichever line is already the widest, so nothing is re-flowed by the padding.
         int widest = 0;
         for (int row = 0; row < rows.Count; row++)
         {
             if (HudMetrics.Width(rows[row]) > HudMetrics.Width(rows[widest])) widest = row;
         }
-        rows[widest] = Pad(rows[widest], width);
+        rows[widest] = Pad(rows[widest], width, align);
 
         while (rows.Count < lines) rows.Add("");
         if (rows.Count > lines) rows = [.. rows.Take(lines)];
         return string.Join('\n', rows);
     }
 
-    // Spaces until the line measures at least `width`. A space is the narrowest glyph there is, so this
-    // lands within one space of the target rather than exactly on it - which is as close as a
-    // proportional font gets without an entity per column.
-    private static string Pad(string line, int width)
+    // Spaces until the line measures at least `width`, laid either side of it or after it depending on
+    // which edge the board is justified to. A space is the narrowest glyph there is, so this lands
+    // within one space of the target rather than exactly on it.
+    private static string Pad(string line, int width, Align align)
     {
         int have = HudMetrics.Width(line);
         if (have >= width) return line;
-        int spaces = (width - have) / HudMetrics.Width(' ');
-        return line + new string(' ', Math.Max(0, spaces));
+
+        // Rounded up, not down: landing just under the target leaves each board a different width by up
+        // to a space, which is the difference between furniture and furniture that shuffles.
+        int spaces = (int)Math.Ceiling((width - have) / (double)HudMetrics.Width(' '));
+        return align switch
+        {
+            Align.Centre => new string(' ', spaces / 2) + line + new string(' ', spaces - (spaces / 2)),
+            Align.Right => new string(' ', spaces) + line,
+            _ => line + new string(' ', spaces),
+        };
     }
 
-    // One team's board: the label, then ten slots that are there from the first pick whether or not
-    // anybody is standing in them. A board that grows as picks land changes size ten times a draft;
-    // a board with the gaps already in it shows how many picks are still to come.
-    internal static string TeamBoard(string label, IEnumerable<string> names)
+    // One team's board: the label, the captain under it, then ten slots that are there from the first
+    // pick whether or not anybody is standing in them. A board that grows as picks land changes size ten
+    // times a draft; a board with the gaps already in it shows how many picks are still to come.
+    //
+    // Composed here rather than through Panel(): Panel puts a blank line after every block, which on a
+    // board exactly as tall as its content pushed the last slot off the bottom.
+    internal static string TeamBoard(string label, string captain, IEnumerable<string> picks, Align align)
     {
-        var filled = names.Select(Clip).ToList();
+        var filled = picks.Select(Clip).ToList();
         var slots = new List<string>();
         for (int slot = 0; slot < TeamSlots; slot++)
         {
             slots.Add(slot < filled.Count ? filled[slot] : "-");
         }
 
-        // Composed here rather than through Panel(): Panel puts a blank line after every block, which on
-        // a board that is exactly as tall as its content pushed the last slot off the bottom and left the
-        // truncation marker in its place.
-        return Fixed($"TEAM {label.ToUpperInvariant()}\n\n" + string.Join('\n', slots), TeamBoardLines, TeamBoardWidth);
+        string text = $"TEAM {label.ToUpperInvariant()}\n{Clip(captain)}\n\n" + string.Join('\n', slots);
+        return Fixed(text, TeamBoardLines, TeamBoardWidth, align);
     }
 }
