@@ -157,18 +157,19 @@ public partial class Gpp
         {
             Paint(player, TwoLine($"{Name(onClock)} IS PICKING",
                 _pickSecondsLeft > 0 ? $"{_pickSecondsLeft}s" : null,
-                $"{_available.Count} left"),
+                $"{UndraftedCount()} left"),
                 [WhySpectating(Id(player))]);
             return;
         }
 
-        var cells = _available.Select((steamId, index) => $"!{index + 1} - {Name(steamId)}").ToList();
+        // The number is the player's own, from the pool, not their place in what is left of the list.
+        var cells = PickList().Select(entry => $"!{entry.Number} - {Name(entry.Id)}").ToList();
         var panel = Page(cells, _hudTicks, out int page, out int pages);
 
         Paint(player, TwoLine(
             Id(player) == onClock ? "PICK NOW!" : $"{Name(onClock)} IS PICKING",
             _pickSecondsLeft > 0 ? $"{_pickSecondsLeft}s" : null,
-            $"{_available.Count} left",
+            $"{UndraftedCount()} left",
             pages > 1 ? $"{page + 1}/{pages}" : null), panel);
     }
 
@@ -182,6 +183,7 @@ public partial class Gpp
             PugPhase.CaptainKnife => "you play once the captains have drafted you",
             PugPhase.Draft when _team1.Contains(id) || _team2.Contains(id) =>
                 "you are drafted - waiting for the rest of the picks",
+            PugPhase.Draft when _gone.Contains(id) => "you left the pool - an admin can !pug cancel",
             PugPhase.Draft => "you are in the pool - you play as soon as a captain picks you",
             _ => "",
         };
@@ -298,12 +300,15 @@ public partial class Gpp
 
                 case MatchPhase.SideChoice:
                 {
-                    bool theirs = player.Team == _knifeSide;
-                    Paint(player, Alert(
-                        theirs ? "TYPE .stay OR .switch" : $"{SideName(_knifeSide)} ARE PICKING",
+                    bool mine = Id(player) == WinningCaptain()
+                        || (!Config.Match.SideChoiceCaptainOnly && player.Team == _knifeSide);
+                    Paint(player, TwoLine(
+                        mine ? "TYPE .stay OR .switch" : $"{Name(WinningCaptain())} IS PICKING",
                         $"{SideName(_knifeSide)} won the knife"),
                     [
-                        theirs ? ".stay keeps this side, .switch takes the other" : "waiting on their call",
+                        mine
+                            ? ".stay keeps this side, .switch takes the other"
+                            : "waiting on their call",
                     ]);
                     break;
                 }

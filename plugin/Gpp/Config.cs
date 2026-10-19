@@ -67,6 +67,15 @@ public class MatchSettings
 
     [JsonPropertyName("live_cfg")] public string LiveCfg { get; set; } = "gpp/live.cfg";
 
+    // Who answers the knife round with .stay or .switch: the winning side's captain, or anyone on the
+    // winning side. The captain by default - it is their call, and five people typing over each other
+    // is how a side gets picked by whoever has the fastest keyboard.
+    [JsonPropertyName("side_choice_captain_only")] public bool SideChoiceCaptainOnly { get; set; } = true;
+
+    // A second ready check between the side choice and going live. Off by default: the ready phase before
+    // the knife round is the one people expect, and a second one is another thing to wait for.
+    [JsonPropertyName("ready_after_sides")] public bool ReadyAfterSides { get; set; } = false;
+
     [JsonPropertyName("pauses_enabled")] public bool PausesEnabled { get; set; } = true;
 
     // Technical pauses a side may call per match. 0 is unlimited.
@@ -128,6 +137,11 @@ public class GppConfig : BasePluginConfig
 
     // "alternate" = 1,2,1,2 ... ; "snake" = 1,2,2,1,1,2,2,1 ...
     [JsonPropertyName("pick_order")] public string PickOrder { get; set; } = "alternate";
+
+    // Seconds after !pug start that anyone can !captain to volunteer, before the captains are drawn
+    // from whoever put their hand up. 0 turns the grace period off and captains are drawn at random, as
+    // they always were. !pug start force skips it either way.
+    [JsonPropertyName("captain_opt_in_seconds")] public int CaptainOptInSeconds { get; set; } = 30;
 
     // Captains knife 1v1 for first pick before the draft. Off: first pick goes to a coin flip.
     [JsonPropertyName("captain_knife")] public bool CaptainKnife { get; set; } = true;

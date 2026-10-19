@@ -183,6 +183,7 @@ public partial class Gpp
         _matchMap = mapLabel;
         _matchStartedAt = DateTime.UtcNow;
         _team1Side = CsTeam.CounterTerrorist;
+        _knifeDone = false;
         _team1Name = TeamName(_captain1);
         _team2Name = TeamName(_captain2);
         ResetPauses();
@@ -205,10 +206,11 @@ public partial class Gpp
 
     // --- knife ------------------------------------------------------------------------------------
 
-    // Everybody readied. Either the knife round for sides, or straight to live.
+    // Everybody readied. Either the knife round for sides, or straight to live - and straight to live is
+    // also the way out of the optional second ready check, which happens after the knife round is over.
     private void StartKnifeOrLive()
     {
-        if (!Config.KnifeRound)
+        if (!Config.KnifeRound || _knifeDone)
         {
             GoLive();
             return;
@@ -246,6 +248,7 @@ public partial class Gpp
     {
         if (_matchPhase != MatchPhase.Knife) return;
 
+        _knifeDone = true;
         _knifeSide = winner;
         _matchPhase = MatchPhase.SideChoice;
 
@@ -260,6 +263,9 @@ public partial class Gpp
 
     // The side that won the knife round, while the choice is open.
     private CsTeam _knifeSide = CsTeam.None;
+
+    // Set once the knife round has been played, so a ready check after it does not start another one.
+    private bool _knifeDone;
 
     private (int alive, int health) SideStanding(CsTeam side)
     {
@@ -294,12 +300,18 @@ public partial class Gpp
             return;
         }
 
-        // The winning side calls it, or the console does. An admin playing on the other side does not get
-        // to pick for them - that is a captain's call, not a permission.
+        // The winning side's captain calls it, or the console does. Not an admin on the other side -
+        // that is a captain's call, not a permission - and by default not the captain's team-mates
+        // either, because five people typing .switch at once is a side picked by reaction time.
         bool console = player == null || !player.IsValid;
         if (!console && player!.Team != _knifeSide)
         {
             player.PrintToChat(Prefix() + $"Not your call - {SideName(_knifeSide)} won the knife.");
+            return;
+        }
+        if (!console && Config.Match.SideChoiceCaptainOnly && Id(player!) != WinningCaptain())
+        {
+            player!.PrintToChat(Prefix() + $"{Name(WinningCaptain())} picks the side for your team.");
             return;
         }
 
@@ -319,9 +331,26 @@ public partial class Gpp
         }
 
         _knifeSide = CsTeam.None;
-        // A frame later: this is called from a chat hook, and going live execs a cfg and restarts the game.
+
+        // A frame later either way: this is called from a chat hook, and both branches exec a cfg.
+        if (Config.Match.ReadyAfterSides)
+        {
+            AfterTick(() =>
+            {
+                _matchPhase = MatchPhase.Ready;
+                ExecWarmupCfg();
+                StartReadyPhase();
+                Prompt("Sides are set - last ready before we go live.", ".ready", Everybody);
+                StartReadyHud(_matchMap);
+            });
+            return;
+        }
         AfterTick(GoLive);
     }
+
+    // The captain of the side that won the knife round. The draft's captains are team1's and team2's, and
+    // which of those is on the winning side depends on where the sides are at the time.
+    private ulong WinningCaptain() => _knifeSide == _team1Side ? _captain1 : _captain2;
 
     // --- live -------------------------------------------------------------------------------------
 

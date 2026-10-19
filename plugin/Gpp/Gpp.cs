@@ -190,11 +190,19 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
             case "start":
             case "vote":
                 _teamSizeOverride = size;
-                AfterTick(() => StartMapVote(force));
+                // The captain grace period goes in front of the vote, not the draft: by the time the map
+                // has changed and everyone has reconnected, nobody is reading chat for a prompt.
+                AfterTick(() =>
+                {
+                    if (!OpenCaptainOptIn(() => StartMapVote(force), force)) StartMapVote(force);
+                });
                 break;
             case "draft":
                 _teamSizeOverride = size;
-                AfterTick(() => StartDraft(force));
+                AfterTick(() =>
+                {
+                    if (!OpenCaptainOptIn(() => StartDraft(force), force)) StartDraft(force);
+                });
                 break;
             case "captains":
                 // !pug captains                      reroll at random
@@ -269,6 +277,11 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
 
     private string Status()
     {
+        if (CaptainOptInOpen)
+        {
+            return $"Picking captains - {_optInSecondsLeft}s left, {VolunteerCount()} volunteer(s).";
+        }
+
         return _phase switch
         {
             PugPhase.MapVote => $"Map vote running, {_votes.Count} vote(s) in, {_voteSecondsLeft}s left.",
@@ -282,6 +295,12 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
 
     private void Cancel(string why)
     {
+        if (CaptainOptInOpen)
+        {
+            CloseCaptainOptIn(draw: false);
+            Announce($"Captain sign-up cancelled. {why}");
+            return;
+        }
         if (_phase == PugPhase.Idle)
         {
             Announce("Nothing to cancel.");

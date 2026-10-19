@@ -107,7 +107,16 @@ public partial class Gpp
 
     private void AddToPool(ulong steamId)
     {
-        if (_available.Contains(steamId)) return;
+        // Back after leaving mid-draft: they keep the number they had. Nobody else was given it.
+        if (_pool.Contains(steamId))
+        {
+            if (_gone.Remove(steamId))
+            {
+                Announce($"{Name(steamId)} is back in the pool as !{_pool.IndexOf(steamId) + 1}.");
+                GrowDraft();
+            }
+            return;
+        }
         if (_pickIndex >= _pickOrder.Count && DateTime.UtcNow >= _joinsOpenUntil)
         {
             // The draft is already wrapping up and the join window has closed.
@@ -115,8 +124,9 @@ public partial class Gpp
             return;
         }
 
-        _available.Add(steamId);
-        Announce($"{Name(steamId)} joined the draft pool ({_available.Count} undrafted).");
+        // Appended, never inserted: the numbers already on screen have to keep meaning what they did.
+        _pool.Add(steamId);
+        Announce($"{Name(steamId)} joined the draft pool as !{_pool.Count} ({UndraftedCount()} undrafted).");
         GrowDraft();
     }
 
@@ -124,7 +134,7 @@ public partial class Gpp
     // deterministic from the start, so regenerating a longer one leaves the picks already made untouched.
     private void GrowDraft()
     {
-        int headcount = _team1.Count + _team2.Count + _available.Count;
+        int headcount = _team1.Count + _team2.Count + UndraftedCount();
         bool autoSize = _teamSizeOverride == 0 && Config.PlayersPerTeam == 0;
 
         if (autoSize && (headcount + 1) / 2 > _playersPerTeam)
@@ -134,8 +144,8 @@ public partial class Gpp
         }
 
         // Auto-sized: everyone undrafted still gets picked, however the split lands.
-        int slotsLeft = autoSize ? _available.Count : (_playersPerTeam * 2) - _team1.Count - _team2.Count;
-        int total = _pickIndex + Math.Min(slotsLeft, _available.Count);
+        int slotsLeft = autoSize ? UndraftedCount() : (_playersPerTeam * 2) - _team1.Count - _team2.Count;
+        int total = _pickIndex + Math.Min(slotsLeft, UndraftedCount());
         if (total <= _pickOrder.Count) return;
 
         _pickOrder = BuildPickOrder(total, Config.PickOrder, _firstPick);

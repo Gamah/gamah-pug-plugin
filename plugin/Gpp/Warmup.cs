@@ -19,6 +19,7 @@ public partial class Gpp
     internal void StopEverything(string why)
     {
         // Phase state first, so nothing below is fighting a timer that is still running.
+        CloseCaptainOptIn(draw: false);
         ResetVote();
         ResetKnife();
         ResetDraft();

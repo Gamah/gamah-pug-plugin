@@ -63,6 +63,12 @@ public partial class Gpp
             // what everyone types - it is what MatchZy answered for years - and "." is still not one of
             // CounterStrikeSharp's chat triggers (configs/core.json: "!" and "/"), so nothing turns
             // ".ready" into css_ready. This listener is the only route for it.
+            case "captain":
+                AfterTick(() => Volunteer(PlayerBySteamId(who)));
+                return HookResult.Continue;
+            // .gaben readies up. It is a joke with a straight face: an alias nobody has to be taught
+            // twice, which is more than can be said for most of the commands here.
+            case "gaben":
             case "ready":
             case "r":
                 AfterTick(() => Ready(PlayerBySteamId(who)));

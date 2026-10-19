@@ -20,7 +20,9 @@ not yet run with ten people on it.
 | `!pug start` | admin | Map vote, then the draft, then the match |
 | `!pug vote` | admin | Map vote only |
 | `!pug draft` | admin | Draft only |
-| `!pug captains` | admin | Reroll captains, before any pick is made |
+| `!pug captains` | admin | Reroll captains at random, before any pick is made |
+| `!pug captains <a> <b>` | admin | Pin exactly those two. `!pug captains humans` picks the two people on an otherwise botted server |
+| `!captain` / `.captain` | everyone | Put your hand up during the sign-up window `!pug start` opens. Again to take it down |
 | `!pug match` | admin | Start the match on the drafted teams (only needed with `auto_start_match` off) |
 | `!pug endmatch` / `.endmatch` | admin | End the match that is running and go back to a held warmup |
 | `!pug stop` | admin | **Nuke everything.** Ends the match, clears bots, drops every phase, frees spectators and lands in a held warmup. Works from any state |
@@ -30,10 +32,10 @@ not yet run with ten people on it.
 | `!vote <number\|map>` | everyone | Vote during a map vote. `!<number>` is shorter |
 | `!draft <number\|name>` | captain on the clock | Make a pick by name; no argument reprints the list |
 | `!players` | everyone | The numbered list of undrafted players, in chat |
-| `.ready` / `.r` / `!ready` | everyone | Ready up. `min_ready` of them starts the match |
+| `.ready` / `.r` / `.gaben` / `!ready` | everyone | Ready up. `min_ready` of them starts the match |
 | `.unready` / `.ur` / `.notready` | everyone | Take it back |
 | `.forceready` / `!pug ...` | admin | Ready everybody and start, whoever is missing |
-| `.stay` / `.switch` | the side that won the knife | Keep this side, or take the other one |
+| `.stay` / `.switch` | the winning side's captain | Keep this side, or take the other one. `side_choice_captain_only` false lets their whole side answer |
 | `.pause` | players in the match | Pause from the end of the round. Both sides `.unpause` to resume |
 | `.tech` | players in the match | Technical pause — capped per side by `max_tech_pauses` |
 | `.unpause` | players in the match | Ask to resume |
@@ -45,7 +47,11 @@ not yet run with ten people on it.
 
 A bare `!<number>` is the command players actually use: during a map vote it votes, during a draft it
 picks, and outside both it is ignored rather than answered — `!1` in chat mid-match is somebody
-talking. It goes through the plugin's own `say` listener because CounterStrikeSharp turns `!foo` into
+talking. **A player's number is theirs for the whole draft**: it is their place in the pool, not their
+place in what is left of it, so picking !3 does not renumber everyone below them and the next captain
+reading the screen gets the player they were looking at. A player who leaves has their number retired
+rather than handed on, someone who joins mid-draft is appended with the next number, and if they come
+back they get their old number again. It goes through the plugin's own `say` listener because CounterStrikeSharp turns `!foo` into
 `css_foo`, and there is no sane way to register one console command per number. The longer `!vote` and
 `!draft` still work and are what you need to pick a player by name.
 
@@ -114,12 +120,17 @@ went with MatchZy; `!pug draft` still drafts on whatever map the server is alrea
 - `knife_round` (true) — knife round for sides once everybody has readied. Off goes straight live on the
   drafted sides
 - `min_ready` (2) — `.ready` needed to start the match. 0 means every drafted player
+- `captain_opt_in_seconds` (30) — the sign-up window `!pug start` opens before the map vote: anyone can
+  `!captain`, and the two captains are drawn from whoever did. Fewer than two volunteers and the rest of
+  the draw is at random as before. 0 turns it off; `!pug start force` skips it
 - `auto_start_match` (true) — start the match as soon as the draft ends. Off waits for `!pug match`
 - `match` — the match itself:
   - `warmup_cfg` / `knife_cfg` / `live_cfg` (`gpp/*.cfg`, relative to `csgo/cfg`) — the three phase
     configs, in [`../../examples/cfg/gpp`](../../examples/cfg/gpp). `warmup.cfg` is the one that holds
     the warmup open, which is what keeps an idle server idle; a missing file falls back to a handful of
     built-in cvars and says so in the log
+  - `side_choice_captain_only` (true) — only the winning side's captain answers the knife round
+  - `ready_after_sides` (false) — a second ready check between the side choice and going live
   - `pauses_enabled` (true), `max_tech_pauses` (0 = unlimited), `tech_pause_seconds` (0 = both sides
     always have to `.unpause`)
   - `demos_enabled` (true), `demo_path` (`gpp-demos`, relative to `csgo/`), `demo_name_format`
@@ -201,6 +212,8 @@ Optional and off by default. With `discord.base_url` empty the plugin makes no n
 
 ## Caveats
 
+- **The last player in the pool is not picked, they are placed.** When one undrafted player is left
+  they go to whoever is on the clock, which is also how the odd player in uneven teams is decided.
 - **The draft is not enforced once the match is live.** Nothing kicks a latecomer and nothing drags a
   player back to their drafted side after go-live: an open server was the whole reason for dropping
   MatchZy's match config. The ready phase does sweep drafted players back onto their side, so the match

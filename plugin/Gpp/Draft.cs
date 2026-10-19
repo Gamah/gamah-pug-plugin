@@ -17,7 +17,15 @@ public partial class Gpp
 
     private readonly List<ulong> _team1 = [];
     private readonly List<ulong> _team2 = [];
-    private readonly List<ulong> _available = [];
+    // Everyone in the draft pool, in the order they entered it. A player's number is their place in
+    // this list plus one, and it does not change for the life of the draft: a list that renumbers itself
+    // after every pick is how a captain types !3 and gets somebody else. Picked players keep their
+    // number and drop off the list; late joiners get the next number along; a player who leaves has
+    // their number retired rather than handed to the next person.
+    private readonly List<ulong> _pool = [];
+
+    // In the pool, but gone from the server.
+    private readonly HashSet<ulong> _gone = [];
     private readonly Dictionary<ulong, string> _names = [];
 
     private ulong _captain1;
@@ -40,6 +48,19 @@ public partial class Gpp
     private int _pickIndex;
     private int _pickSecondsLeft;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _pickTimer;
+
+    private bool IsUndrafted(ulong steamId) =>
+        !_gone.Contains(steamId) && !_team1.Contains(steamId) && !_team2.Contains(steamId);
+
+    private List<ulong> Undrafted() => _pool.Where(IsUndrafted).ToList();
+
+    private int UndraftedCount() => _pool.Count(IsUndrafted);
+
+    // The pickable players with the numbers a captain actually types.
+    private List<(int Number, ulong Id)> PickList() =>
+        _pool.Select((steamId, index) => (index + 1, steamId))
+            .Where(entry => IsUndrafted(entry.Item2))
+            .ToList();
 
     private void StartWaitingForPlayers()
     {
@@ -180,9 +201,9 @@ public partial class Gpp
         pool.Remove(_captain2);
         _team1.Add(_captain1);
         _team2.Add(_captain2);
-        _available.AddRange(pool);
+        _pool.AddRange(pool);
 
-        int picks = autoSized ? _available.Count : Math.Min(_available.Count, (_playersPerTeam * 2) - 2);
+        int picks = autoSized ? UndraftedCount() : Math.Min(UndraftedCount(), (_playersPerTeam * 2) - 2);
         if (picks == 0)
         {
             Announce($"Nothing to draft at {_playersPerTeam}v{_playersPerTeam} - the captains are the teams.");
@@ -275,7 +296,6 @@ public partial class Gpp
             _team2.Clear();
             _team1.Add(_captain1);
             _team2.Add(_captain2);
-            _available.RemoveAll(steamId => steamId == _captain1 || steamId == _captain2);
             MoveToTeam(_captain1, CsTeam.CounterTerrorist);
             MoveToTeam(_captain2, CsTeam.Terrorist);
             Announce($"Captains: {Colorize("{green}")}{Name(_captain1)}{Colorize("{default}")} (CT) and "
@@ -312,15 +332,17 @@ public partial class Gpp
             return;
         }
 
-        var pool = _available.Concat([_captain1, _captain2]).OrderBy(_ => _rng.Next()).ToList();
+        // Renumbering is fine here and nowhere else: a reroll is only allowed before the first pick.
+        var pool = Undrafted().Concat([_captain1, _captain2]).OrderBy(_ => _rng.Next()).ToList();
         _captain1 = pool[0];
         _captain2 = pool[1];
         _team1.Clear();
         _team2.Clear();
         _team1.Add(_captain1);
         _team2.Add(_captain2);
-        _available.Clear();
-        _available.AddRange(pool.Skip(2));
+        _pool.Clear();
+        _gone.Clear();
+        _pool.AddRange(pool.Skip(2));
 
         Announce($"New captains: {Colorize("{green}")}{Name(_captain1)}{Colorize("{default}")} (CT) and {Colorize("{green}")}{Name(_captain2)}{Colorize("{default}")} (T).");
         MoveToTeam(_captain1, CsTeam.CounterTerrorist);
@@ -332,18 +354,17 @@ public partial class Gpp
 
     private void PrintAvailable(CCSPlayerController? only = null)
     {
-        if (_available.Count == 0)
+        var pickable = PickList();
+        if (pickable.Count == 0)
         {
             Announce("Nobody left undrafted.");
             return;
         }
 
-        string header = $"Undrafted ({_available.Count}) - pick with !1, !2, ...:";
-        var lines = new List<string>();
-        for (int i = 0; i < _available.Count; i++)
-        {
-            lines.Add($"{Colorize("{green}")}{i + 1}{Colorize("{default}")} {Name(_available[i])}");
-        }
+        string header = $"Undrafted ({pickable.Count}) - pick with !1, !2, ...:";
+        var lines = pickable
+            .Select(entry => $"{Colorize("{green}")}{entry.Number}{Colorize("{default}")} {Name(entry.Id)}")
+            .ToList();
 
         // Three to a line: one chat line per player buries the prompt on a 10-man.
         var chunks = lines
@@ -379,9 +400,23 @@ public partial class Gpp
         _pickTimer?.Kill();
         _pickTimer = null;
 
-        if (_pickIndex >= _pickOrder.Count || _available.Count == 0)
+        if (_pickIndex >= _pickOrder.Count || UndraftedCount() == 0)
         {
             FinishDraft();
+            return;
+        }
+
+        // The last player in the pool is not a choice. They go to whoever is on the clock - which is what
+        // keeps uneven teams even-handed, since the pick order decides who gets the odd one - rather than
+        // leaving somebody as the last name on a screen waiting to be picked. Unless more players are
+        // still expected, in which case they are not the last one yet.
+        var pickable = Undrafted();
+        if (pickable.Count == 1 && !WaitingForMorePlayers())
+        {
+            Announce($"{Colorize("{green}")}{Name(pickable[0])}{Colorize("{default}")} goes to "
+                + $"{Name(CurrentCaptain())} - last in the pool.");
+            ulong last = pickable[0];
+            AfterTick(() => ApplyPick(last));
             return;
         }
 
@@ -390,7 +425,7 @@ public partial class Gpp
         _waitTimer = null;
 
         var captain = PlayerBySteamId(CurrentCaptain());
-        Prompt($"{Colorize("{green}")}{Name(CurrentCaptain())}{Colorize("{default}")} picks ({_available.Count} left).",
+        Prompt($"{Colorize("{green}")}{Name(CurrentCaptain())}{Colorize("{default}")} picks ({UndraftedCount()} left).",
             "pick now - !1, !2, ...", $"{Name(CurrentCaptain())} only");
         // With the HUD up the captains already have the list on screen; chat only repeats it without one.
         if (!Config.Hud)
@@ -414,7 +449,13 @@ public partial class Gpp
         _pickSecondsLeft--;
         if (_pickSecondsLeft > 0) return;
 
-        var pick = _available[_rng.Next(_available.Count)];
+        var pickable = Undrafted();
+        if (pickable.Count == 0)
+        {
+            AfterTick(FinishDraft);
+            return;
+        }
+        var pick = pickable[_rng.Next(pickable.Count)];
         Announce($"Out of time - {Name(pick)} picked at random.");
         AfterTick(() => ApplyPick(pick));
     }
@@ -469,19 +510,35 @@ public partial class Gpp
 
     private ulong ResolvePick(string arg)
     {
-        if (int.TryParse(arg, out int number) && number >= 1 && number <= _available.Count) return _available[number - 1];
+        // The number is a place in the pool, not a place in what is left of it.
+        if (int.TryParse(arg, out int number) && number >= 1 && number <= _pool.Count)
+        {
+            ulong numbered = _pool[number - 1];
+            return IsUndrafted(numbered) ? numbered : 0;
+        }
 
-        var exact = _available.Where(s => Name(s).Equals(arg, StringComparison.OrdinalIgnoreCase)).ToList();
+        var undrafted = Undrafted();
+        var exact = undrafted.Where(s => Name(s).Equals(arg, StringComparison.OrdinalIgnoreCase)).ToList();
         if (exact.Count == 1) return exact[0];
 
-        var partial = _available.Where(s => Name(s).Contains(arg, StringComparison.OrdinalIgnoreCase)).ToList();
+        var partial = undrafted.Where(s => Name(s).Contains(arg, StringComparison.OrdinalIgnoreCase)).ToList();
         return partial.Count == 1 ? partial[0] : 0;
     }
 
     private void ApplyPick(ulong steamId)
     {
+        // Two things can pick at once: the captain typing a number and the clock running out on the same
+        // frame, both of which hand their work to the next frame. Without this the same player is added
+        // to both teams and the pick order advances twice, which is what "picked twice" looks like from
+        // the chat. Whoever gets here first wins and the other is a no-op.
+        if (_pickIndex >= _pickOrder.Count || !IsUndrafted(steamId)) return;
+        _pickTimer?.Kill();
+        _pickTimer = null;
+        _pickSecondsLeft = 0;
+
         int team = _pickOrder[_pickIndex];
-        _available.Remove(steamId);
+        // Not removed from the pool: being on a team is what takes a player off the list, and their
+        // number stays theirs so nobody else inherits it.
         if (team == 0)
         {
             _team1.Add(steamId);
@@ -512,7 +569,7 @@ public partial class Gpp
         // Anyone left over (a short pick order, or someone who turned up late) fills the smaller team. Only
         // a pinned team size leaves people in spectator; an auto-sized draft puts everyone in the match.
         bool pinned = _teamSizeOverride > 0 || Config.PlayersPerTeam > 0;
-        foreach (var steamId in _available.ToList())
+        foreach (var steamId in Undrafted())
         {
             bool toTeam1 = _team1.Count <= _team2.Count;
             if (pinned && (toTeam1 ? _team1.Count : _team2.Count) >= _playersPerTeam)
@@ -529,14 +586,13 @@ public partial class Gpp
                 _team2.Add(steamId);
                 MoveToTeam(steamId, CsTeam.Terrorist);
             }
-            _available.Remove(steamId);
         }
 
         Announce($"CT: {string.Join(", ", _team1.Select(Name))}");
         Announce($"T: {string.Join(", ", _team2.Select(Name))}");
-        if (_available.Count > 0)
+        if (UndraftedCount() > 0)
         {
-            Announce($"Not drafted: {string.Join(", ", _available.Select(Name))}");
+            Announce($"Not drafted: {string.Join(", ", Undrafted().Select(Name))}");
         }
 
         // Whoever is left over was put in spectator by the pug, not by choice. The draft is done with
@@ -549,12 +605,20 @@ public partial class Gpp
         HandOffToMatch();
     }
 
+    // True while players we were told to expect have not turned up yet and the join window is still open.
+    // Teams must not lock in that state, and the last player in the pool is not the last player yet.
+    private bool WaitingForMorePlayers()
+    {
+        int here = _team1.Count + _team2.Count + UndraftedCount();
+        return here < _expectedPlayers && DateTime.UtcNow < _joinsOpenUntil;
+    }
+
     // Teams must not lock while players we were expecting are still loading in - that is how a 2v2 ends up
-    // loaded with everyone else shut out by the whitelist.
+    // with everyone else shut out.
     private bool HoldForLateJoiners()
     {
-        int here = _team1.Count + _team2.Count + _available.Count;
-        if (here >= _expectedPlayers || DateTime.UtcNow >= _joinsOpenUntil) return false;
+        if (!WaitingForMorePlayers()) return false;
+        int here = _team1.Count + _team2.Count + UndraftedCount();
 
         _pickTimer?.Kill();
         _pickTimer = null;
@@ -593,15 +657,17 @@ public partial class Gpp
             return;
         }
 
-        if (_available.Remove(steamId))
+        if (_pool.Contains(steamId) && IsUndrafted(steamId))
         {
+            // Retired, not removed: the numbers after theirs must not all shift up one.
+            _gone.Add(steamId);
             Announce($"{Name(steamId)} left the draft pool.");
             // The pool may now be shorter than the remaining picks.
-            if (_pickOrder.Count > _pickIndex + _available.Count)
+            if (_pickOrder.Count > _pickIndex + UndraftedCount())
             {
-                _pickOrder = _pickOrder.Take(_pickIndex + _available.Count).ToList();
+                _pickOrder = _pickOrder.Take(_pickIndex + UndraftedCount()).ToList();
             }
-            if (_available.Count == 0) FinishDraft();
+            if (UndraftedCount() == 0) FinishDraft();
             else if (PlayerBySteamId(CurrentCaptain()) != null) PromptPick();
             return;
         }
@@ -630,7 +696,7 @@ public partial class Gpp
     private string DraftStatus()
     {
         if (_pickIndex >= _pickOrder.Count) return "Draft finishing up.";
-        return $"Draft running - {Name(CurrentCaptain())} to pick, {_available.Count} undrafted, CT {_team1.Count} / T {_team2.Count}.";
+        return $"Draft running - {Name(CurrentCaptain())} to pick, {UndraftedCount()} undrafted, CT {_team1.Count} / T {_team2.Count}.";
     }
 
     private void ResetDraft()
@@ -644,7 +710,8 @@ public partial class Gpp
         _waitTimer = null;
         _team1.Clear();
         _team2.Clear();
-        _available.Clear();
+        _pool.Clear();
+        _gone.Clear();
         _pickOrder = [];
         _pickIndex = 0;
         _captain1 = 0;

@@ -8,6 +8,7 @@
 # the match so it actually ends while you are watching.
 #
 #   bot-test.sh bots [n]        bots on, default 9
+#   bot-test.sh captains        pin the two humans on the server as captains
 #   bot-test.sh draft [n]       bots + draft on the current map - the quick path to a match
 #   bot-test.sh start [n]       bots + the full flow, map vote first (you have to !1 to vote)
 #   bot-test.sh ready           force the ready phase through
@@ -43,10 +44,16 @@ case ${1:-status} in
     bots_on "${2:-9}"
     ;;
 
+  captains)
+    # The draw is over bots too when count_bots is on, and a bot captain neither knifes nor picks.
+    rcon "css_pug captains humans" >/dev/null
+    echo "the two humans here are the captains - they knife each other for first pick"
+    ;;
+
   draft)
     bots_on "${2:-9}"
     sleep 6
-    # force: skips min_players and ends anything already running.
+    # force: skips min_players, skips the !captain sign-up window, and ends anything already running.
     rcon "css_pug draft force" >/dev/null
     echo "drafting on the current map. Bot captains pick on a 3s clock, so give it ~30s,"
     echo "then: bot-test.sh ready"
