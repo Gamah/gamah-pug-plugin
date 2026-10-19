@@ -181,7 +181,9 @@ public partial class Gpp
             if (!HasCamera(player))
             {
                 HideWorldPanel(player.Slot);
-                player.PrintToCenterAlert(Alert($"{Name(onClock)} IS PICKING", "YOU WILL BE SPAWNED WHEN PICKED"));
+                // Thirty characters is the alert box's cap, and it clips rather than wraps: the first version of
+                // this line lost its last letter and read "WHEN PICKE".
+                player.PrintToCenterAlert(Alert($"{Name(onClock)} IS PICKING", "YOU SPAWN WHEN PICKED"));
                 DraftDrawn(player, "alert (no pawn of their own)");
                 continue;
             }

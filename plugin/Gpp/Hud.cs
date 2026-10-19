@@ -160,7 +160,7 @@ public partial class Gpp
             bool duelling = Id(player) == _captain1 || Id(player) == _captain2;
             ulong other = Id(player) == _captain1 ? _captain2 : _captain1;
             player.PrintToCenterAlert(duelling
-                ? Alert("KNIFE FOR FIRST PICK", $"vs {Name(other)} - first blood takes it")
+                ? Alert("KNIFE FOR FIRST PICK", $"vs {Name(other)} - first blood")
                 : Alert("CAPTAINS ARE KNIFING", $"{Name(_captain1)} vs {Name(_captain2)}"));
         }
     }
