@@ -83,11 +83,33 @@ public partial class Gpp
         }
     }
 
-    // The ballot pages the same way the pick list does, for the same reason: the whole map pool is on it
-    // now, and thirty-odd maps are not four lines. Numbers run across the whole ballot, not the page, so
-    // a map you saw two pages ago is still that number.
-    private const int VotePageSize = 6;
-    private const int VotePageSeconds = 3;
+    // Both lists page by *line*, three lines at a time, a new page every three seconds. Three rather
+    // than four because the client shrinks the panel's text to fit a fourth line, and small text on a
+    // 1080p monitor across the room is not a list anybody reads. Paging by line rather than by a count of
+    // cells is also what stops a page coming out one line shorter than the last and jumping about.
+    //
+    // Numbers run across the whole list, not the page, so a map or a player you saw two pages ago is
+    // still that number.
+    private const int ListLines = 3;
+    private const int PageSeconds = 3;
+
+    // Lays the cells out, then returns the page of at most three lines that is this player's turn to see.
+    private static List<string> Page(IEnumerable<string> cells, int ticks, out int page, out int pages)
+    {
+        var lines = Columns(cells);
+        pages = Math.Max(1, (lines.Count + ListLines - 1) / ListLines);
+        page = pages > 1 ? (ticks / PageSeconds) % pages : 0;
+        return lines.Skip(page * ListLines).Take(ListLines).ToList();
+    }
+
+    // The alert box is exactly two lines in every phase: what is happening, and the state. It used to be
+    // one line per part, which meant it grew a third line whenever a clock or a page counter appeared and
+    // shrank again when it went - and the whole box jumps when it does.
+    private static string TwoLine(string title, params string?[] state)
+    {
+        string line = string.Join("  ", state.Where(part => !string.IsNullOrWhiteSpace(part)));
+        return Alert(title, line.Length > 0 ? line : " ");
+    }
 
     private void PaintVote(CCSPlayerController player)
     {
@@ -98,27 +120,14 @@ public partial class Gpp
         // "vote 1". Carrying the bang in every cell means the list *is* the instruction.
         var cells = _ballot.Select((map, index) =>
             $"!{index + 1} - {map.Label}{(tally[index] > 0 ? " " + new string('*', Math.Min(tally[index], 5)) : "")}").ToList();
-        int pages = Math.Max(1, (cells.Count + VotePageSize - 1) / VotePageSize);
-        int page = pages > 1 ? (_hudTicks / VotePageSeconds) % pages : 0;
-        var panel = Columns(cells.Skip(page * VotePageSize).Take(VotePageSize), 3);
+        var panel = Page(cells, _hudTicks, out int page, out int pages);
 
         bool voted = _votes.TryGetValue(Id(player), out int mine);
-        if (voted)
-        {
-            var waiting = HumanPlayers()
-                .Where(other => !_votes.ContainsKey(Id(other)))
-                .Select(other => other.PlayerName)
-                .ToList();
-            panel.Add($"you voted {_ballot[mine].Label}");
-            panel.Add(waiting.Count == 0 ? "everybody has voted" : $"still to vote: {Join(waiting)}");
-        }
-
-        string? of = pages > 1 ? $"page {page + 1}/{pages}" : null;
-        Paint(player, Alert(
-            voted ? "VOTED" : "VOTE NOW!",
+        Paint(player, TwoLine(
+            voted ? $"VOTED {_ballot[mine].Label}" : "VOTE NOW!",
             $"{_voteSecondsLeft}s",
             $"{_votes.Count}/{HumanPlayers().Count} votes",
-            of), panel);
+            pages > 1 ? $"{page + 1}/{pages}" : null), panel);
     }
 
     private void PaintKnife(CCSPlayerController player)
@@ -127,7 +136,7 @@ public partial class Gpp
         string clock = _duelArmed ? $"{_knifeSecondsLeft}s" : "starting";
         ulong other = Id(player) == _captain1 ? _captain2 : _captain1;
 
-        Paint(player, Alert(
+        Paint(player, TwoLine(
             duelling ? "KNIFE FOR FIRST PICK" : "CAPTAINS ARE KNIFING",
             duelling ? $"vs {Name(other)}" : null,
             clock),
@@ -136,34 +145,31 @@ public partial class Gpp
                 : [$"{Name(_captain1)} vs {Name(_captain2)}", WhySpectating(Id(player))]);
     }
 
-    // The pick list pages six at a time, three across, a new page every three seconds: twelve names fit in
-    // the budget as one block but read as a wall, and six at a larger spacing is what the room could follow.
-    // The numbers belong to the player, not the page, so a captain can call a number that is off screen.
-    private const int PickPageSize = 6;
-    private const int PickPageSeconds = 3;
-
     private void PaintDraft(CCSPlayerController player)
     {
         ulong onClock = CurrentCaptain();
-        string? clock = _pickSecondsLeft > 0 ? $"{_pickSecondsLeft}s" : null;
+        bool captain = Id(player) == _captain1 || Id(player) == _captain2;
+
+        // The list is for whoever can pick from it. Everyone else is in spectator waiting to be picked,
+        // and a scrolling list of names they cannot do anything with is not information - what they want
+        // to know is why they are not playing yet.
+        if (!captain)
+        {
+            Paint(player, TwoLine($"{Name(onClock)} IS PICKING",
+                _pickSecondsLeft > 0 ? $"{_pickSecondsLeft}s" : null,
+                $"{_available.Count} left"),
+                [WhySpectating(Id(player))]);
+            return;
+        }
 
         var cells = _available.Select((steamId, index) => $"!{index + 1} - {Name(steamId)}").ToList();
-        int pages = Math.Max(1, (cells.Count + PickPageSize - 1) / PickPageSize);
-        int page = pages > 1 ? (_hudTicks / PickPageSeconds) % pages : 0;
-        var panel = Columns(cells.Skip(page * PickPageSize).Take(PickPageSize), 3);
-        // A captain knows why they are not playing: they are reading the list of people to pick. The
-        // status line is for everyone else, who are sitting in spectator wondering what they are waiting on.
-        bool captain = Id(player) == _captain1 || Id(player) == _captain2;
-        if (!captain) panel.Add(WhySpectating(Id(player)));
+        var panel = Page(cells, _hudTicks, out int page, out int pages);
 
-        // The page counter rides on the alert line with the rest of the state, so the centre panel spends
-        // all four of its lines on names.
-        string? of = pages > 1 ? $"page {page + 1}/{pages}" : null;
-        Paint(player, Alert(
+        Paint(player, TwoLine(
             Id(player) == onClock ? "PICK NOW!" : $"{Name(onClock)} IS PICKING",
-            clock,
+            _pickSecondsLeft > 0 ? $"{_pickSecondsLeft}s" : null,
             $"{_available.Count} left",
-            of), panel);
+            pages > 1 ? $"{page + 1}/{pages}" : null), panel);
     }
 
     // Being stuck in spectator with no explanation is the complaint behind half of this overlay, so every

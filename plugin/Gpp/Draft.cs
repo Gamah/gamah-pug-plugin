@@ -221,6 +221,84 @@ public partial class Gpp
         return order;
     }
 
+    // !pug captains <a> <b>, or !pug captains humans - pin who wears the armbands instead of drawing
+    // them. Set while idle it is what the next draft starts from (StartDraft keeps captains who are
+    // still connected); set during a draft before any pick has been made it takes effect there and then.
+    //
+    // "humans" exists for a test run: with count_bots on, the draw is over bots as well, and a bot
+    // captain neither knifes nor picks - so a night with two people on the server and eight bots in the
+    // pool has to be able to say "us two".
+    private void SetCaptains(CommandInfo command, string first, string second)
+    {
+        if (_phase == PugPhase.CaptainKnife)
+        {
+            Reply(command, "The captains are already knifing - !pug cancel first.");
+            return;
+        }
+        if (_phase == PugPhase.Draft && (_team1.Count > 1 || _team2.Count > 1))
+        {
+            Reply(command, "Picks have already been made - !pug cancel and start again.");
+            return;
+        }
+
+        ulong one;
+        ulong two;
+        if (first == "humans")
+        {
+            var humans = HumanPlayers().Where(player => !player.IsBot).Select(Id).ToList();
+            if (humans.Count < 2)
+            {
+                Reply(command, $"Need two humans on the server for that ({humans.Count} here).");
+                return;
+            }
+            // More than two and it is a draw among them, which is still the thing being asked for.
+            var drawn = humans.OrderBy(_ => _rng.Next()).ToList();
+            one = drawn[0];
+            two = drawn[1];
+        }
+        else
+        {
+            one = ResolvePlayer(first);
+            two = ResolvePlayer(second);
+            if (one == 0) { Reply(command, $"No single player matches \"{first}\"."); return; }
+            if (two == 0) { Reply(command, $"No single player matches \"{second}\"."); return; }
+            if (one == two) { Reply(command, "Those are the same player."); return; }
+        }
+
+        _captain1 = one;
+        _captain2 = two;
+        foreach (var steamId in new[] { one, two }) _names[steamId] = Name(steamId);
+
+        if (_phase == PugPhase.Draft)
+        {
+            _team1.Clear();
+            _team2.Clear();
+            _team1.Add(_captain1);
+            _team2.Add(_captain2);
+            _available.RemoveAll(steamId => steamId == _captain1 || steamId == _captain2);
+            MoveToTeam(_captain1, CsTeam.CounterTerrorist);
+            MoveToTeam(_captain2, CsTeam.Terrorist);
+            Announce($"Captains: {Colorize("{green}")}{Name(_captain1)}{Colorize("{default}")} (CT) and "
+                + $"{Colorize("{green}")}{Name(_captain2)}{Colorize("{default}")} (T).");
+            PromptPick();
+            return;
+        }
+
+        Announce($"Captains pinned: {Colorize("{green}")}{Name(_captain1)}{Colorize("{default}")} and "
+            + $"{Colorize("{green}")}{Name(_captain2)}{Colorize("{default}")} - they knife for first pick.");
+    }
+
+    // Any connected player, by exact then partial name. 0 when nothing or more than one matches.
+    private ulong ResolvePlayer(string arg)
+    {
+        var players = HumanPlayers();
+        var exact = players.Where(p => p.PlayerName.Equals(arg, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (exact.Count == 1) return Id(exact[0]);
+
+        var partial = players.Where(p => p.PlayerName.Contains(arg, StringComparison.OrdinalIgnoreCase)).ToList();
+        return partial.Count == 1 ? Id(partial[0]) : 0;
+    }
+
     private void RerollCaptains(CommandInfo command)
     {
         if (_phase != PugPhase.Draft)

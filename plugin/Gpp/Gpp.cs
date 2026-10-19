@@ -197,7 +197,23 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
                 AfterTick(() => StartDraft(force));
                 break;
             case "captains":
-                RerollCaptains(command);
+                // !pug captains                      reroll at random
+                // !pug captains humans               the two people on the server, bots left out
+                // !pug captains <name> <name>        exactly these two
+                if (command.ArgCount > 3)
+                {
+                    string one = command.ArgByIndex(2);
+                    string two = command.ArgByIndex(3);
+                    AfterTick(() => SetCaptains(command, one.ToLowerInvariant() == "humans" ? "humans" : one, two));
+                }
+                else if (arg == "humans")
+                {
+                    AfterTick(() => SetCaptains(command, "humans", ""));
+                }
+                else
+                {
+                    RerollCaptains(command);
+                }
                 break;
             case "match":
                 AfterTick(() =>

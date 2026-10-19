@@ -64,11 +64,14 @@ public partial class Gpp
         _armingTicks = 0;
         _knifeSecondsLeft = Math.Max(10, Config.CaptainKnifeSeconds);
 
-        // Everyone else watches: a third player in the duel is a third player who can win it.
+        // Everyone else watches: a third player in the duel is a third player who can win it. Everyone
+        // human, that is - a bot in spectator is outside bot_quota, so the engine kicks it and adds a
+        // replacement, and a test run turns into a churn of connecting bots. StandDownTestBots below is
+        // how bots are taken out of the duel: it kills them, which the duel's own cvars make stick.
         foreach (var player in HumanPlayers())
         {
-            if (Id(player) == _captain1 || Id(player) == _captain2) continue;
-            player.ChangeTeam(CsTeam.Spectator);
+            if (player.IsBot || Id(player) == _captain1 || Id(player) == _captain2) continue;
+            HoldInSpectator(player);
         }
         first.ChangeTeam(CsTeam.CounterTerrorist);
         second.ChangeTeam(CsTeam.Terrorist);

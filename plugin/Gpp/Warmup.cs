@@ -46,12 +46,11 @@ public partial class Gpp
         // rather than trusting the plugin's own idea of what is running.
         AbandonMatch(why);
 
-        // MatchZy, if it is still installed, is put back to sleep: a match it was somehow running leaves
-        // it awake with its own ready phase and its unready chat timer on.
-        if (Config.Match.MatchZyInstalled)
-        {
-            Server.ExecuteCommand("get5_endmatch;matchzy_autostart_mode 0;css_sleep");
-        }
+        // Deliberately *not* get5_endmatch and css_sleep. They were how !pug stop cleared a MatchZy match
+        // back when MatchZy ran the match; MatchZy does not run anything now, and both of them print to
+        // everyone's chat ("Sleep mode loaded!"), so a stop announced itself twice in MatchZy's name.
+        // QuietenMatchZy only sets cvars, which MatchZy answers silently when the console asks.
+        // [SOURCE: MatchZy 0.9.1 SleepMode.cs StartSleepMode, ConfigConvars.cs:246, read 2026-10-19]
         QuietenMatchZy();
 
         // And land in a held warmup rather than a live round ticking down with nobody in it. The cfg does
