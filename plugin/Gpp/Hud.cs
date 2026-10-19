@@ -39,6 +39,26 @@ public partial class Gpp
     // Seconds the panel has been up, which is what pages the pick list.
     private int _hudTicks;
 
+    // Whatever is on screen right now, so it can be drawn again between phase ticks. A panel sets this
+    // when it paints and Clear() takes it down; the repaint timer below is what makes a long line
+    // actually move, rather than it stepping once a second when the phase clock happens to tick.
+    private Action? _repaint;
+
+    private const float RepaintSeconds = 0.25f;
+
+    private CounterStrikeSharp.API.Modules.Timers.Timer? _repaintTimer;
+
+    private void StartRepaintLoop()
+    {
+        _repaintTimer?.Kill();
+        _repaintTimer = AddTimer(RepaintSeconds, () =>
+        {
+            if (_repaint == null) return;
+            HudLayout.BumpPaintTick();
+            _repaint.Invoke();
+        }, TimerFlags.REPEAT);
+    }
+
     private CounterStrikeSharp.API.Modules.Timers.Timer? _hudTimer;
 
     private void StartHud()
@@ -59,6 +79,7 @@ public partial class Gpp
 
     private void Clear()
     {
+        _repaint = null;
         foreach (var player in HumanPlayers())
         {
             player.PrintToCenter(" ");
@@ -69,12 +90,18 @@ public partial class Gpp
     private void HudTick()
     {
         _hudTicks++;
-        HudLayout.BumpPaintTick();
         if (_phase == PugPhase.Idle || (_phase == PugPhase.Draft && _pickIndex >= _pickOrder.Count))
         {
             StopHud();
             return;
         }
+        PaintPhase();
+    }
+
+    // Just the drawing: no clock, no paging, so the repaint timer can call it as often as it likes.
+    private void PaintPhase()
+    {
+        _repaint = PaintPhase;
 
         foreach (var player in HumanPlayers())
         {
@@ -220,7 +247,6 @@ public partial class Gpp
 
     private void ReadyHudTick()
     {
-        HudLayout.BumpPaintTick();
         if (--_readyHudSecondsLeft <= 0)
         {
             // Five minutes of a panel nobody has acted on is a panel nobody is reading. The phase stays
@@ -233,6 +259,12 @@ public partial class Gpp
             });
             return;
         }
+        ReadyHudPaint();
+    }
+
+    private void ReadyHudPaint()
+    {
+        _repaint = ReadyHudPaint;
 
         // Bots cannot ready up, so they are neither counted nor named.
         var roster = _roster.Keys.Where(steamId => !IsBotId(steamId)).ToList();
@@ -277,7 +309,6 @@ public partial class Gpp
 
     private void MatchHudTick()
     {
-        HudLayout.BumpPaintTick();
         bool wanted = _matchPhase == MatchPhase.Knife
             || _matchPhase == MatchPhase.SideChoice
             || (_matchPhase == MatchPhase.Live && _paused);
@@ -286,6 +317,12 @@ public partial class Gpp
             AfterTick(StopMatchHud);
             return;
         }
+        MatchHudPaint();
+    }
+
+    private void MatchHudPaint()
+    {
+        _repaint = MatchHudPaint;
 
         var (score1, score2) = _matchPhase == MatchPhase.Live ? Score() : (0, 0);
 

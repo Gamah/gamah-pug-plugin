@@ -71,7 +71,7 @@ public partial class Gpp
     private void RestartPanel()
     {
         if (!Config.Hud) return;
-        BumpPaintTick();
+        _repaint = RestartPanel;
 
         foreach (var player in HumanPlayers())
         {

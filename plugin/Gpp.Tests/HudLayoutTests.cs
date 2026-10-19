@@ -197,10 +197,9 @@ public class HudLayoutTests
         Assert.True(first.Length <= HudLayout.AlertWidth);
         Assert.DoesNotContain("…", first);
 
-        HudLayout.BumpPaintTick();
-        HudLayout.BumpPaintTick();
-        HudLayout.BumpPaintTick();
-        HudLayout.BumpPaintTick();
+        // The panel holds still for the first couple of seconds on purpose - at four redraws a second
+        // that is eight of these - so a handful of ticks is not enough to see it move.
+        for (int tick = 0; tick < 12; tick++) HudLayout.BumpPaintTick();
         Assert.NotEqual(first, HudLayout.Alert(title));
     }
 }

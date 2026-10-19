@@ -102,7 +102,7 @@ public partial class Gpp
     private void OptInPanel()
     {
         if (!Config.Hud) return;
-        BumpPaintTick();
+        _repaint = OptInPanel;
 
         var names = _volunteers.Where(steamId => PlayerBySteamId(steamId) != null).Select(Name).ToList();
         var body = names.Count == 0

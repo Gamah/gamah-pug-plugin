@@ -157,12 +157,17 @@ public partial class Gpp
 
     internal void AskToUnpause(CCSPlayerController? player)
     {
-        // Round one's Discord pause is not a team pause and does not need both sides: anyone who is
-        // already where they need to be can say so.
+        // Round one's Discord hold is answered with .ready, by everyone playing. .unpause skips the
+        // wait outright, so it is an admin's to use - otherwise the ready list means nothing.
         if (OpeningPauseRunning)
         {
+            if (player != null && player.IsValid && !IsAdmin(player))
+            {
+                Tell(player, "Type .ready when you are in your channel.");
+                return;
+            }
             string who = player != null && player.IsValid ? player.PlayerName : "An admin";
-            EndOpeningPause($"{who} says they are ready.");
+            EndOpeningPause($"{who} skipped the wait.");
             return;
         }
 

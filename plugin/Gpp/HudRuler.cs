@@ -22,6 +22,45 @@ namespace Gpp;
 // widths it produces want re-measuring after a CS2 update, and a tool nobody can find never gets re-run.
 public partial class Gpp
 {
+    // !pug scroll - does a long line actually move, and does a faster redraw flicker?
+    //
+    // The scroll steps once per redraw, so what it looks like depends entirely on how often the panel is
+    // painted. At 1Hz it stepped a glyph a second after holding still for three, which on screen read as
+    // text that only changed when something else happened. The panels repaint four times a second now;
+    // this is how that gets judged rather than asserted.
+    internal void ScrollProbe()
+    {
+        Announce("Scroll probe: 25s. The top line should crawl steadily; the bottom one must not "
+            + "flicker or move. !pug stop ends it.");
+
+        string ruler = "SCROLLING: ....5...10....5...20....5...30....5...40....5...50....5...60"
+            + "....5...70....5...80....5...90...100 <- end";
+        const string still = "STILL: this line fits and must sit perfectly still";
+
+        int left = 25;
+        _probeTimer?.Kill();
+        _probeTimer = AddTimer(1.0f, () =>
+        {
+            if (--left <= 0)
+            {
+                _probeTimer?.Kill();
+                _probeTimer = null;
+                StopHud();
+                Announce("Scroll probe done. Did the top line move smoothly, and did the bottom one "
+                    + "hold still?");
+            }
+        }, TimerFlags.REPEAT);
+
+        // The repaint loop does the drawing, four times a second, exactly as it does for a real panel.
+        _repaint = () =>
+        {
+            foreach (var player in HumanPlayers())
+            {
+                Paint(player, Alert("SCROLL PROBE", $"{left}s"), [ruler, still]);
+            }
+        };
+    }
+
     // !pug wrap - where does this client actually wrap?
     //
     // hud_line_budget is the one number in the layout that is not a property of the font: it depends on

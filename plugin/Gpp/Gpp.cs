@@ -54,6 +54,7 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         HookCaptainKnife();
         HookFunCommands();
         StartWarmupWatch();
+        StartRepaintLoop();
         RegisterListener<Listeners.OnMapStart>(OnMapStart);
         RegisterListener<Listeners.OnClientDisconnect>(OnClientDisconnect);
 
@@ -272,6 +273,9 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
             case "preview":
                 if (arg == "stop") { StopPreview(); StopHud(); Reply(command, "Preview stopped."); }
                 else HudPreview();
+                break;
+            case "scroll":
+                ScrollProbe();
                 break;
             case "wrap":
                 WrapProbe();

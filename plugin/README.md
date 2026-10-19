@@ -36,7 +36,7 @@ not yet run with ten people on it.
 | `!vote <number\|map>` | everyone | Vote during a map vote. `!<number>` is shorter |
 | `!draft <number\|name>` | captain on the clock | Make a pick by name; no argument reprints the list |
 | `!players` | everyone | The numbered list of undrafted players, in chat |
-| `.ready` / `.r` / `.gaben` / `!ready` | everyone | Ready up. `min_ready` of them starts the match |
+| `.ready` / `.r` / `.gaben` / `!ready` | everyone | Ready up. `min_ready` of them starts the match - and, during round one's Discord hold, says you are in your channel |
 | `.unready` / `.ur` / `.notready` | everyone | Take it back |
 | `.forceready` / `!pug ...` | admin | Ready everybody and start, whoever is missing |
 | `.stay` / `.switch` | the winning side's captain | Keep this side, or take the other one. `side_choice_captain_only` false lets their whole side answer |
@@ -182,6 +182,19 @@ Reload by index, never by name: `css_plugins reload 3`. `css_plugins reload Gpp`
   noise rather than a conflict. It goes away with MatchZy.
 
 Nothing in GPP reads MatchZy state any more, and nothing in GPP kicks anyone.
+
+## Round one holds for Discord
+
+`opening_pause_seconds` (30) of held freeze time at the start of round one, with the side that **lost
+the knife** told in capitals to get into their voice channel — the winners picked the side they wanted
+and stay put. The Discord bot moving people does not replace this: it cannot move somebody who has not
+joined voice yet.
+
+It is a ready check, not just a timer. Everyone playing types `.ready` when they are in, the panel
+lists who has not, and the hold ends the moment the last one does — a side that sorted itself out in
+eight seconds should not stand around for the other twenty-two. The clock is the backstop. `.unpause`
+skips the wait outright and is an admin's, or the ready list would mean nothing; `!pug go` does the
+same from rcon.
 
 ## The idle-server panel
 

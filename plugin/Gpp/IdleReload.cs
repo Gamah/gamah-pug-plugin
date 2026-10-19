@@ -112,7 +112,7 @@ public partial class Gpp
     private void IdlePromptPanel()
     {
         if (!Config.Hud) return;
-        BumpPaintTick();
+        _repaint = IdlePromptPanel;
 
         // The alert box explains; the lower panel carries what to type. Three lines up there because the
         // sentence does not fit two and the clock is the part people care about.

@@ -135,6 +135,9 @@ public partial class Gpp
     // A ready from a player, from an admin over rcon (player null), or from the chat hook.
     internal void Ready(CCSPlayerController? player)
     {
+        // Round one's Discord hold has a ready of its own: same word, different question.
+        if (ReadyForOpening(player)) return;
+
         if (_matchPhase != MatchPhase.Ready)
         {
             if (player != null && player.IsValid && _matchPhase == MatchPhase.None)

@@ -31,8 +31,12 @@ internal static class HudLayout
 
     internal static void BumpPaintTick() => _paintTick++;
 
-    private const int ScrollUnitsPerTick = 12;   // about one glyph per redraw
-    private const int ScrollHoldTicks = 3;
+    // Per *redraw*, not per second: the panels repaint four times a second (see Gpp.RepaintHz), so this
+    // is about twelve units - a glyph and a bit - of travel a second, in four steps rather than one lurch.
+    // The first version stepped a whole glyph on a 1Hz redraw after sitting still for three seconds,
+    // which on screen read as text that only changed when something else happened.
+    private const int ScrollUnitsPerTick = 3;
+    private const int ScrollHoldTicks = 8;   // two seconds still at each end
 
     internal static string Scroll(string line, int budget, int tick)
     {
