@@ -50,6 +50,7 @@ public partial class Gpp
         // back; re-assert after, not before.
         NeverKickAnyone();
         KeepMatchZyAsleep();
+        AllowUnlimitedZeus();
 
         // And land in a held warmup rather than a live round ticking down with nobody in it.
         Server.ExecuteCommand("mp_ignore_round_win_conditions 0;mp_warmup_start;"

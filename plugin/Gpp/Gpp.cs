@@ -48,6 +48,7 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
     {
         NeverKickAnyone();
         KeepMatchZyAsleep();
+        AllowUnlimitedZeus();
 
         HookMatchZy();
         HookJoins();
@@ -127,10 +128,20 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         Server.ExecuteCommand("matchzy_autostart_mode 0");
     }
 
+    // Warmup hands out unlimited money, so a one-per-round zeus reads as a bug. MatchZy/warmup.cfg and
+    // sleep.cfg set this to -1, but live.cfg puts it back to 1 and that outlives the match, so assert it
+    // wherever the server lands back in an idle warmup. Matches are unaffected: live.cfg runs after this
+    // and returns the competitive limit of one.
+    private static void AllowUnlimitedZeus()
+    {
+        Server.ExecuteCommand("mp_weapons_allow_zeus -1");
+    }
+
     private void OnMapStart(string mapName)
     {
         NeverKickAnyone();
         KeepMatchZyAsleep();
+        AllowUnlimitedZeus();
         ClearFunEffects();
 
         if (!_draftPendingMapChange) return;
