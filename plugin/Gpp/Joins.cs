@@ -95,6 +95,8 @@ public partial class Gpp
         _heldInSpectator.Remove(Id(player));
         if (player.Team != CsTeam.CounterTerrorist && player.Team != CsTeam.Terrorist)
         {
+            Logger.LogInformation("Draft: moving {Name} from {From} to {To} and spawning them.",
+                player.PlayerName, player.Team, side);
             player.ChangeTeam(side);
         }
 

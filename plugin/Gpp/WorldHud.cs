@@ -498,53 +498,20 @@ public partial class Gpp
 
     private static float EyeHeight(CBasePlayerPawn pawn) => pawn.ViewOffset.Z == 0 ? 64f : pawn.ViewOffset.Z;
 
-    // Whether the server can find a camera for this player at all. False means a spectator or somebody
+    // Whether the server can find a camera for this player at all. False means a spectator, or somebody
     // who has not spawned yet, and there is nowhere to hang a board for them.
     internal bool HasCamera(CCSPlayerController player) => ViewPawn(player) != null;
 
-    // Whichever pawn this player is actually looking through.
+    // The pawn this player is looking through, which is their own or nothing.
     //
-    // A spectator has no PlayerPawn at all - and during the draft everybody who has not been picked yet
-    // is held in spectator, which is to say the people the panel most needs to reach were the only ones
-    // not getting it. m_hPawn is whichever pawn the engine is using, observer or alive, so that is the
-    // one to ask.
-    //
-    // Somebody watching another player in first person is looking through that player's eyes, so the
-    // boards hang off the target's pawn rather than the observer's: parented to the observer pawn they
-    // would sit wherever the observer entity happens to be, which is not where the camera is.
+    // Following whoever a spectator was watching was tried and is worse than useless: the boards hang on
+    // that player and go wherever they go, so the spectator sees nothing while the server believes it
+    // has drawn them a panel - which is also why the alert that was meant to cover this case never
+    // fired. Somebody with no pawn of their own gets told so, in a box that needs no pawn.
     private static CBasePlayerPawn? ViewPawn(CCSPlayerController player)
     {
-        var alive = player.PlayerPawn.Value;
-        if (alive != null && alive.IsValid && alive.Health > 0 && alive.AbsOrigin != null) return alive;
-
-        // Dead, or in spectator. Both are ordinary states during a pug and both used to draw nothing:
-        // everybody in the pool is held in spectator for the draft, and the captain who loses the knife
-        // is dead for the whole of it - which is to say the two people who most need the pick list were
-        // the ones without it.
-        //
-        // The camera in both cases is somebody else's eyes, so the boards hang off whoever is being
-        // watched. The observer pawn is tried before m_hPawn because a dead player keeps a corpse at
-        // m_hPawn, and a board at the corpse is a board nobody is looking at.
-        var observer = player.ObserverPawn.Value;
-        var watched = Watched(observer) ?? Watched(player.Pawn.Value);
-        if (watched != null) return watched;
-
-        if (observer != null && observer.IsValid && observer.AbsOrigin != null) return observer;
-
-        var pawn = player.Pawn.Value;
-        return pawn != null && pawn.IsValid && pawn.AbsOrigin != null ? pawn : null;
-    }
-
-    // Whoever this pawn is watching, if it is watching anybody.
-    private static CBasePlayerPawn? Watched(CBasePlayerPawn? pawn)
-    {
-        if (pawn == null || !pawn.IsValid) return null;
-
-        var target = pawn.ObserverServices?.ObserverTarget?.Value;
-        if (target == null || !target.IsValid) return null;
-
-        var watched = target.As<CBasePlayerPawn>();
-        return watched.IsValid && watched.AbsOrigin != null ? watched : null;
+        var pawn = player.PlayerPawn.Value;
+        return pawn != null && pawn.IsValid && pawn.Health > 0 && pawn.AbsOrigin != null ? pawn : null;
     }
 
     // The view angle, which is the one field that is on every pawn. EyeAngles is only on CCSPlayerPawn,
