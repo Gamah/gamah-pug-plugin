@@ -24,7 +24,7 @@ public partial class Gpp
         ResetDraft();
         StopHud();
         StopReadyHud();
-        StopReadyGate();
+        StopReadyPhase();
         StopSpectateGuard();
         ClearFunEffects();
         _waitTimer?.Kill();
@@ -41,17 +41,21 @@ public partial class Gpp
         // Test bots, if a harness run left any.
         KeepTestBotsTopped(0);
 
-        // MatchZy next. get5_endmatch is sent unconditionally - _matchLoaded only tracks what this
-        // plugin set up, and the whole point of !pug stop is to clear a mess it may not have made.
-        Server.ExecuteCommand("get5_endmatch");
-        _matchLoaded = false;
+        // Any match, ours or one nobody here started: !pug stop is the command people reach for when the
+        // server is in a state nothing else will clear, so it ends the match and execs the warmup cfg
+        // rather than trusting the plugin's own idea of what is running.
+        AbandonMatch(why);
 
-        // A series end restores whatever cvars MatchZy changed for it, which can put an old whitelist
-        // back; re-assert after, not before.
-        NeverKickAnyone();
-        PutMatchZyBackToSleep();
+        // MatchZy, if it is still installed, is put back to sleep: a match it was somehow running leaves
+        // it awake with its own ready phase and its unready chat timer on.
+        if (Config.Match.MatchZyInstalled)
+        {
+            Server.ExecuteCommand("get5_endmatch;matchzy_autostart_mode 0;css_sleep");
+        }
+        QuietenMatchZy();
 
-        // And land in a held warmup rather than a live round ticking down with nobody in it.
+        // And land in a held warmup rather than a live round ticking down with nobody in it. The cfg does
+        // this too; saying it here as well means a missing cfg still leaves an idle server idle.
         Server.ExecuteCommand("mp_ignore_round_win_conditions 0;mp_warmup_start;"
             + "mp_warmuptime 9999;mp_warmup_pausetimer 1");
 
@@ -74,8 +78,8 @@ public partial class Gpp
     // only a 0/1 toggle; the cap is mp_weapons_allow_typecount, which defaults to 5.
     //
     // Followed on the warmup edge rather than asserted at load or on map start, because the server has to
-    // get the cap back for a live match and nothing else puts it back: MatchZy/warmup.cfg lifts it,
-    // live.cfg says nothing about it, and the open handoff loads no match config to say it either.
+    // get the cap back for a live match and nothing else puts it back: the warmup cfg does not set it at
+    // all (the line was taken out so this is the only owner) and the live cfg says nothing about it.
     private void SyncBuyCap()
     {
         bool warmup = InWarmupPeriod();

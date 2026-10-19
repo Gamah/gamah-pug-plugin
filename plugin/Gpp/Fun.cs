@@ -12,10 +12,9 @@ namespace Gpp;
 // Warmup toys: .kill, .slap, .fent and .drug.
 //
 // Two things about how they are wired. First, the dot: CounterStrikeSharp's chat triggers are "!" and "/"
-// (configs/core.json), and MatchZy serves its own "." commands from a chat hook rather than from CSSharp -
-// and that hook only dispatches MatchZy's own commands, so registering css_kill here would answer !kill and
+// (configs/core.json), so nothing turns ".kill" into css_kill - registering css_kill answers !kill and
 // never .kill. A "say" listener of our own is what makes the dot work without editing core.json, which
-// needs a server restart to take.
+// needs a server restart to take. MatchZy served its own "." commands the same way, from a chat hook.
 //
 // Second, nothing here does its work inline. A chat command runs inside the engine's netchan message
 // processing, which has a CPU budget per call and drops the client whose message overran it - that is how
@@ -60,6 +59,52 @@ public partial class Gpp
 
         switch (verb)
         {
+            // The match commands. These are console commands as well, so !ready works too, but the dot is
+            // what everyone types - it is what MatchZy answered for years - and "." is still not one of
+            // CounterStrikeSharp's chat triggers (configs/core.json: "!" and "/"), so nothing turns
+            // ".ready" into css_ready. This listener is the only route for it.
+            case "ready":
+            case "r":
+                AfterTick(() => Ready(PlayerBySteamId(who)));
+                return HookResult.Continue;
+            case "unready":
+            case "notready":
+            case "ur":
+                AfterTick(() => Unready(PlayerBySteamId(who)));
+                return HookResult.Continue;
+            case "forceready":
+            case "forcestart":
+                AfterTick(() =>
+                {
+                    var caller = PlayerBySteamId(who);
+                    if (IsAdmin(caller)) ForceReady();
+                    else Tell(caller, "You do not have access to this command.");
+                });
+                return HookResult.Continue;
+            case "stay":
+                AfterTick(() => ChooseSide(PlayerBySteamId(who), stay: true));
+                return HookResult.Continue;
+            case "switch":
+            case "swap":
+                AfterTick(() => ChooseSide(PlayerBySteamId(who), stay: false));
+                return HookResult.Continue;
+            case "pause":
+                AfterTick(() => PauseMatch(PlayerBySteamId(who), technical: false));
+                return HookResult.Continue;
+            case "tech":
+                AfterTick(() => PauseMatch(PlayerBySteamId(who), technical: true));
+                return HookResult.Continue;
+            case "unpause":
+                AfterTick(() => AskToUnpause(PlayerBySteamId(who)));
+                return HookResult.Continue;
+            case "endmatch":
+                AfterTick(() =>
+                {
+                    var caller = PlayerBySteamId(who);
+                    if (IsAdmin(caller)) AbandonMatch($"{caller?.PlayerName ?? "An admin"} ended it.");
+                    else Tell(caller, "You do not have access to this command.");
+                });
+                return HookResult.Continue;
             case "kill":
                 AfterTick(() => KillCommand(PlayerBySteamId(who)));
                 return HookResult.Continue;

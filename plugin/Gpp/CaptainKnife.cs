@@ -7,8 +7,8 @@ using CounterStrikeSharp.API.Modules.Utils;
 namespace Gpp;
 
 // Captains knife 1v1 on the voted map for first pick. First blood decides it; if nobody connects a knife
-// in time it goes on health, and only a dead-even duel is a coin flip. MatchZy's own knife round still
-// happens later with the full teams - that one is for sides, this one is for the first pick.
+// in time it goes on health, and only a dead-even duel is a coin flip. The match's own knife round still
+// happens later with the full teams (Match.cs) - that one is for sides, this one is for the first pick.
 public partial class Gpp
 {
     // Both captains spawn with a knife and nothing else. Round wins stay ignored so the round does not end
@@ -19,8 +19,8 @@ public partial class Gpp
         "mp_startmoney 0;mp_give_player_c4 0;mp_freezetime 3;mp_respawn_on_death_ct 0;" +
         "mp_respawn_on_death_t 0;mp_team_intro_time 0;mp_round_restart_delay 3;mp_warmup_end;mp_restartgame 1";
 
-    // Back to competitive defaults, so an abandoned pug does not leave a knife server behind. MatchZy's
-    // warmup.cfg and live.cfg set all of these again when the match loads.
+    // Back to competitive defaults, so an abandoned pug does not leave a knife server behind. The warmup
+    // and live cfgs set all of these again when the match starts.
     private const string DuelCvarsReset =
         "mp_ct_default_secondary weapon_hkp2000;mp_t_default_secondary weapon_glock;mp_free_armor 0;" +
         "mp_maxmoney 16000;mp_startmoney 16000;mp_give_player_c4 1;mp_freezetime 10";
@@ -167,7 +167,7 @@ public partial class Gpp
         Announce($"{Colorize("{green}")}{Name(winner)}{Colorize("{default}")} picks first ({why}).");
 
         // Spawns, weapons and freezetime are still the duel's: let the restart settle before picking.
-        AddTimer(2.0f, () => StartDraft(force: true, skipMatchZyCheck: true));
+        AddTimer(2.0f, () => StartDraft(force: true, skipMatchCheck: true));
     }
 
     private void ResetKnife()

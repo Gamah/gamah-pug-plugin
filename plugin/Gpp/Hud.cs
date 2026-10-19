@@ -187,8 +187,8 @@ public partial class Gpp
         return joined.Length <= 64 ? joined : $"{joined[..61]}...";
     }
 
-    // MatchZy's ready phase has no overlay of its own, and ".ready in chat" is exactly the instruction a
-    // room full of people not reading chat will sit on forever.
+    // ".ready in chat" is exactly the instruction a room full of people not reading chat will sit on
+    // forever, so the ready phase gets a panel of its own naming who is still holding it up.
     private CounterStrikeSharp.API.Modules.Timers.Timer? _readyHudTimer;
     private int _readyHudSecondsLeft;
     private string _readyHudMap = "";
@@ -216,7 +216,14 @@ public partial class Gpp
     {
         if (--_readyHudSecondsLeft <= 0)
         {
-            AfterTick(StopReadyHud);
+            // Five minutes of a panel nobody has acted on is a panel nobody is reading. The phase stays
+            // open - .ready still starts the match - but the overlay comes down rather than turning into
+            // the repeating nag that was the whole complaint about MatchZy's ready phase.
+            AfterTick(() =>
+            {
+                StopReadyHud();
+                if (_matchPhase == MatchPhase.Ready) Prompt("Still waiting on readies.", ".ready", Everybody);
+            });
             return;
         }
 
@@ -238,6 +245,71 @@ public partial class Gpp
                 unready.Count == 0 ? "everybody is ready - starting" : "still to ready:",
                 .. Columns(unready, 4),
             ]);
+        }
+    }
+
+    // The match's own panel, which only goes up when the room is being asked for something: the knife
+    // round, the side choice after it, and a pause. A live round deliberately draws nothing - the overlay
+    // sits where the engine puts its own round text, and a pug does not need it narrated.
+    private CounterStrikeSharp.API.Modules.Timers.Timer? _matchHudTimer;
+
+    private void StartMatchHud()
+    {
+        if (!Config.Hud) return;
+        if (_matchHudTimer != null) return;
+        _matchHudTimer = AddTimer(1.0f, MatchHudTick, TimerFlags.REPEAT);
+        MatchHudTick();
+    }
+
+    private void StopMatchHud()
+    {
+        _matchHudTimer?.Kill();
+        _matchHudTimer = null;
+        Clear();
+    }
+
+    private void MatchHudTick()
+    {
+        bool wanted = _matchPhase == MatchPhase.Knife
+            || _matchPhase == MatchPhase.SideChoice
+            || (_matchPhase == MatchPhase.Live && _paused);
+        if (!wanted)
+        {
+            AfterTick(StopMatchHud);
+            return;
+        }
+
+        var (score1, score2) = _matchPhase == MatchPhase.Live ? Score() : (0, 0);
+
+        foreach (var player in HumanPlayers())
+        {
+            switch (_matchPhase)
+            {
+                case MatchPhase.Knife:
+                    Paint(player, Alert("KNIFE ROUND", "winner picks the side"),
+                        ["knives only - whoever is left standing picks the side to start on"]);
+                    break;
+
+                case MatchPhase.SideChoice:
+                {
+                    bool theirs = player.Team == _knifeSide;
+                    Paint(player, Alert(
+                        theirs ? "TYPE .stay OR .switch" : $"{SideName(_knifeSide)} ARE PICKING",
+                        $"{SideName(_knifeSide)} won the knife"),
+                    [
+                        theirs ? ".stay keeps this side, .switch takes the other" : "waiting on their call",
+                    ]);
+                    break;
+                }
+
+                default:
+                    Paint(player, Alert("PAUSED", PauseLine()),
+                    [
+                        "both sides have to type .unpause to resume",
+                        $"{_team1Name} {score1} - {score2} {_team2Name}",
+                    ]);
+                    break;
+            }
         }
     }
 

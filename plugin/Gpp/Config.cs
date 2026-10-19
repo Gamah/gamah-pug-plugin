@@ -5,11 +5,10 @@ namespace Gpp;
 
 public class MapEntry
 {
-    // Map name as the server knows it (de_mirage), used for changelevel and as the MatchZy maplist entry
-    // when there is no workshop id.
+    // Map name as the server knows it (de_mirage), used for changelevel when there is no workshop id.
     [JsonPropertyName("name")] public string Name { get; set; } = "";
 
-    // Workshop file id. Set for workshop maps: MatchZy and host_workshop_map address those by id, not by name.
+    // Workshop file id. Set for workshop maps: host_workshop_map addresses those by id, not by name.
     [JsonPropertyName("workshop_id")] public string WorkshopId { get; set; } = "";
 
     // What players see on the ballot. Defaults to Name.
@@ -30,9 +29,6 @@ public class MapEntry
         return name;
     }
 
-    // What goes in a MatchZy maplist / what we hand to the map change command.
-    [JsonIgnore] public string MatchZyRef => string.IsNullOrWhiteSpace(WorkshopId) ? Name : WorkshopId;
-
     [JsonIgnore] public bool IsWorkshop => !string.IsNullOrWhiteSpace(WorkshopId);
 }
 
@@ -44,7 +40,7 @@ public class DiscordConfig
     // Shared secret, sent as the X-GPP-Token header. The bot rejects anything without it.
     [JsonPropertyName("token")] public string Token { get; set; } = "";
 
-    // Move the two rosters into their voice channels when the draft is handed to MatchZy.
+    // Move the two rosters into their voice channels when the match starts.
     [JsonPropertyName("move_on_handoff")] public bool MoveOnHandoff { get; set; } = true;
 
     // Send everyone back to the warmup channel when the match ends.
@@ -57,13 +53,56 @@ public class DiscordConfig
     [JsonIgnore] public bool Enabled => !string.IsNullOrWhiteSpace(BaseUrl);
 }
 
+// The match itself: which cfgs hold the phases, and the three things MatchZy used to do that were worth
+// keeping. Round backups are not among them - a match that breaks mid-way cannot be restored, which was
+// decided when MatchZy was dropped rather than overlooked.
+public class MatchSettings
+{
+    // Phase configs, relative to csgo/cfg. The plugin execs them; examples/cfg/gpp holds the ones this
+    // server uses, copied from MatchZy's. warmup.cfg is the one that holds the warmup open, so an idle
+    // server stays idle - without it the plugin falls back to a handful of built-in cvars.
+    [JsonPropertyName("warmup_cfg")] public string WarmupCfg { get; set; } = "gpp/warmup.cfg";
+
+    [JsonPropertyName("knife_cfg")] public string KnifeCfg { get; set; } = "gpp/knife.cfg";
+
+    [JsonPropertyName("live_cfg")] public string LiveCfg { get; set; } = "gpp/live.cfg";
+
+    [JsonPropertyName("pauses_enabled")] public bool PausesEnabled { get; set; } = true;
+
+    // Technical pauses a side may call per match. 0 is unlimited.
+    [JsonPropertyName("max_tech_pauses")] public int MaxTechPauses { get; set; } = 0;
+
+    // Seconds a technical pause runs before either side alone may .unpause it. 0 means both sides always
+    // have to agree.
+    [JsonPropertyName("tech_pause_seconds")] public int TechPauseSeconds { get; set; } = 0;
+
+    [JsonPropertyName("demos_enabled")] public bool DemosEnabled { get; set; } = true;
+
+    // Where demos go, relative to csgo/. Needs tv_enable 1 on the server or tv_record does nothing.
+    [JsonPropertyName("demo_path")] public string DemoPath { get; set; } = "gpp-demos";
+
+    // {TIME} {MATCHID} {MAP} {TEAM1} {TEAM2}. Anything a filename cannot carry is stripped.
+    [JsonPropertyName("demo_name_format")]
+    public string DemoNameFormat { get; set; } = "{TIME}_{MAP}_{TEAM1}_vs_{TEAM2}";
+
+    [JsonPropertyName("stats_enabled")] public bool StatsEnabled { get; set; } = true;
+
+    // SQLite file for match and player rows. A bare name sits next to the plugin dll.
+    [JsonPropertyName("stats_database")] public string StatsDatabase { get; set; } = "gpp.db";
+
+    // MatchZy is still installed alongside GPP. While this is true the plugin keeps MatchZy asleep and
+    // keeps its two kick cvars off, so a leftover whitelist cannot kick anyone mid-pug. Set it false once
+    // the MatchZy plugin folder is gone, or the server console fills with unknown-command lines.
+    [JsonPropertyName("matchzy_installed")] public bool MatchZyInstalled { get; set; } = true;
+}
+
 public class GppConfig : BasePluginConfig
 {
     [JsonPropertyName("ConfigVersion")] public override int Version { get; set; } = 1;
 
-    // "vote_then_draft": whole server votes a map, server changes to it, then captains draft.
-    // "draft_then_veto": captains draft first, then MatchZy's own .ban/.pick veto picks the map.
-    [JsonPropertyName("flow")] public string Flow { get; set; } = "vote_then_draft";
+    // There is deliberately no "flow" setting any more. It chose between a map vote and MatchZy's own
+    // map veto, and the veto went with MatchZy: !pug start votes for a map and then drafts, !pug draft
+    // drafts on the map the server is already on.
 
     // 0 = size the teams from whoever is present when the draft starts, and nobody is left out: an odd
     // headcount drafts uneven teams (5 players -> 3v2). Any other value pins the team size and anyone
@@ -99,24 +138,24 @@ public class GppConfig : BasePluginConfig
     // Move everyone to spectator when the draft starts, so only drafted players are on a team.
     [JsonPropertyName("force_spectate")] public bool ForceSpectate { get; set; } = true;
 
-    // Write the MatchZy config and run matchzy_loadmatch when the draft ends.
-    [JsonPropertyName("auto_load_match")] public bool AutoLoadMatch { get; set; } = true;
+    // Start the match - ready phase, knife, live - as soon as the draft ends. Off leaves the teams set
+    // and waits for !pug match.
+    [JsonPropertyName("auto_start_match")] public bool AutoStartMatch { get; set; } = true;
 
-    // Directory for generated match configs, relative to csgo/.
-    [JsonPropertyName("match_config_dir")] public string MatchConfigDir { get; set; } = "MatchZy";
-
-    // Knife round for the drafted map. In draft_then_veto the captains pick sides in MatchZy's veto instead.
+    // Knife round for sides once everybody has readied. Off goes straight live with the drafted sides.
     [JsonPropertyName("knife_round")] public bool KnifeRound { get; set; } = true;
 
-    // How many .ready votes MatchZy needs to start the drafted match. 0 means every drafted player.
+    // How many .ready are needed to start the match. 0 means every drafted player.
     [JsonPropertyName("min_ready")] public int MinReady { get; set; } = 2;
 
-    // There is deliberately no whitelist option. MatchZy enforces a whitelist by kicking everyone who is
-    // not on a loaded match's roster - including, hours later, whoever connects next, because the cvar
-    // outlives the match. This server never kicks anyone, so the pug turns it off and keeps it off.
+    [JsonPropertyName("match")] public MatchSettings Match { get; set; } = new();
+
+    // There is deliberately no whitelist option, and nothing in this plugin kicks anyone. A whitelist is
+    // enforced by kicking everyone who is not on the roster - which is how MatchZy, hours after a pug,
+    // kicked whoever connected next, because the cvar outlived the match that set it.
 
     // Count bots as players, so one person plus `bot_add` can walk the whole flow on an empty server.
-    // Bots have no SteamID, so they are tracked by slot and left out of the MatchZy roster.
+    // Bots have no SteamID, so they are tracked by slot and left out of the stats.
     [JsonPropertyName("count_bots")] public bool CountBots { get; set; } = false;
 
     // The Discord bot is optional and off unless base_url is set. With it empty, !link-discord says so

@@ -1,28 +1,42 @@
 # GPP — the plugin
 
-CounterStrikeSharp plugin for 10-man nights: whole-server map vote, random captains, captain draft
-with everyone held in spectator, then hand the drafted rosters to MatchZy.
+CounterStrikeSharp plugin for 10-man nights: whole-server map vote, random captains, captain draft with
+everyone held in spectator, then the match itself — ready up, knife for sides, go live, pauses, a demo
+and a stats row.
 
-Built against CounterStrikeSharp API 1.0.376 (net10.0). **Not yet run on a server** — it compiles and
-the logic is reviewed, nothing more.
+MatchZy used to run everything from `.ready` onwards. It does not any more: see
+[../docs/match.md](../docs/match.md) for what replaced it and what was given up with it (round backups —
+a match that breaks mid-way cannot be restored).
+
+Built against CounterStrikeSharp API 1.0.376 (net10.0). The engine-free parts — the ready threshold,
+pause limits, side swaps, knife scoring, demo naming and the stats SQL — are covered by
+[`../Gpp.Tests`](../Gpp.Tests) (`dotnet test`). Everything that needs the engine has been reviewed and
+not yet run with ten people on it.
 
 ## Commands
 
 | Command | Who | What |
 | --- | --- | --- |
-| `!pug start` | admin | Runs the configured flow: map vote, or draft if `flow` is `draft_then_veto` |
+| `!pug start` | admin | Map vote, then the draft, then the match |
 | `!pug vote` | admin | Map vote only |
 | `!pug draft` | admin | Draft only |
 | `!pug captains` | admin | Reroll captains, before any pick is made |
-| `!pug stop` | admin | **Nuke everything.** Ends the MatchZy match, clears bots, drops every phase, frees spectators and lands in a held warmup. Works from any state |
+| `!pug match` | admin | Start the match on the drafted teams (only needed with `auto_start_match` off) |
+| `!pug endmatch` / `.endmatch` | admin | End the match that is running and go back to a held warmup |
+| `!pug stop` | admin | **Nuke everything.** Ends the match, clears bots, drops every phase, frees spectators and lands in a held warmup. Works from any state |
 | `!pug cancel` | admin | Abandon the running vote or draft, and nothing else |
-| `!pug clear` | admin | Forget a match we think MatchZy has loaded (ends nothing) |
-| `!pug status` | admin | What phase it is in |
-| `!pug flow <vote_then_draft\|draft_then_veto>` | admin | Switch flow until the next plugin load |
+| `!pug status` | admin | What phase it is in, and the score if a match is live |
 | `!<number>` | everyone | **The main one.** Votes for that map during a vote, makes that pick during a draft. Silent outside both |
 | `!vote <number\|map>` | everyone | Vote during a map vote. `!<number>` is shorter |
 | `!draft <number\|name>` | captain on the clock | Make a pick by name; no argument reprints the list |
 | `!players` | everyone | The numbered list of undrafted players, in chat |
+| `.ready` / `.r` / `!ready` | everyone | Ready up. `min_ready` of them starts the match |
+| `.unready` / `.ur` / `.notready` | everyone | Take it back |
+| `.forceready` / `!pug ...` | admin | Ready everybody and start, whoever is missing |
+| `.stay` / `.switch` | the side that won the knife | Keep this side, or take the other one |
+| `.pause` | players in the match | Pause from the end of the round. Both sides `.unpause` to resume |
+| `.tech` | players in the match | Technical pause — capped per side by `max_tech_pauses` |
+| `.unpause` | players in the match | Ask to resume |
 | `!link-discord` | everyone | Get a code to link your Steam account to Discord (needs the optional bot) |
 | `.kill` / `!kill` | everyone | Kill yourself. Warmup only, and never during a pug phase |
 | `.slap <player> [damage]` / `!slap` | admin | Fling a player about. Warmup only |
@@ -35,10 +49,10 @@ talking. It goes through the plugin's own `say` listener because CounterStrikeSh
 `css_foo`, and there is no sane way to register one console command per number. The longer `!vote` and
 `!draft` still work and are what you need to pick a player by name.
 
-The three warmup toys answer the dot as well as the bang. CounterStrikeSharp's chat triggers are `!`
-and `/`; MatchZy serves its own `.` commands from a chat hook that only dispatches MatchZy's own
-commands, so GPP listens to `say` itself rather than adding `.` to `core.json`, which would need a
-server restart.
+The match commands answer the dot as well as the bang, and the dot is what everyone types — it is what
+MatchZy answered for years. CounterStrikeSharp's chat triggers are `!` and `/` (`configs/core.json`), so
+nothing turns `.ready` into `css_ready`: GPP listens to `say` itself rather than adding `.` to
+`core.json`, which would need a server restart. The warmup toys below work the same way.
 
 `.fent` teleports the view angles ten times a second — the player's transform yanked around under
 them, which is not a camera effect at all but is funny enough to keep.
@@ -60,36 +74,33 @@ input and never leave the client.
 Both effects are cleared when a vote or draft starts, at the handoff and on every map change. A warped
 FOV is invisible to whoever set it and would otherwise follow the player into a live match.
 
-`force` as a second argument (`!pug draft force`) skips the `min_players` check, and ends a loaded
-MatchZy match (`get5_endmatch`) before starting.
+`force` as a second argument (`!pug draft force`) skips the `min_players` check, and ends a match that
+is already running before starting.
 
 Admin commands need `@css/config` by default (`admin_flag`), from CounterStrikeSharp's own
-`configs/admins.json` — not MatchZy's.
+`configs/admins.json`.
 
-The pick command is `!draft`, not `!pick`, because **MatchZy already registers `css_pick`** for its map
-veto.
+The pick command is `!draft`, not `!pick`: MatchZy registered `css_pick` for its map veto, and while it
+is still installed alongside GPP that name is still taken.
 
-## Flows
-
-`vote_then_draft` (default):
+## The night, end to end
 
     !pug start -> everyone !vote -> map changes -> draft starts ~10s after the map loads
-      -> all to spectator -> two random captains -> captains !draft
-      -> match config written -> matchzy_loadmatch -> .ready
+      -> all to spectator -> two random captains knife 1v1 for first pick -> captains !draft
+      -> teams set, warmup held -> .ready
+      -> knife round for sides -> .stay / .switch
+      -> LIVE (demo recording, stats counting, .pause available)
+      -> match ends -> scores and players written, demo flushed, map reloads into a held warmup
 
-`draft_then_veto`:
-
-    !pug start -> all to spectator -> random captains -> captains !draft
-      -> match config written with the whole pool and skip_veto false
-      -> MatchZy's own veto: captains .ban / .pick -> .ready
+There is one flow. The old `draft_then_veto` chose MatchZy's map veto instead of the vote, and the veto
+went with MatchZy; `!pug draft` still drafts on whatever map the server is already on.
 
 ## Config
 
 `addons/counterstrikesharp/configs/plugins/Gpp/Gpp.json`, written on first load.
 
-- `flow` — `vote_then_draft` or `draft_then_veto`
 - `map_pool` — `[{ "name": "de_mirage" }, { "name": "de_season", "workshop_id": "3073892687" }]`.
-  `workshop_id` is required for workshop maps: both `host_workshop_map` and MatchZy address those by id.
+  `workshop_id` is required for workshop maps: `host_workshop_map` addresses those by id, not by name.
 - `players_per_team` (5), `min_players` (10)
 - `vote_seconds` (30), `pick_seconds` (30, 0 = no timeout)
 - `reconnect_wait_seconds` (90) — after a map change, how long latecomers have. Picking starts as soon
@@ -100,41 +111,58 @@ veto.
 - `pick_order` — `snake` (1,2,2,1,1,2,2,1) or `alternate`
 - `force_spectate` (true) — everyone not yet drafted is held in spectator for the whole draft:
   `jointeam` is blocked and a sweep puts anyone sitting in the team-select menu back
-- `knife_round` (true) — written as MatchZy `side_type: always_knife`
-- `min_ready` (2) — `.ready` votes needed to start the match, written into the match config as
-  `min_players_to_ready`. 0 means every drafted player
-- `whitelist` (true) — writes `matchzy_whitelist_enabled_default true` into the config's `cvars`, so
-  only drafted players can take a team
-- `auto_load_match` (true) — write the config and run `matchzy_loadmatch`
-- `match_config_dir` (`MatchZy`) — relative to `csgo/`
+- `knife_round` (true) — knife round for sides once everybody has readied. Off goes straight live on the
+  drafted sides
+- `min_ready` (2) — `.ready` needed to start the match. 0 means every drafted player
+- `auto_start_match` (true) — start the match as soon as the draft ends. Off waits for `!pug match`
+- `match` — the match itself:
+  - `warmup_cfg` / `knife_cfg` / `live_cfg` (`gpp/*.cfg`, relative to `csgo/cfg`) — the three phase
+    configs, in [`../../examples/cfg/gpp`](../../examples/cfg/gpp). `warmup.cfg` is the one that holds
+    the warmup open, which is what keeps an idle server idle; a missing file falls back to a handful of
+    built-in cvars and says so in the log
+  - `pauses_enabled` (true), `max_tech_pauses` (0 = unlimited), `tech_pause_seconds` (0 = both sides
+    always have to `.unpause`)
+  - `demos_enabled` (true), `demo_path` (`gpp-demos`, relative to `csgo/`), `demo_name_format`
+    (`{TIME}_{MAP}_{TEAM1}_vs_{TEAM2}`). Needs `tv_enable 1`, or `tv_record` does nothing and the log
+    says so once
+  - `stats_enabled` (true), `stats_database` (`gpp.db`, next to the plugin dll)
+  - `matchzy_installed` (true) — while MatchZy is still on the server, keep it asleep and keep its two
+    kick cvars off. Set it false once its plugin folder is gone
 
 ## Build and install
 
     dotnet build -c Release
-    # copy to the server:
-    #   addons/counterstrikesharp/plugins/Gpp/Gpp.dll
+    dotnet test ../Gpp.Tests          # the engine-free rules and the stats SQL
 
-CounterStrikeSharp loads a plugin from a directory matching the DLL name. `css_plugins reload GPP`
-picks up changes without restarting the server.
+The plugin is **not one file any more**: the stats database pulls in `Microsoft.Data.Sqlite`, so the
+whole build output goes to the server —
 
-## MatchZy integration
+    addons/counterstrikesharp/plugins/Gpp/
+      Gpp.dll  Gpp.deps.json  Microsoft.Data.Sqlite.dll  SQLitePCLRaw.*.dll
+      runtimes/linux-x64/native/libe_sqlite3.so
 
-MatchZy exposes nothing to other plugins — no CounterStrikeSharp plugin capability, no shared state. It
-does expose console commands, so GPP follows them:
+`Gpp.deps.json` is what tells the loader where that native library is; without it stats log one error
+and are skipped, and the pug runs on regardless. Copy `Gpp.dll` **last** — writing it is the reload.
 
-- `matchzy_loadmatch`, `matchzy_loadmatch_url` and the `get5_` aliases mark a match as loaded;
-  `get5_endmatch` / `.forceend` / `.rr` mark it gone. `round_announce_match_start` and
-  `cs_win_panel_match` correct the flag if the plugin was loaded mid-match.
-- A vote or draft refuses to start while a match is loaded, or while the server is past warmup. `force`
-  runs `get5_endmatch` first and then starts.
-- While a vote or draft is running, MatchZy's `.ready`, `.start`, `.map` and `.rmap` are blocked with a
-  message, so nobody readies the server out from under a draft.
-- The handoff sets the whitelist through the match config's `cvars`, locking teams to the drafted
-  rosters.
+The phase cfgs go to `csgo/cfg/gpp/`. `examples/install.sh` does all of this.
 
-These are command hooks, not a contract: a MatchZy release that renames a command, or a config file it
-rejects, leaves the flag wrong. `!pug status` prints what GPP believes, `!pug clear` resets it, and
-`force` works regardless.
+Reload by index, never by name: `css_plugins reload 3`. `css_plugins reload Gpp` is refused.
+
+## While MatchZy is still installed
+
+`match.matchzy_installed` is true until its plugin folder is deleted. While it is:
+
+- MatchZy is held in sleep mode (`matchzy_autostart_mode 0`) at load, on every map change and in
+  `!pug stop`. Awake it arms a repeating "N players are not ready" chat timer and turns its own
+  `.ready` on over the top of GPP's.
+- `matchzy_whitelist_enabled_default` and `matchzy_kick_when_no_match_loaded` are asserted false in the
+  same places. Both are MatchZy kicking people on connect, and both are cvars that outlive the match
+  that set them — which is how a finished pug kicked whoever connected next, hours later.
+- `css_ready`, `css_start` and friends are registered by both plugins. CounterStrikeSharp keeps a list
+  of handlers per command name and runs all of them, and an asleep MatchZy ignores its own, so this is
+  noise rather than a conflict. It goes away with MatchZy.
+
+Nothing in GPP reads MatchZy state any more, and nothing in GPP kicks anyone.
 
 ## HUD widths
 
@@ -173,15 +201,18 @@ Optional and off by default. With `discord.base_url` empty the plugin makes no n
 
 ## Caveats
 
-- In `draft_then_veto`, MatchZy chooses its own veto captains — the first player it finds on each team,
-  which is not necessarily the drafted captain.
-- Set `whitelist` to false and undrafted players can take a team after the handoff; MatchZy only locks
-  rosters while its whitelist is on.
+- **The draft is not enforced once the match is live.** Nothing kicks a latecomer and nothing drags a
+  player back to their drafted side after go-live: an open server was the whole reason for dropping
+  MatchZy's match config. The ready phase does sweep drafted players back onto their side, so the match
+  starts on the right teams.
+- **No round backups.** A match that is abandoned, crashed out or ended by accident cannot be restored
+  mid-way; it is replayed from the start or not at all.
 - A map vote whose winner is the workshop map already running will still reload it: a workshop id can't
   be compared against the running map name.
-- `!` is CounterStrikeSharp's default chat trigger. MatchZy's `.` prefix is its own; these commands
-  answer to `!` (and `/` silently) unless `core.json`'s `PublicChatTrigger` says otherwise. The three
-  warmup toys are the exception and answer both.
+- `!` is CounterStrikeSharp's default chat trigger; `.` is not one, and the plugin's own `say` listener
+  is the only thing that answers it. So the admin commands answer `!` (and `/` silently) unless
+  `core.json`'s `PublicChatTrigger` says otherwise, while the match commands and the warmup toys answer
+  both.
 - **A chat command must not do its work inline.** The engine gives netchan message processing a CPU
   budget and drops the client whose message overran it: `!pug start` spent ~800ms building the vote and
   the admin who typed it was disconnected with `NETWORK_DISCONNECT_OVERFLOW` while the vote came up

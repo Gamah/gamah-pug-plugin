@@ -1,6 +1,6 @@
 # The Discord bot
 
-Optional. It does one useful thing: when the draft hands the teams to MatchZy, it moves each team into
+Optional. It does one useful thing: when the draft is done and the match starts, it moves each team into
 its own voice channel, and puts everyone back when the match ends.
 
 Everything else here exists to solve the one hard problem underneath that — **knowing which Discord

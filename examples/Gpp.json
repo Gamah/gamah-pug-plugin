@@ -1,16 +1,13 @@
 {
   "ConfigVersion": 1,
-  "flow": "vote_then_draft",
   "players_per_team": 0,
   "min_players": 4,
   "vote_seconds": 90,
   "pick_seconds": 30,
   "pick_order": "alternate",
   "force_spectate": true,
-  "auto_load_match": true,
-  "match_config_dir": "MatchZy",
+  "auto_start_match": true,
   "knife_round": true,
-  "whitelist": false,
   "discord": {
     "base_url": "",
     "token": "",
@@ -92,5 +89,19 @@
   "ballot_size": 0,
   "captain_knife": true,
   "captain_knife_seconds": 60,
-  "count_bots": false
+  "count_bots": false,
+  "match": {
+    "warmup_cfg": "gpp/warmup.cfg",
+    "knife_cfg": "gpp/knife.cfg",
+    "live_cfg": "gpp/live.cfg",
+    "pauses_enabled": true,
+    "max_tech_pauses": 0,
+    "tech_pause_seconds": 0,
+    "demos_enabled": true,
+    "demo_path": "gpp-demos",
+    "demo_name_format": "{TIME}_{MAP}_{TEAM1}_vs_{TEAM2}",
+    "stats_enabled": true,
+    "stats_database": "gpp.db",
+    "matchzy_installed": true
+  }
 }

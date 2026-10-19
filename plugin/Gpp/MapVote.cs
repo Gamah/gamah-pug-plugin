@@ -14,7 +14,7 @@ public partial class Gpp
     private int _voteSecondsLeft;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _voteTimer;
 
-    private void StartMapVote(bool force, bool skipMatchZyCheck = false)
+    private void StartMapVote(bool force, bool skipMatchCheck = false)
     {
         if (_phase != PugPhase.Idle)
         {
@@ -34,12 +34,12 @@ public partial class Gpp
             return;
         }
 
-        if (!skipMatchZyCheck)
+        if (!skipMatchCheck)
         {
-            if (!MatchZyIsClear(force, out bool waitForEnd)) return;
+            if (!MatchIsClear(force, out bool waitForEnd)) return;
             if (waitForEnd)
             {
-                AddTimer(3.0f, () => StartMapVote(force, skipMatchZyCheck: true));
+                AddTimer(3.0f, () => StartMapVote(force, skipMatchCheck: true));
                 return;
             }
         }

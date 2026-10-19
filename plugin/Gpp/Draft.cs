@@ -88,7 +88,7 @@ public partial class Gpp
         AfterTick(() => StartDraft(force: false));
     }
 
-    private void StartDraft(bool force, bool skipMatchZyCheck = false)
+    private void StartDraft(bool force, bool skipMatchCheck = false)
     {
         if (_phase != PugPhase.Idle)
         {
@@ -117,12 +117,12 @@ public partial class Gpp
             : (players.Count + 1) / 2;
         _playersPerTeam = autoSized ? wanted : Math.Max(1, Math.Min(wanted, players.Count / 2));
 
-        if (!skipMatchZyCheck)
+        if (!skipMatchCheck)
         {
-            if (!MatchZyIsClear(force, out bool waitForEnd)) return;
+            if (!MatchIsClear(force, out bool waitForEnd)) return;
             if (waitForEnd)
             {
-                AddTimer(3.0f, () => StartDraft(force, skipMatchZyCheck: true));
+                AddTimer(3.0f, () => StartDraft(force, skipMatchCheck: true));
                 return;
             }
         }
@@ -341,7 +341,7 @@ public partial class Gpp
         AfterTick(() => ApplyPick(pick));
     }
 
-    [ConsoleCommand("css_draft", "Pick a player during a GPP draft (MatchZy already owns !pick for map veto)")]
+    [ConsoleCommand("css_draft", "Pick a player during a GPP draft")]
     [CommandHelper(minArgs: 0, usage: "<number|name>")]
     public void OnPickCommand(CCSPlayerController? player, CommandInfo command)
     {
@@ -468,7 +468,7 @@ public partial class Gpp
         _phase = PugPhase.Idle;
         _teamSizeOverride = 0;
         _knifeWinner = 0;
-        HandOffToMatchZy();
+        HandOffToMatch();
     }
 
     // Teams must not lock while players we were expecting are still loading in - that is how a 2v2 ends up
@@ -528,7 +528,7 @@ public partial class Gpp
             return;
         }
 
-        // A drafted player left. MatchZy locks rosters by SteamID, so they keep their slot when they reconnect.
+        // A drafted player left. The roster is keyed on SteamID, so they keep their slot if they come back.
         if (_team1.Contains(steamId) || _team2.Contains(steamId))
         {
             Announce($"{Name(steamId)} left - still on their drafted team if they come back.");
@@ -558,7 +558,7 @@ public partial class Gpp
     private void ResetDraft()
     {
         StopHud();
-        StopReadyGate();
+        StopReadyPhase();
         StopSpectateGuard();
         _pickTimer?.Kill();
         _pickTimer = null;

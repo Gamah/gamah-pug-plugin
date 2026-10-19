@@ -9,9 +9,40 @@ PLUGIN=$CSS/plugins/Gpp
 
 [ -f "$SRC/Gpp.dll" ] || { echo "no Gpp.dll in $SRC"; exit 1; }
 
+# The plugin is no longer one file: the stats database pulls in Microsoft.Data.Sqlite, which needs its
+# managed assemblies, Gpp.deps.json (that is what tells the loader where the native library is) and
+# runtimes/linux-x64. Copy the whole build output, not just the dll.
 echo "== plugin"
 install -d -o steam -g steam -m 755 "$PLUGIN"
+install -d -o steam -g steam -m 755 "$PLUGIN/runtimes/linux-x64/native"
+for file in "$SRC"/*.dll "$SRC"/Gpp.deps.json "$SRC"/Gpp.runtimeconfig.json; do
+  [ -f "$file" ] || continue
+  install -o steam -g steam -m 644 "$file" "$PLUGIN/$(basename "$file")"
+done
+if [ -f "$SRC/runtimes/linux-x64/native/libe_sqlite3.so" ]; then
+  install -o steam -g steam -m 644 "$SRC/runtimes/linux-x64/native/libe_sqlite3.so" \
+    "$PLUGIN/runtimes/linux-x64/native/libe_sqlite3.so"
+else
+  echo "  no libe_sqlite3.so in $SRC/runtimes/linux-x64/native - stats will log an error and be skipped"
+fi
+# Written last: CounterStrikeSharp reloads the plugin the moment Gpp.dll is written, so everything it
+# needs has to be in place before that happens.
 install -o steam -g steam -m 644 "$SRC/Gpp.dll" "$PLUGIN/Gpp.dll"
+
+echo "== phase cfgs"
+install -d -o steam -g steam -m 755 "$CS2/cfg/gpp"
+for cfg in warmup knife live; do
+  src="$SRC/cfg/gpp/$cfg.cfg"
+  dest="$CS2/cfg/gpp/$cfg.cfg"
+  if [ ! -f "$src" ]; then
+    echo "  no $src - skipping"
+  elif [ -f "$dest" ]; then
+    echo "  $dest exists, leaving it alone"
+  else
+    install -o steam -g steam -m 644 "$src" "$dest"
+    echo "  wrote $dest"
+  fi
+done
 
 echo "== workshop maps installed"
 for dir in /home/steam/cs2/steamapps/workshop/content/730/*; do
@@ -82,3 +113,4 @@ PY
 echo
 echo "Done. Copying the dll is the reload - CounterStrikeSharp picks it up on write."
 echo "Then check:  rcon 127.0.1.1 27015 <pw> 'css_plugins list'"
+echo "A config change needs a reload by index:  css_plugins reload <n>  (the name is refused)."

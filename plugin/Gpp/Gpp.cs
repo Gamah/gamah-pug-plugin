@@ -21,7 +21,7 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
 {
     public override string ModuleName => "Gamah's Pug Plugin";
     public override string ModuleVersion => "0.1.0";
-    public override string ModuleDescription => "Map vote, random captains and a captain draft, handed to MatchZy.";
+    public override string ModuleDescription => "Map vote, random captains, a captain draft and the match that follows.";
 
     public GppConfig Config { get; set; } = new();
 
@@ -40,43 +40,60 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         Config.MapPool = Config.MapPool.Where(m => !string.IsNullOrWhiteSpace(m.Name) || m.IsWorkshop).ToList();
         if (Config.MapPool.Count == 0)
         {
-            Logger.LogWarning("map_pool is empty: !pug vote has nothing to offer and draft_then_veto cannot build a veto pool.");
+            Logger.LogWarning("map_pool is empty: !pug vote has nothing to offer.");
         }
     }
 
     public override void Load(bool hotReload)
     {
-        NeverKickAnyone();
-        KeepMatchZyAsleep();
+        QuietenMatchZy();
 
-        HookMatchZy();
+        HookMatch();
+        HookGuardedCommands();
         HookJoins();
-        HookReadyGate();
         HookCaptainKnife();
         HookFunCommands();
         StartWarmupWatch();
         RegisterListener<Listeners.OnMapStart>(OnMapStart);
         RegisterListener<Listeners.OnClientDisconnect>(OnClientDisconnect);
+
+        // Who holds the warmup open on a server that has only just started: nothing else does now. The
+        // OnMapStart listener above is no use for it - a plugin loads after the map it loads into - and
+        // the gamerules entity does not exist for the first moment or two, so the check waits.
+        //
+        // A live match is left alone either way. Reloading the dll mid-match loses the plugin's own match
+        // state, which is bad enough without also resetting the engine's.
+        AddTimer(2.0f, () =>
+        {
+            if (!MatchRunning && InWarmupPeriod()) ExecWarmupCfg();
+        });
     }
 
-    // Nobody is ever kicked off this server, match or no match. Both of these are MatchZy kicking people
-    // on connect - the whitelist for anyone outside a loaded roster, the other for everyone at all when no
-    // match is loaded - and both are cvars that outlive whatever set them, so they are asserted at load,
-    // on every map, and in every match config the draft writes.
-    private void NeverKickAnyone()
+    // MatchZy is still installed next to GPP until a pug has been run without it. Asleep it does nothing,
+    // but two of its cvars outlive the match that set them and kick people on connect - the whitelist for
+    // anyone outside a loaded roster, the other for everyone at all when no match is loaded - which is how
+    // a finished pug silently kicked the next person to connect hours later. Nobody is ever kicked off
+    // this server, so both are turned off here, on every map change, and at every match start.
+    //
+    // Sleep mode matters for a different reason: left on autostart, MatchZy arms a repeating "N players
+    // are not ready" chat timer on the first connect and turns its own .ready on, over the top of GPP's.
+    // [SOURCE: MatchZy 0.9.1 Utility.cs AutoStart/SendUnreadyPlayersMessage, SleepMode.cs, read 2026-10-19]
+    private void QuietenMatchZy()
     {
-        Server.ExecuteCommand("matchzy_whitelist_enabled_default false;matchzy_kick_when_no_match_loaded false");
+        if (!Config.Match.MatchZyInstalled) return;
+        Server.ExecuteCommand("matchzy_whitelist_enabled_default false;matchzy_kick_when_no_match_loaded false;"
+            + "matchzy_autostart_mode 0");
     }
 
     // How many bots a test run wants on the server, and the timer that keeps putting them back.
     private int _botTarget;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _botTopUpTimer;
 
-    // Topping up once does not hold. MatchZy execs MatchZy/warmup.cfg on every map start and every time it
-    // restarts warmup, and that file's first line is `bot_quota 0`, so the bots are wiped again a second or
-    // two later - the first version of this stopped as soon as it saw them and the draft still got an empty
-    // server. The top-up therefore keeps running for as long as a test wants bots, repairing the quota
-    // whenever MatchZy clears it, and only !pug bots 0 turns it off.
+    // Topping up once does not hold. The quota is cleared again under a test run by anything that execs a
+    // phase cfg or restarts the warmup - MatchZy's warmup.cfg opened with `bot_quota 0`, which is why
+    // GPP's copy deliberately does not, and bot_join_after_player still empties an unattended server. The
+    // first version of this stopped as soon as it saw the bots and the draft still got an empty server, so
+    // the top-up keeps running for as long as a test wants bots and only !pug bots 0 turns it off.
     internal void KeepTestBotsTopped(int target)
     {
         _botTarget = Math.Max(0, target);
@@ -104,7 +121,7 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         }
 
         // The quota is asserted every time, not only when we are short: it is what trims a surplus left by
-        // an earlier test, and what MatchZy keeps setting back to zero. bot_add is only for the shortfall,
+        // an earlier test, and what repairs a quota something else has reset. bot_add is only for the shortfall,
         // and the quota caps whatever it does.
         Server.ExecuteCommand($"bot_join_after_player 0;bot_quota_mode normal;bot_quota {_botTarget}");
 
@@ -112,41 +129,17 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         for (int i = here; i < _botTarget; i++) Server.ExecuteCommand("bot_add");
     }
 
-    // MatchZy's ready phase belongs to a match the draft has handed over, not to an empty server. Left on
-    // autostart, MatchZy calls StartWarmup() on the first connect and on every map start, which arms the
-    // repeating "N players are not ready" chat timer and turns .ready on - during the vote and the draft,
-    // before there are any teams to be ready for. Sleep mode (autostart_mode 0) leaves readyAvailable
-    // false, so the timer is never armed and .ready falls through silently, while matchzy_loadmatch still
-    // wakes it at the handoff. [SOURCE: MatchZy 0.9.1 Utility.cs SendUnreadyPlayersMessage/AutoStart,
-    // SleepMode.cs StartSleepMode, read 2026-10-15]
-    //
-    // Sleep mode execs cfg/MatchZy/sleep.cfg, and that file - not this plugin - owns holding the warmup
-    // open afterwards; stock it ends the warmup instead, which leaves an idle server playing live rounds.
-    private static void KeepMatchZyAsleep()
-    {
-        Server.ExecuteCommand("matchzy_autostart_mode 0");
-    }
-
-    // autostart_mode only decides what MatchZy does on a map start, so it is not enough on its own: the
-    // open handoff wakes MatchZy with css_match, and a match that ends leaves it awake in match mode with
-    // its ready phase - and its unready chat timer - back on. css_sleep refuses while a match is started,
-    // so this is only ever called where the match is already over or abandoned, never from Load().
-    private void PutMatchZyBackToSleep()
-    {
-        Server.ExecuteCommand("matchzy_autostart_mode 0;css_sleep");
-
-        // css_sleep refuses while MatchZy still thinks a match is started, and the match that just ended
-        // only clears that flag when EndSeries gets round to ResetMatch - up to mp_match_restart_delay
-        // later. Asking again a few times costs a re-exec of sleep.cfg on an idle server and nothing else.
-        AddTimer(5.0f, () => Server.ExecuteCommand("css_sleep"));
-        AddTimer(15.0f, () => Server.ExecuteCommand("css_sleep"));
-    }
-
     private void OnMapStart(string mapName)
     {
-        NeverKickAnyone();
-        KeepMatchZyAsleep();
+        QuietenMatchZy();
         ClearFunEffects();
+
+        // A map change ends any match that was running - including the restart at the end of one - and the
+        // new map starts in whatever state its own cfgs leave it. The held warmup is this plugin's job now
+        // that MatchZy's sleep mode is not doing it.
+        _matchPhase = MatchPhase.None;
+        ResetPauses();
+        AddTimer(1.0f, ExecWarmupCfg);
 
         if (!_draftPendingMapChange) return;
         _draftPendingMapChange = false;
@@ -170,8 +163,8 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         });
     }
 
-    [ConsoleCommand("css_pug", "GPP admin command: start | vote | draft | captains | stop | cancel | clear | status | flow | bots <n> | hudsize | hudboth | hudlist [abcd]")]
-    [CommandHelper(minArgs: 0, usage: "<start|vote|draft|captains|stop|cancel|clear|status|flow|hudsize|hudlist>")]
+    [ConsoleCommand("css_pug", "GPP admin command: start | vote | draft | captains | match | endmatch | stop | cancel | status | bots <n> | hudsize | hudboth | hudlist [abcd]")]
+    [CommandHelper(minArgs: 0, usage: "<start|vote|draft|captains|match|endmatch|stop|cancel|status|hudsize|hudlist>")]
     public void OnPugCommand(CCSPlayerController? player, CommandInfo command)
     {
         if (!IsAdmin(player))
@@ -195,13 +188,6 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         switch (sub)
         {
             case "start":
-                _teamSizeOverride = size;
-                AfterTick(() =>
-                {
-                    if (Config.Flow == "draft_then_veto") StartDraft(force);
-                    else StartMapVote(force);
-                });
-                break;
             case "vote":
                 _teamSizeOverride = size;
                 AfterTick(() => StartMapVote(force));
@@ -213,10 +199,16 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
             case "captains":
                 RerollCaptains(command);
                 break;
-            case "clear":
-                _matchLoaded = false;
-                StopReadyGate();
-                Reply(command, "Forgot the loaded MatchZy match (nothing was ended).");
+            case "match":
+                AfterTick(() =>
+                {
+                    if (MatchRunning) Announce($"Already running: {MatchStatus()}");
+                    else if (_team1.Count == 0 && _team2.Count == 0) Announce("No teams drafted yet.");
+                    else StartMatch(Server.MapName);
+                });
+                break;
+            case "endmatch":
+                AfterTick(() => AbandonMatch("An admin ended it."));
                 break;
             case "cancel":
                 AfterTick(() => Cancel("An admin cancelled it."));
@@ -224,17 +216,6 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
             case "stop":
             case "reset":
                 AfterTick(() => StopEverything("An admin stopped it."));
-                break;
-            case "flow":
-                if (arg is "vote_then_draft" or "draft_then_veto")
-                {
-                    Config.Flow = arg;
-                    Reply(command, $"Flow set to {arg} (for this session; edit the config to make it stick).");
-                }
-                else
-                {
-                    Reply(command, "Usage: !pug flow <vote_then_draft|draft_then_veto>");
-                }
                 break;
             case "bots":
                 if (!Config.CountBots)
@@ -277,8 +258,9 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
             PugPhase.MapVote => $"Map vote running, {_votes.Count} vote(s) in, {_voteSecondsLeft}s left.",
             PugPhase.CaptainKnife => $"Captains knifing for first pick, {_knifeSecondsLeft}s left.",
             PugPhase.Draft => DraftStatus(),
-            _ => $"Idle. Flow: {Config.Flow}. {HumanPlayers().Count} player(s) connected. "
-                 + (_matchLoaded ? "A MatchZy match is loaded." : "No MatchZy match loaded."),
+            _ => MatchRunning
+                ? MatchStatus()
+                : $"Idle. {HumanPlayers().Count} player(s) connected.",
         };
     }
 
@@ -328,7 +310,7 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
     // a test run needs. Nothing outside this file needs to know which kind it is holding.
     //
     // The two ranges must not overlap, and the first attempt at this put the bot range *above* the SteamID
-    // range: every real player then read as a bot, which emptied the MatchZy rosters and handed humans the
+    // range: every real player then read as a bot, which emptied the drafted rosters and handed humans the
     // three-second pick clock meant for bots. Every SteamID64 is at or above 76561197960265728, so bots go
     // at the bottom instead, where nothing real can reach.
     private const ulong SteamId64Floor = 76561197960265728;
