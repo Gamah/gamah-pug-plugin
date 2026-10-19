@@ -26,11 +26,10 @@ internal static class WorldLayout
     // that stays where it was is worth more than the last three letters of somebody's tag.
     internal const int NameWidth = 12;
 
-    // Two across, not three. Three columns of twelve-character names made the middle board two thirds
-    // of the screen wide, which left no room either side of it for the team boards - and the boards had
-    // four blank lines underneath doing nothing. Eighteen names, the pool of a twenty-man pug once the
-    // captains are out of it, is nine rows of two: exactly the height there is.
-    internal const int PerRow = 2;
+    // Three across, which is what the ballot and the pick list were judged on and kept. Two was tried
+    // when the middle board was too wide for the team boards to sit beside it, but the width was never
+    // the columns - it was a board padded out to 900 units with nothing in most of it.
+    internal const int PerRow = 3;
 
     // Columns are space-padded against a proportional font, so they line up to about a space. Exact
     // columns would need one entity per column; approximately-aligned cells read fine.
@@ -134,6 +133,7 @@ internal static class WorldLayout
 
         int fixedLines = 1
             + blocks.Where((block, index) => index != paged).Sum(block => block.Lines.Count)
+            + blocks.Count(block => !block.Pageable)            // a gap before each heading
             + (string.IsNullOrEmpty(footer) ? 0 : 1);
 
         int room = Math.Max(1, BodyLines - fixedLines);
@@ -141,29 +141,55 @@ internal static class WorldLayout
         int page = 0, pages = 1;
         if (paged >= 0 && blocks[paged].Lines.Count > room)
         {
-            var rows = blocks[paged].Lines;
-            pages = (rows.Count + room - 1) / room;
+            var list = blocks[paged].Lines;
+            pages = (list.Count + room - 1) / room;
             page = (ticks / PageSeconds) % pages;
-            blocks[paged] = blocks[paged] with { Lines = [.. rows.Skip(page * room).Take(room)] };
+            blocks[paged] = blocks[paged] with { Lines = [.. list.Skip(page * room).Take(room)] };
         }
 
-        // A blank line between blocks is the first thing to give up when a panel is tall: it is spacing,
-        // and the alternative is paging a list that somebody has to read all of.
-        int tall = 1 + blocks.Sum(block => block.Lines.Count) + blocks.Count
-            + (string.IsNullOrEmpty(footer) ? 0 : 1);
-        bool spaced = tall <= BodyLines;
+        // Spacing is given up a line at a time, worst first, rather than all at once.
+        //
+        // A gap goes before a heading, never between a heading and its own list - that gap is what split
+        // "STILL TO ANSWER" from the names underneath it. The blank under the title is the first to be
+        // dropped when a panel is tall, since a title is already set apart by being a title; the gaps
+        // between sections are the last, because they are what make two lists read as two lists.
+        var gaps = new bool[blocks.Count];
+        for (int block = 0; block < blocks.Count; block++) gaps[block] = !blocks[block].Pageable;
 
-        var text = new StringBuilder(title.ToUpperInvariant()).Append('\n');
-        foreach (var block in blocks)
+        int wanted = 1 + blocks.Sum(block => block.Lines.Count) + gaps.Count(gap => gap)
+            + (string.IsNullOrEmpty(footer) ? 1 : 2);
+        int over = Math.Max(0, wanted - BodyLines);
+
+        bool underTitle = gaps.Length > 0 && gaps[0];
+        if (over > 0 && underTitle) { underTitle = false; gaps[0] = false; over--; }
+
+        bool aboveFooter = !string.IsNullOrEmpty(footer);
+        if (over > 0 && aboveFooter) { aboveFooter = false; over--; }
+
+        for (int block = blocks.Count - 1; block > 0 && over > 0; block--)
         {
-            if (spaced) text.Append('\n');
-            text.AppendJoin('\n', block.Lines).Append('\n');
+            if (!gaps[block]) continue;
+            gaps[block] = false;
+            over--;
+        }
+
+        var rows = new List<string> { title.ToUpperInvariant() };
+        for (int block = 0; block < blocks.Count; block++)
+        {
+            if (gaps[block]) rows.Add("");
+            rows.AddRange(blocks[block].Lines);
         }
 
         string tail = pages > 1
             ? string.IsNullOrEmpty(footer) ? $"page {page + 1}/{pages}" : $"{footer}        page {page + 1}/{pages}"
             : footer ?? "";
-        if (tail.Length > 0) text.Append(spaced ? "\n" : "").Append(tail);
+        if (tail.Length > 0)
+        {
+            if (aboveFooter) rows.Add("");
+            rows.Add(tail);
+        }
+
+        var text = new StringBuilder(string.Join('\n', rows));
 
         // A panel whose fixed sections alone overrun the budget is a caller bug - the tests assert every
         // real panel's worst case fits - but it must not take the title off the top of the view, because
@@ -222,10 +248,10 @@ internal static class WorldLayout
     // Both measured rather than guessed: the widest line either board can hold, plus headroom. The old
     // 900 was a number picked out of the air, and the middle board was two thirds of the screen wide
     // with nothing in most of it - which is why the team boards had nowhere to sit.
-    // Widest lines, 2026-10-19: an eighteen-name draft grid 279, a seventeen-map ballot 224, a clipped
-    // name 126. WidestLineIsPrinted in the tests reprints them.
+    // Widest lines in three columns, 2026-10-19: an eighteen-name draft grid 415, a seventeen-map
+    // ballot 344, a clipped name 126. WidestLineIsPrinted in the tests reprints them.
     internal const int TeamBoardWidth = 180;
-    internal const int MainBoardWidth = 320;
+    internal const int MainBoardWidth = 450;
 
     // Pads a composed panel to exactly `lines` tall and `width` wide, padding whichever line is widest
     // so nothing already written gets re-flowed.
