@@ -189,12 +189,16 @@ public partial class Gpp
         // Round held and warmup off for the same reason as the vote: the overlay is the draft, and nobody
         // should be running around in it.
         HoldTheRound();
+        // Everybody stays on the field for the draft, drafted or not, and is frozen there - see
+        // BelongsOnTheField. Holding the pool in spectator is what left them with no overlay at all:
+        // the server cannot read a spectator's camera, so there is nowhere to hang their boards.
         if (Config.ForceSpectate)
         {
+            int side = 0;
             foreach (var player in players.Where(player => !player.IsBot))
             {
                 if (Id(player) == keep1 || Id(player) == keep2) continue;
-                HoldInSpectator(player);
+                PutOnTheField(player, side++ % 2 == 0 ? CsTeam.CounterTerrorist : CsTeam.Terrorist);
             }
         }
 
@@ -230,22 +234,30 @@ public partial class Gpp
         StartHud();
         StartSpectateGuard();
 
-        // Locked where they spawned for as long as the draft runs. A captain reading a pick list has no
-        // reason to be anywhere, and a captain wandering off during their own draft is a captain whose
-        // boards are somewhere else by the time they look up. The lock comes off when the draft ends.
-        AddTimer(1.0f, () => LockCaptains(true));
+        // Locked where they spawned for as long as the draft runs: nobody reading a pick list has any
+        // reason to be anywhere, and somebody wandering off during the draft is somebody whose boards
+        // are behind them by the time they look up. Re-applied every second because being picked moves
+        // a player to their team, and being moved spawns them again with movement back on.
+        _lockTimer?.Kill();
+        _lockTimer = AddTimer(1.0f, () => LockDrafters(true), TimerFlags.REPEAT);
     }
 
-    // Both captains held still, or let go. Movement only - they can still look around, which is what the
-    // boards follow.
-    private void LockCaptains(bool locked)
+    private CounterStrikeSharp.API.Modules.Timers.Timer? _lockTimer;
+
+    // Everybody in the draft held still, or let go. Movement only - they can still look around, which is
+    // what the boards follow.
+    private void LockDrafters(bool locked)
     {
-        foreach (ulong steamId in new[] { _captain1, _captain2 })
+        foreach (var player in HumanPlayers())
         {
-            var pawn = PlayerBySteamId(steamId)?.PlayerPawn.Value;
+            if (player.IsBot) continue;
+            var pawn = player.PlayerPawn.Value;
             if (pawn == null || !pawn.IsValid || pawn.Health <= 0) continue;
 
-            pawn.MoveType = locked ? MoveType_t.MOVETYPE_NONE : MoveType_t.MOVETYPE_WALK;
+            var wanted = locked ? MoveType_t.MOVETYPE_NONE : MoveType_t.MOVETYPE_WALK;
+            if (pawn.MoveType == wanted) continue;
+
+            pawn.MoveType = wanted;
             Utilities.SetStateChanged(pawn, "CBaseEntity", "m_MoveType");
         }
     }
@@ -593,7 +605,7 @@ public partial class Gpp
         _waitTimer = null;
         StopHud();
         StopSpectateGuard();
-        LockCaptains(false);
+        LockDrafters(false);
 
         // Anyone left over (a short pick order, or someone who turned up late) fills the smaller team. Only
         // a pinned team size leaves people in spectator; an auto-sized draft puts everyone in the match.
@@ -732,7 +744,9 @@ public partial class Gpp
     {
         // Whatever ended the draft - a finished pick order, !pug cancel, !pug stop - nobody is left
         // standing still because of it.
-        LockCaptains(false);
+        _lockTimer?.Kill();
+        _lockTimer = null;
+        LockDrafters(false);
         StopHud();
         StopReadyPhase();
         StopSpectateGuard();

@@ -87,6 +87,31 @@ public partial class Gpp
         player.ChangeTeam(CsTeam.Spectator);
     }
 
+    // The opposite, for the draft: on a team, alive, and standing still. Which team does not matter -
+    // being picked moves them - but being on one does, because that is what gives them a pawn to look
+    // through and a board to look at.
+    private void PutOnTheField(CCSPlayerController player, CsTeam side)
+    {
+        _heldInSpectator.Remove(Id(player));
+        if (player.Team != CsTeam.CounterTerrorist && player.Team != CsTeam.Terrorist)
+        {
+            player.ChangeTeam(side);
+        }
+
+        var pawn = player.PlayerPawn.Value;
+        if (pawn == null || !pawn.IsValid || pawn.Health <= 0)
+        {
+            try
+            {
+                player.Respawn();
+            }
+            catch (Exception exception)
+            {
+                Logger.LogWarning("Could not respawn {Name} for the draft: {Message}", player.PlayerName, exception.Message);
+            }
+        }
+    }
+
     // Hands spectator back to the player. This used to put them on CsTeam.None - the unassigned slot a
     // fresh connection sits in - because that makes the team-select menu come up by itself. It also puts
     // them in no team section at all, which is how people went missing from the scoreboard. Spectator
@@ -195,10 +220,19 @@ public partial class Gpp
     // drafted players once they have been picked.
     private bool BelongsOnTheField(ulong steamId)
     {
+        // The draft keeps everybody on the field now, drafted or not. The overlay is the draft, and a
+        // spectator's camera is driven client-side: the server cannot read where it is, so a board hung
+        // on it lands somewhere nobody is looking. Everyone alive has a pawn, and a pawn is a camera the
+        // boards can be hung from. They are frozen instead, which stops the running about that holding
+        // them in spectator was for.
+        //
+        // The captain duel still clears the floor: a third player in a 1v1 is a third player who can win
+        // it. Those watchers get two lines of centre-screen alert rather than boards.
         return _phase switch
         {
-            PugPhase.MapVote => false,
+            PugPhase.MapVote => true,
             PugPhase.CaptainKnife => steamId == _captain1 || steamId == _captain2,
+            PugPhase.Draft => true,
             _ => _team1.Contains(steamId) || _team2.Contains(steamId),
         };
     }
