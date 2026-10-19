@@ -65,49 +65,25 @@ public partial class Gpp
     // every tick throws away the prediction that parenting just bought.
     private const float AimTolerance = 1.5f;
 
-    // What the panel is made of, all measured on a client 2026-10-19 and all explained in WorldPanel.cs:
-    // FontSize stays put and WorldUnitsPerPx does the sizing, because raising FontSize grows the glyphs
-    // without moving the lines apart.
-    private const float BaseFontSize = 64f;
-    private const float AssumedVerticalFov = 59f;
-    private const float LineHeightFactor = 1.2f;
-    private const int ReferenceLines = 12;
-    private const float PanelDistance = 70f;
-
-    // The two team boards: out to each side with a gap, toed in to face the viewer. Not flush with the
-    // middle one - three panels touching read as one wide panel, and the whole point of the side boards
-    // is that a glance left or right is a different question from the one in front of you.
+    // What a board is made of, measured on a client 2026-10-19: FontSize stays put and WorldUnitsPerPx
+    // does the sizing, because raising FontSize grows the glyphs without moving the lines apart.
     //
-    // All three are tunable live with !pug sides, because the only way to judge them is to stand in
-    // front of them, and a redeploy per guess is the slow version of that.
-    // Where the side boards sit is worked out from how wide the boards actually are, not from a number
-    // somebody liked the look of. Half the middle board, plus half a side board, plus a margin - which
-    // is the smallest gap that cannot overlap, whatever the text size or the distance is set to.
-    //
-    // A board's width in world units is its width in HudMetrics units times two pixels a unit times the
-    // panel scale. The two is the only empirical part: measured off a 4K screenshot, where a board of
-    // 900 HudMetrics units came out 95 world units wide. [SOURCE: measured 2026-10-19.]
-    private const float PixelsPerMetric = 2f;
-
-    private static float BoardWorldWidth(int metrics) => metrics * PixelsPerMetric * PanelScale();
-
-    private float SideGap => _sideGapOverride
-        ?? ((BoardWorldWidth(WorldLayout.MainBoardWidth) + BoardWorldWidth(WorldLayout.TeamBoardWidth)) / 2f) + 8f;
-
-    private float? _sideGapOverride;     // !pug sides, for when the derived number still looks wrong
-    private float _sideToeIn = 22f;      // degrees each side board turns inward to face the viewer
-    private float _sideBack = 0f;        // units further away than the middle board, if they want it
-    // Dropped from 75 on 2026-10-19: with three boards across, type that size left the side boards at the
-    // edge of the view and nothing room to breathe. Everything is one size, so this is the one knob.
-    private const float PanelScreenPercent = 62f;
+    // The sizes, the distance and where the side boards sit live in WorldGeometry, which has no engine
+    // in it - so the tests can check the one thing that has gone wrong repeatedly, which is three boards
+    // that do not fit across the view and end up on top of each other.
+    private const float BaseFontSize = WorldGeometry.BaseFontSize;
+    private const float PanelDistance = WorldGeometry.Distance;
     private const float PanelUpOffset = 9f;
 
-    private static float PanelScale()
-    {
-        double half = AssumedVerticalFov * Math.PI / 360.0;
-        double worldHeight = 2.0 * PanelDistance * Math.Tan(half) * (PanelScreenPercent / 100.0);
-        return (float)(worldHeight / (ReferenceLines * BaseFontSize * LineHeightFactor));
-    }
+    private static float PanelScale() => WorldGeometry.Scale();
+
+    // Centre to centre between the middle board and a side board. !pug sides overrides it, for when the
+    // derived number still looks wrong in front of a real client; !pug sides auto hands it back.
+    private float SideGap => _sideGapOverride ?? WorldGeometry.SideGap();
+
+    private float? _sideGapOverride;
+    private float _sideToeIn = 22f;      // degrees each side board turns inward to face the viewer
+    private float _sideBack = 0f;        // units further away than the middle board, if they want it
 
     // Decides the follow tier once, at load.
     //

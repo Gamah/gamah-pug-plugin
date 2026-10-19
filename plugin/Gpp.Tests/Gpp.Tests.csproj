@@ -20,6 +20,7 @@
     <Compile Include="../Gpp/HudLayout.cs" />
     <Compile Include="../Gpp/HudMetrics.cs" />
     <Compile Include="../Gpp/WorldLayout.cs" />
+    <Compile Include="../Gpp/WorldGeometry.cs" />
   </ItemGroup>
 
   <ItemGroup>

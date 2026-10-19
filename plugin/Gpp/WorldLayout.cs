@@ -245,13 +245,21 @@ internal static class WorldLayout
     // asserted in the tests, because a board whose content outgrows its target stops being a fixed size
     // and starts breathing again. MainBoardWidth is a three-column grid of twelve-character names;
     // TeamBoardWidth is one clipped name plus room for the label.
-    // Both measured rather than guessed: the widest line either board can hold, plus headroom. The old
-    // 900 was a number picked out of the air, and the middle board was two thirds of the screen wide
-    // with nothing in most of it - which is why the team boards had nowhere to sit.
-    // Widest lines in three columns, 2026-10-19: an eighteen-name draft grid 415, a seventeen-map
-    // ballot 344, a clipped name 126. WidestLineIsPrinted in the tests reprints them.
-    internal const int TeamBoardWidth = 180;
-    internal const int MainBoardWidth = 450;
+    // One width, every board, every phase. A middle board that is one size on its own and another size
+    // with the team boards beside it is three sizes of furniture, and the eye follows furniture moving
+    // rather than the words on it.
+    //
+    // The number is what three boards can be and still fit across the view: at seventy units away with
+    // an assumed 90 degree FOV the screen is 140 world units across, and three of these plus their
+    // margins come to about 132. Everything else gives way to that - the type is smaller than it was
+    // because a board wide enough to hold a three-column pick list is only possible with smaller type.
+    //
+    // Widest lines it has to hold, 2026-10-19: an eighteen-name draft grid 415, a seventeen-map ballot
+    // 344, a clipped name 126. WidestLineIsPrinted in the tests reprints them.
+    internal const int BoardWidth = 500;
+
+    internal const int TeamBoardWidth = BoardWidth;
+    internal const int MainBoardWidth = BoardWidth;
 
     // Pads a composed panel to exactly `lines` tall and `width` wide, padding whichever line is widest
     // so nothing already written gets re-flowed.

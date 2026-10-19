@@ -242,4 +242,42 @@ public class WorldLayoutTests
         _out.WriteLine($"team name   {team}");
         _out.WriteLine($"MainBoardWidth {WorldLayout.MainBoardWidth}, TeamBoardWidth {WorldLayout.TeamBoardWidth}");
     }
+
+    // The invariant that has gone wrong more than any other: three boards, side by side, across a view
+    // that is only so wide. When this fails the panels overlap on somebody's screen - which is what the
+    // owner has had to report by screenshot three times.
+    [Fact]
+    public void ThreeBoardsFitAcrossTheView()
+    {
+        float board = WorldGeometry.BoardWidth(WorldLayout.BoardWidth);
+        float span = WorldGeometry.ThreeBoardSpan();
+        float screen = WorldGeometry.ScreenWidth();
+
+        _out.WriteLine($"board {board:F1} world units, three of them span {span:F1}, screen is {screen:F1}");
+        _out.WriteLine($"a board is {100 * board / screen:F0}% of the screen, the three together {100 * span / screen:F0}%");
+
+        Assert.True(span < screen, $"three boards span {span:F1} across a {screen:F1} view - they will overlap");
+        // And not so small that the type is unreadable across a room: the three should use most of the
+        // width they have, or the boards are further apart than they need to be.
+        Assert.True(span > screen * 0.75f, $"three boards only use {100 * span / screen:F0}% of the view");
+    }
+
+    // Every board is one width, whatever is on it and whatever phase it is - a middle board that is one
+    // size alone and another size with the team boards beside it is three sizes of furniture.
+    [Fact]
+    public void EveryBoardIsTheSameWidth()
+    {
+        string main = WorldLayout.MainPanel("pick a map",
+            [WorldLayout.Section.List(WorldLayout.Grid(Maps.Select((m, i) => WorldLayout.Cell(i + 1, m))))],
+            "28s", 0);
+        string sparse = WorldLayout.MainPanel("server restarting", [WorldLayout.Section.Of("an admin asked")], "10s", 0);
+        string team = WorldLayout.TeamBoard("A", "Ada", Names.Take(4));
+        string empty = WorldLayout.TeamBoard("B", "Baz", []);
+
+        foreach (var panel in new[] { main, sparse, team, empty })
+        {
+            Assert.Equal(WorldLayout.PanelLines, WorldLayout.LineCount(panel));
+            Assert.Equal(WorldLayout.Rule(WorldLayout.BoardWidth), panel.Split('\n')[^1]);
+        }
+    }
 }
