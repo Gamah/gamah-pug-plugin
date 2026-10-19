@@ -146,6 +146,38 @@ public class GppConfig : BasePluginConfig
     // rather than rolling the plugin back.
     [JsonPropertyName("hud_style")] public string HudStyle { get; set; } = "world";
 
+    // What the world panel hangs from. There is no camera entity to parent to - the first-person camera
+    // in Source 2 is client-side, derived from the pawn's eye position and angles, which is why every
+    // plugin that wanted a panel on your face used the viewmodel until Valve took it out of the schema.
+    // So these are the anchors that exist:
+    //
+    //   "orient"      point_orient parented to the pawn and aimed down the eyeline, panel parented to
+    //                 it. Position and facing both ride the client's prediction of its own pawn.
+    //   "attachment"  the same, but the orient hangs off a named attachment on the player model rather
+    //                 than the pawn's origin - which is a head/look bone, so it should track the aim
+    //                 more closely. Unproven: CS2-GameHUD ships this line commented out.
+    //   "pawn"        panel parented straight to the pawn, re-squared when the view has turned far
+    //                 enough. The pawn's rotation is the body yaw, which snaps and lags behind the aim.
+    //   "teleport"    moved every tick, no parenting. Always works, always trails about a tenth of a
+    //                 second behind the camera.
+    //
+    // Left empty, the plugin picks the best one the schema still supports.
+    [JsonPropertyName("hud_anchor")] public string HudAnchor { get; set; } = "";
+
+    // The attachment the "attachment" anchor hangs from. [SOURCE: the only name seen in the wild is
+    // CS2-GameHUD's commented-out "look_straight_ahead_stand" - unverified on this server's player
+    // models, which is why it is a setting and not a constant.]
+    [JsonPropertyName("hud_anchor_attachment")] public string HudAnchorAttachment { get; set; } = "look_straight_ahead_stand";
+
+    // How fast the point_orient may turn to follow the eyes, in whatever units the engine means by it.
+    // A rate-limited orient trails a fast flick, which looks like the panel swinging. 0 leaves the
+    // engine default alone; a big number tells it to keep up.
+    [JsonPropertyName("hud_orient_turn_rate")] public float HudOrientTurnRate { get; set; } = 0f;
+
+    // ePreserveUpAxis keeps the orient's up axis pointing at the sky, which holds the panel upright
+    // without the roll compensation Square() does by hand. Worth comparing against "none".
+    [JsonPropertyName("hud_orient_constraint")] public string HudOrientConstraint { get; set; } = "none";
+
     // "alternate" = 1,2,1,2 ... ; "snake" = 1,2,2,1,1,2,2,1 ...
     [JsonPropertyName("pick_order")] public string PickOrder { get; set; } = "alternate";
 

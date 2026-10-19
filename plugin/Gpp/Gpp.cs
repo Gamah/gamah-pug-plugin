@@ -296,6 +296,11 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
                 if (arg == "stop") { StopPreview(); StopHud(); Reply(command, "Preview stopped."); }
                 else HudPreview();
                 break;
+            case "anchor":
+                // What the world panel hangs from, switched live so four of them can be compared
+                // standing in the same spot. "orient" is the default; see Config.HudAnchor.
+                Reply(command, SetAnchor(arg, command.ArgCount > 3 ? command.ArgByIndex(3) : ""));
+                break;
             case "scroll":
                 ScrollProbe();
                 break;

@@ -42,7 +42,7 @@ public partial class Gpp
     //           re-squared only when the eyes have turned past AimTolerance.
     // Teleport: moved every tick, which is what the prototype did. Always works, always trails by about
     //           a tenth of a second.
-    private enum Follow { Orient, Pawn, Teleport }
+    private enum Follow { Orient, Attachment, Pawn, Teleport }
 
     private Follow _follow = Follow.Teleport;
 
@@ -98,6 +98,34 @@ public partial class Gpp
         else
         {
             _follow = Follow.Teleport;
+        }
+
+        // An explicit hud_anchor overrides the probe - that is what makes it possible to stand in front
+        // of all four of them in one session and say which one looks right. It cannot pick a tier the
+        // schema will not support: asking for one that failed the probe is logged and ignored.
+        if (!string.IsNullOrWhiteSpace(Config.HudAnchor))
+        {
+            var wanted = Config.HudAnchor.Trim().ToLowerInvariant() switch
+            {
+                "orient" => Follow.Orient,
+                "attachment" => Follow.Attachment,
+                "pawn" => Follow.Pawn,
+                "teleport" => Follow.Teleport,
+                _ => (Follow?)null,
+            };
+            if (wanted == null)
+            {
+                Logger.LogWarning("hud_anchor \"{Anchor}\" is not a thing - using {Tier}.", Config.HudAnchor, _follow);
+            }
+            else if ((wanted == Follow.Orient || wanted == Follow.Attachment) && _follow != Follow.Orient)
+            {
+                Logger.LogWarning("hud_anchor \"{Anchor}\" needs point_orient, which this build does not have - using {Tier}.",
+                    Config.HudAnchor, _follow);
+            }
+            else
+            {
+                _follow = wanted.Value;
+            }
         }
 
         Logger.LogInformation("World panel follow tier: {Tier}. point_orient size {Size}, m_nGoalDirection at {Offset}.",
@@ -198,20 +226,30 @@ public partial class Gpp
         return true;
     }
 
-    // Puts the panel where it belongs and attaches it, by whichever tier the probe chose. Teleport
-    // first, parent second: SetParent freezes whatever local offset the entity has at the time.
+    // Puts the panel where it belongs and attaches it, by whichever tier the probe chose.
+    //
+    // Order matters and is what a 45-degree panel was: SetParent freezes the entity's offset from its
+    // parent at the moment it is called, so teleporting first and parenting second freezes the panel
+    // against whatever rotation the parent happened to have in that frame. A point_orient spawned in the
+    // same frame has not been aimed at its target yet, so that rotation is arbitrary - and the panel
+    // comes out skewed by it, consistently, for as long as it lives.
+    //
+    // So: parent first, then teleport, with the position and the facing both read off the orient rather
+    // than off the eyes. The orient is what the panel hangs from; the eyes are only what the orient is
+    // following.
+    // [SOURCE: shape taken from darkerz7/CS2-GameHUD HUD.cs GetPositionOrient, read 2026-10-19]
     private void Place(CCSPlayerController player, ViewerPanel panel)
     {
         var pawn = player.PlayerPawn.Value;
         if (panel.Text == null || !panel.Text.IsValid || pawn == null || !pawn.IsValid || pawn.AbsOrigin == null) return;
 
-        var eyes = pawn.EyeAngles;
-        panel.Text.Teleport(InFront(pawn, eyes), new QAngle(0, eyes.Y + 270f, 90f), new Vector(0, 0, 0));
-        panel.AimedAt = eyes.Y;
+        if (_follow == Follow.Teleport)
+        {
+            Square(panel, pawn.AbsOrigin, pawn.EyeAngles, EyeHeight(pawn));
+            return;
+        }
 
-        if (_follow == Follow.Teleport) return;
-
-        if (_follow == Follow.Orient)
+        if (_follow == Follow.Orient || _follow == Follow.Attachment)
         {
             var orient = Utilities.CreateEntityByName<CPointOrient>("point_orient");
             if (orient != null && orient.Handle != IntPtr.Zero && orient.IsValid)
@@ -220,14 +258,44 @@ public partial class Gpp
                 // Aimed down the pawn's eyeline, which is what carries the panel's facing without the
                 // server sending an angle every tick.
                 orient.GoalDirection = PointOrientGoalDirectionType_t.eEyesForward;
+                // ePreserveUpAxis holds the orient's up axis at the sky, which keeps the panel upright
+                // through a pitch without Square() having to take the pitch back out of the roll.
+                orient.Constraint = Config.HudOrientConstraint.Trim().ToLowerInvariant() == "preserveupaxis"
+                    ? PointOrientConstraint_t.ePreserveUpAxis
+                    : PointOrientConstraint_t.eNone;
+                // A rate-limited orient trails a fast flick, which reads as the panel swinging out and
+                // catching up. 0 leaves whatever the engine defaults to.
+                if (Config.HudOrientTurnRate > 0f) orient.MaxTurnRate = Config.HudOrientTurnRate;
                 orient.DispatchSpawn();
                 orient.Teleport(new Vector(pawn.AbsOrigin.X, pawn.AbsOrigin.Y, pawn.AbsOrigin.Z + EyeHeight(pawn)),
                     null, null);
-                orient.AcceptInput("SetParent", pawn, null, "!activator");
+
+                // The whole difference between the two orient tiers: what the orient itself hangs from.
+                // The pawn's origin is at its feet and its rotation is the body yaw; a look attachment
+                // on the model is a head bone, which tracks where somebody is actually looking. Whether
+                // this server's player models carry the attachment is not knowable from here - a name
+                // the model does not have makes SetParentAttachmentMaintainOffset do nothing, so the
+                // panel simply stays parented at the origin and looks like the plain orient tier.
+                if (_follow == Follow.Attachment && !string.IsNullOrWhiteSpace(Config.HudAnchorAttachment))
+                {
+                    orient.AcceptInput("SetParentAttachmentMaintainOffset", pawn, null, Config.HudAnchorAttachment);
+                }
+                else
+                {
+                    orient.AcceptInput("SetParent", pawn, null, "!activator");
+                }
                 orient.AcceptInput("SetTarget", pawn, null, "!activator");
                 panel.Orient = orient;
-                panel.Text.AcceptInput("SetParent", orient, null, "!activator");
                 panel.ParentedTo = (int)pawn.Index;
+
+                // Next frame, by which time the orient has been turned to face down the eyeline. Doing
+                // this in the same frame is exactly the bug described above.
+                Server.NextFrame(() =>
+                {
+                    if (panel.Text == null || !panel.Text.IsValid || !orient.IsValid) return;
+                    panel.Text.AcceptInput("SetParent", orient, null, "!activator");
+                    SquareToOrient(panel, orient);
+                });
                 return;
             }
             // The factory went away under us: carry on at the next tier down rather than drawing nothing.
@@ -237,6 +305,39 @@ public partial class Gpp
 
         panel.Text.AcceptInput("SetParent", pawn, null, "!activator");
         panel.ParentedTo = (int)pawn.Index;
+        Square(panel, pawn.AbsOrigin, pawn.EyeAngles, EyeHeight(pawn));
+    }
+
+    // Hangs the panel off the orient's own frame. Teleporting a parented entity re-freezes its offset,
+    // so this doubles as the correction when the freeze was taken at a bad moment.
+    private static void SquareToOrient(ViewerPanel panel, CPointOrient orient)
+    {
+        if (orient.AbsOrigin == null || orient.AbsRotation == null) return;
+        Square(panel, orient.AbsOrigin, orient.AbsRotation, 0f);
+    }
+
+    // The one place the panel's position and facing are worked out, from whatever frame it is being hung
+    // in. The roll is 90 minus the pitch rather than a flat 90: 90 is what stands the text plane up when
+    // the view is level, and the pitch has to come back out of it or the panel tilts as soon as somebody
+    // looks up.
+    private static void Square(ViewerPanel panel, Vector origin, QAngle angles, float eyeHeight)
+    {
+        if (panel.Text == null || !panel.Text.IsValid) return;
+
+        double yaw = angles.Y * Math.PI / 180.0;
+        double pitch = angles.X * Math.PI / 180.0;
+        double sy = Math.Sin(yaw), cy = Math.Cos(yaw), sp = Math.Sin(pitch), cp = Math.Cos(pitch);
+
+        var forward = new Vector((float)(cp * cy), (float)(cp * sy), (float)-sp);
+        var up = new Vector((float)(sp * cy), (float)(sp * sy), (float)cp);
+
+        var at = new Vector(
+            origin.X + (forward.X * PanelDistance) + (up.X * PanelUpOffset),
+            origin.Y + (forward.Y * PanelDistance) + (up.Y * PanelUpOffset),
+            origin.Z + eyeHeight + (forward.Z * PanelDistance) + (up.Z * PanelUpOffset));
+
+        panel.Text.Teleport(at, new QAngle(0, angles.Y + 270f, 90f - angles.X), new Vector(0, 0, 0));
+        panel.AimedAt = angles.Y;
     }
 
     // Called on every text update. A parented panel usually needs nothing; this is what notices a
@@ -256,24 +357,31 @@ public partial class Gpp
             return;
         }
 
-        if (_follow == Follow.Orient) return;
+        if (_follow == Follow.Orient || _follow == Follow.Attachment)
+        {
+            // Parented and riding the orient, so there is normally nothing to do. The check is for the
+            // one case that cannot be seen from here: a freeze taken while the orient was still turning,
+            // which leaves the panel permanently off to one side. One comparison a second, and a single
+            // teleport to put it right, rather than an angle on the wire every tick.
+            if (panel.Orient == null || !panel.Orient.IsValid || panel.Orient.AbsRotation == null) return;
+            if (panel.Text.AbsRotation == null) return;
+
+            float want = panel.Orient.AbsRotation.Y + 270f;
+            if (Math.Abs(Delta(want, panel.Text.AbsRotation.Y)) > AimTolerance) SquareToOrient(panel, panel.Orient);
+            return;
+        }
 
         var eyes = pawn.EyeAngles;
         if (_follow == Follow.Pawn)
         {
-            float turned = Math.Abs(Delta(eyes.Y, panel.AimedAt));
-            if (float.IsNaN(panel.AimedAt) || turned > AimTolerance)
+            if (float.IsNaN(panel.AimedAt) || Math.Abs(Delta(eyes.Y, panel.AimedAt)) > AimTolerance)
             {
-                panel.Text.AcceptInput("ClearParent", null, null, "!activator");
-                panel.Text.Teleport(InFront(pawn, eyes), new QAngle(0, eyes.Y + 270f, 90f), new Vector(0, 0, 0));
-                panel.Text.AcceptInput("SetParent", pawn, null, "!activator");
-                panel.AimedAt = eyes.Y;
+                Square(panel, pawn.AbsOrigin, eyes, EyeHeight(pawn));
             }
             return;
         }
 
-        panel.Text.Teleport(InFront(pawn, eyes), new QAngle(0, eyes.Y + 270f, 90f), new Vector(0, 0, 0));
-        panel.AimedAt = eyes.Y;
+        Square(panel, pawn.AbsOrigin, eyes, EyeHeight(pawn));
     }
 
     // The Teleport tier only: every tick, for the players who have a panel up.
@@ -289,30 +397,6 @@ public partial class Gpp
     }
 
     private static float EyeHeight(CCSPlayerPawn pawn) => pawn.ViewOffset.Z == 0 ? 64f : pawn.ViewOffset.Z;
-
-    // Where the panel hangs: in front of the eyes, lifted above the crosshair along the camera's own up
-    // axis so the offset stays above the crosshair when they are looking up or down rather than above
-    // the world.
-    private static Vector InFront(CCSPlayerPawn pawn, QAngle eyes)
-    {
-        double yaw = eyes.Y * Math.PI / 180.0;
-        double pitch = eyes.X * Math.PI / 180.0;
-
-        var forward = new Vector(
-            (float)(Math.Cos(pitch) * Math.Cos(yaw)),
-            (float)(Math.Cos(pitch) * Math.Sin(yaw)),
-            (float)-Math.Sin(pitch));
-        var right = new Vector((float)-Math.Sin(yaw), (float)Math.Cos(yaw), 0);
-        var up = new Vector(
-            (forward.Y * right.Z) - (forward.Z * right.Y),
-            (forward.Z * right.X) - (forward.X * right.Z),
-            (forward.X * right.Y) - (forward.Y * right.X));
-
-        return new Vector(
-            pawn.AbsOrigin!.X + (forward.X * PanelDistance) + (up.X * PanelUpOffset),
-            pawn.AbsOrigin.Y + (forward.Y * PanelDistance) + (up.Y * PanelUpOffset),
-            pawn.AbsOrigin.Z + EyeHeight(pawn) + (forward.Z * PanelDistance) + (up.Z * PanelUpOffset));
-    }
 
     private static float Delta(float now, float then)
     {
@@ -360,5 +444,54 @@ public partial class Gpp
         {
             if (stray.IsValid) stray.Remove();
         }
+    }
+
+    // !pug anchor [orient|attachment|pawn|teleport] [attachment name]
+    //
+    // Config is read at plugin load, so comparing four anchors through Gpp.json is four reloads and a
+    // lost sense of what the last one looked like. This switches live: every panel up is torn down and
+    // hung again from the new anchor, which is exactly what happens at a phase change anyway.
+    internal string SetAnchor(string mode, string attachment)
+    {
+        if (string.IsNullOrWhiteSpace(mode))
+        {
+            return $"Anchor is {_follow}"
+                + (_follow == Follow.Attachment ? $" on \"{Config.HudAnchorAttachment}\"" : "")
+                + $". point_orient {(Schema.GetClassSize("CPointOrient") > 0 ? "is" : "is NOT")} in this build's schema.";
+        }
+
+        var wanted = mode.Trim().ToLowerInvariant() switch
+        {
+            "orient" => Follow.Orient,
+            "attachment" or "attach" => Follow.Attachment,
+            "pawn" or "model" => Follow.Pawn,
+            "teleport" or "follow" => Follow.Teleport,
+            _ => (Follow?)null,
+        };
+        if (wanted == null) return "Anchor is one of: orient, attachment, pawn, teleport.";
+
+        if ((wanted == Follow.Orient || wanted == Follow.Attachment) && Schema.GetClassSize("CPointOrient") <= 0)
+        {
+            return "point_orient is not in this build's schema - orient and attachment cannot work here.";
+        }
+
+        if (!string.IsNullOrWhiteSpace(attachment)) Config.HudAnchorAttachment = attachment;
+        _follow = wanted.Value;
+
+        // Torn down rather than re-parented: an entity's offset from its parent is frozen when it is
+        // parented, so moving a live panel between anchors means unpicking exactly the state that is
+        // hardest to see. A fresh panel is one spawn per viewer and no doubt about what it is hanging
+        // from.
+        var showing = _panels.ToDictionary(entry => entry.Key, entry => entry.Value.Sent);
+        ClearWorldPanels();
+        foreach (var (slot, text) in showing)
+        {
+            var player = Utilities.GetPlayerFromSlot(slot);
+            if (player != null && player.IsValid && text.Length > 0) ShowWorldPanel(player, text);
+        }
+
+        return $"Anchor is now {_follow}"
+            + (_follow == Follow.Attachment ? $" on \"{Config.HudAnchorAttachment}\"" : "")
+            + $", {showing.Count} panel(s) rehung.";
     }
 }
