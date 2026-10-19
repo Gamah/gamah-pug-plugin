@@ -244,10 +244,9 @@ public partial class Gpp
                     BoardAt("B", teamB[0], teamB.Skip(1).ToList(), 4));
             }),
 
-            ("side choice", left => (WorldLayout.MainPanel("type .stay or .switch",
+            ("side choice", left => (WorldLayout.MainPanel("you won the knife - .stay or .switch",
             [
-                WorldLayout.Section.Of("you won the knife, on CT"),
-                WorldLayout.Section.Of(".stay      keep CT", ".switch    take T"),
+                WorldLayout.Section.Of(".stay      stay on CT", ".switch    switch to T"),
             ], WorldLayout.Footer("mirage"), _hudTicks),
                 BoardAt("A", teamA[0], teamA.Skip(1).ToList(), 4),
                 BoardAt("B", teamB[0], teamB.Skip(1).ToList(), 4))),

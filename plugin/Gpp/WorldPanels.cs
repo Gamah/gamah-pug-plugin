@@ -241,18 +241,14 @@ public partial class Gpp
             // Somebody who cannot answer does not need to be told what the two commands do. They need to
             // know who the room is waiting on and that nothing is being asked of them - the first panel
             // here spelled out both commands to nine people who could not type either.
+            // Two lines for the captain who has to type, one line for everybody else. What each command
+            // does is only worth saying to the person who can use one.
             string panel = mine
-                ? WorldLayout.MainPanel("type .stay or .switch",
-                    [
-                        WorldLayout.Section.Of($"you won the knife, on {on}"),
-                        WorldLayout.Section.Of($".stay      keep {on}", $".switch    take {other}"),
-                    ],
+                ? WorldLayout.MainPanel("you won the knife - .stay or .switch",
+                    [WorldLayout.Section.Of($".stay      stay on {on}", $".switch    switch to {other}")],
                     WorldLayout.Footer(_matchMap), _hudTicks)
-                : WorldLayout.MainPanel($"{winner} is picking the side",
-                    [
-                        WorldLayout.Section.Of($"they won the knife, on {on}"),
-                        WorldLayout.Section.Of("you start on whatever is left"),
-                    ],
+                : WorldLayout.MainPanel($"{winner} won the knife",
+                    [WorldLayout.Section.Of("they choose to stay or switch")],
                     WorldLayout.Footer(_matchMap), _hudTicks);
             WorldShow(player, panel, left, right);
         }
