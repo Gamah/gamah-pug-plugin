@@ -129,21 +129,24 @@ public partial class Gpp
 
     private void WorldWaitPanel()
     {
-        var here = HumanPlayers().Select(Id).ToHashSet();
-        var missing = _expectedRoster.Where(entry => !here.Contains(entry.Key)).Select(entry => entry.Value).ToList();
-        int back = _expectedRoster.Count - missing.Count;
+        // Only the captains hold this up now - everybody else is in spectator waiting to be drafted, and
+        // the map is already loaded for them.
+        var waiting = new List<string>();
+        if (PlayerBySteamId(_captain1) == null) waiting.Add(WorldLayout.Clip(Name(_captain1)));
+        if (PlayerBySteamId(_captain2) == null) waiting.Add(WorldLayout.Clip(Name(_captain2)));
 
         foreach (var player in HumanPlayers())
         {
-            string panel = WorldLayout.MainPanel("waiting for players",
+            string panel = WorldLayout.MainPanel("waiting for the captains",
                 [
-                    WorldLayout.Section.Of($"{back}/{_expectedRoster.Count} BACK - STILL TO CONNECT"),
-                    // Two columns, not three: there are ten lines spare and nobody is reading this one
-                    // in a hurry - it wants to be legible across the room, not compact.
-                    WorldLayout.Section.List(WorldLayout.Grid(missing.Select(WorldLayout.Clip), 2)),
-                    WorldLayout.Section.Of(missing.Count == 0 ? "everybody is back - drafting now" : null),
+                    WorldLayout.Section.Of(waiting.Count == 0
+                        ? "both captains are in - knifing now"
+                        : "STILL LOADING"),
+                    new([.. WorldLayout.Slots(waiting, 2, 1)]),
+                    WorldLayout.Section.Of("the knife starts the moment they are both in.",
+                        "an armband is handed on if they do not make it."),
                 ],
-                WorldLayout.Footer("drafting anyway in", $"{_waitSecondsLeft}s"),
+                WorldLayout.Footer($"{_waitSecondsLeft}s"),
                 _hudTicks);
             WorldShow(player, panel);
         }

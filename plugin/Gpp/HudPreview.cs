@@ -209,15 +209,13 @@ public partial class Gpp
                 ], WorldLayout.Footer("!1-!9 changes your vote", $"{left}s"), _hudTicks), null, null);
             }),
 
-            ("waiting to reconnect", left =>
-            {
-                var missing = Dwindling(PreviewNames.Skip(2), left);
-                return (WorldLayout.MainPanel("waiting for players",
-                [
-                    WorldLayout.Section.Of($"{PreviewNames.Length - missing.Count}/{PreviewNames.Length} BACK - STILL TO CONNECT"),
-                    WorldLayout.Section.List(WorldLayout.Grid(missing, 2)),
-                ], WorldLayout.Footer("drafting anyway in", $"{left}s"), _hudTicks), null, null);
-            }),
+            ("waiting for the captains", left => (WorldLayout.MainPanel("waiting for the captains",
+            [
+                WorldLayout.Section.Of("STILL LOADING"),
+                new([.. WorldLayout.Slots(left > 7 ? ["Ada", "Baz"] : ["Baz"], 2, 1)]),
+                WorldLayout.Section.Of("the knife starts the moment they are both in.",
+                    "an armband is handed on if they do not make it."),
+            ], WorldLayout.Footer($"{left}s"), _hudTicks), null, null)),
 
             // The draft is the step the side boards exist for, so the pool empties and the two boards
             // fill as it runs.

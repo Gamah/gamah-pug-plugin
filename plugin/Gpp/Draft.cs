@@ -70,52 +70,105 @@ public partial class Gpp
     {
         _waitTimer?.Kill();
         _waitSecondsLeft = Math.Max(5, Config.ReconnectWaitSeconds);
-        int here = HumanPlayers().Count;
-        if (_expectedPlayers > here)
-        {
-            Announce($"Waiting for players to reconnect: {here}/{_expectedPlayers}.");
-        }
+        Announce("Waiting for the captains to load - the knife starts as soon as both are in.");
         _waitTimer = AddTimer(1.0f, WaitTick, TimerFlags.REPEAT);
     }
 
+    // After a map change, the only people worth waiting for are the two captains.
+    //
+    // This used to wait for the whole room to be back, which was wrong in both directions: a map change
+    // does not disconnect anybody, so the headcount was satisfied the instant the map loaded and the duel
+    // started while people were still looking at a loading screen - a captain on a slow machine could
+    // lose first pick without ever seeing it. And when somebody genuinely had gone, it waited out the
+    // whole ninety seconds for them.
+    //
+    // Nobody needs to be spawned or warmed up for this. Everyone who is not a captain is held in
+    // spectator, which is where the duel wants them anyway, and the pick list is what they are waiting
+    // for rather than the map.
     private void WaitTick()
     {
-        int here = HumanPlayers().Count;
-        bool everyoneBack = here >= _expectedPlayers;
         _waitSecondsLeft--;
 
-        // Waiting means waiting for the people we know are coming, not for a quorum. Starting as soon as
-        // min_players were back took the armband off a captain who was still loading and sized the teams
-        // from half the room; reconnect_wait_seconds is the limit, not the headcount.
-        if (!everyoneBack && _waitSecondsLeft > 0)
+        var first = PlayerBySteamId(_captain1);
+        var second = PlayerBySteamId(_captain2);
+
+        if (Config.ForceSpectate)
         {
-            if (_waitSecondsLeft % 15 == 0)
+            foreach (var player in HumanPlayers())
             {
-                Announce($"Waiting: {here}/{_expectedPlayers} back, {_waitSecondsLeft}s.");
+                if (player.IsBot) continue;
+                if (Id(player) == _captain1 || Id(player) == _captain2) continue;
+                if (player.Team == CsTeam.Spectator) continue;
+                HoldInSpectator(player);
             }
-            // The one phase that never had a panel: a chat line every fifteen seconds, to a room that
-            // has just reconnected and is looking at a warmup. Whoever is back can see who is not.
-            if (WorldStyle) WorldWaitPanel();
+        }
+
+        if (first != null && second != null)
+        {
+            Done();
             return;
         }
 
-        if (WorldStyle) ClearWorldPanels();
-
-        _waitTimer?.Kill();
-        _waitTimer = null;
-        bool enough = here >= Math.Max(2, Config.MinPlayers);
-        if (!everyoneBack && !enough)
+        if (_waitSecondsLeft > 0)
         {
-            Announce($"Gave up waiting - {here} of {_expectedPlayers} are back.");
-        }
-        else if (!everyoneBack)
-        {
-            Announce($"Starting with {here} of {_expectedPlayers} - anyone else who joins goes in the pool.");
+            if (WorldStyle) WorldWaitPanel();
+            if (_waitSecondsLeft % 15 == 0)
+            {
+                Announce($"Still waiting on {MissingCaptains()} - {_waitSecondsLeft}s.");
+            }
+            return;
         }
 
-        _joinWindowSeconds = Math.Max(0, _waitSecondsLeft);
-        // min_players still applies: better to stop and let an admin decide than to draft a 1v1 by accident.
-        AfterTick(() => StartDraft(force: false));
+        // Out of time with an armband nobody is wearing. Somebody here takes it: whoever was in the room
+        // that voted this map in, if any of them are still around, and anybody at all if not. An armband
+        // on a player who is not coming back is a pug that never starts.
+        var here = HumanPlayers().Select(Id).ToList();
+        if (first == null) _captain1 = ReplaceCaptain(here, _captain2);
+        if (second == null || _captain2 == _captain1) _captain2 = ReplaceCaptain(here, _captain1);
+
+        if (_captain1 == 0 || _captain2 == 0 || _captain1 == _captain2)
+        {
+            Announce("Not enough players here to pick two captains - an admin can !pug start again.");
+            _waitTimer?.Kill();
+            _waitTimer = null;
+            return;
+        }
+
+        Announce($"Gave up waiting: {Colorize("{green}")}{Name(_captain1)}{Colorize("{default}")} and "
+            + $"{Colorize("{green}")}{Name(_captain2)}{Colorize("{default}")} are the captains.");
+        Done();
+
+        void Done()
+        {
+            if (WorldStyle) ClearWorldPanels();
+            _waitTimer?.Kill();
+            _waitTimer = null;
+            _joinWindowSeconds = Math.Max(0, _waitSecondsLeft);
+            // force, because the headcount was checked when the pug started and the room has not changed
+            // since: waiting on min_players here would stop a pug that is already under way.
+            AfterTick(() => StartDraft(force: true));
+        }
+    }
+
+    private string MissingCaptains()
+    {
+        var missing = new List<string>();
+        if (PlayerBySteamId(_captain1) == null) missing.Add(Name(_captain1));
+        if (PlayerBySteamId(_captain2) == null) missing.Add(Name(_captain2));
+        return missing.Count == 0 ? "nobody" : string.Join(" and ", missing);
+    }
+
+    // The people who voted this map in come first - they were here a minute ago and chose to be - and
+    // anybody else present after that.
+    private ulong ReplaceCaptain(List<ulong> here, ulong other)
+    {
+        var fromThePool = here
+            .Where(steamId => steamId != other && _expectedRoster.ContainsKey(steamId))
+            .OrderBy(_ => _rng.Next())
+            .ToList();
+        if (fromThePool.Count > 0) return fromThePool[0];
+
+        return DrawCaptain(here, other);
     }
 
     private void StartDraft(bool force, bool skipMatchCheck = false)
