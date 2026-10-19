@@ -110,8 +110,8 @@ public partial class Gpp
         _panelViewer = player;
         Announce("World text panel: map select, then the draft, 10s each. !pug panel stop ends it.");
 
-        var maps = Config.MapPool.Take(12).Select((map, i) => $"{i + 1,2}  {map.Label}").ToList();
-        string mapPanel = "PICK A MAP\n\n" + Columned(maps, 3) + "\n\ntype !1 - !12 in chat";
+        var maps = Config.MapPool.Take(12).Select((map, i) => Cell(i, map.Label)).ToList();
+        string mapPanel = "PICK A MAP\n\n" + Columned(maps, 3) + "\n\ntype the number in chat";
 
         // Eighteen, which is a twenty-man pug once the two captains are out of the pool - the case
         // that decides whether one column can work at all.
@@ -121,15 +121,29 @@ public partial class Gpp
             "☆Supreme☆Toxicity☆", "Madzie", "Kittana", "Tani Rani", "giant panda!",
             "SeventeenMidgets", "BadWolfKnight", "peterwrinkle", "da iceman", "Breezy", "Tea.",
         };
-        // One name per line: padding columns with spaces only lines up in a monospace font, and this is
-        // not one. Real columns would want each column as its own entity, positioned.
+        // Three across. Space padding against a proportional font only lines up approximately - the
+        // columns drift by up to a space - but a clipped name in roughly the right place reads far
+        // better than eighteen lines running off the top of the screen. Exact columns need one entity
+        // per column, which is the next version.
         string draftPanel = "YOUR PICK\n\n"
-            + string.Join("\n", names.Select((name, i) => $"{i + 1,2}  {name}"))
-            + "\n\n30s   18 left   type !1 - !18";
+            + Columned(names.Select((name, i) => Cell(i, name)).ToList(), 3)
+            + "\n\n30s   18 left";
 
         Spawn(mapPanel);
         AddTimer(10.0f, () => { if (_panelEntity != null) SetText(draftPanel); });
         AddTimer(20.0f, StopWorldPanel);
+    }
+
+    // "!4  Fitzwillia" - the bang included, because the number on its own left people typing the name
+    // or "vote 4", and what they have to type is the whole point of the cell. Names are clipped rather
+    // than wrapped: at twelve characters it is still obvious who it is, and a column that stays put is
+    // worth more than the last three letters of somebody's tag.
+    private const int NameWidth = 12;
+
+    private static string Cell(int index, string name)
+    {
+        string clipped = name.Length <= NameWidth ? name : name[..NameWidth];
+        return $"!{index + 1,-2} {clipped}";
     }
 
     // Padded columns, the same idea as the centre panel's but without a width budget to fight: the
