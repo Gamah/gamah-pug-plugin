@@ -184,11 +184,21 @@ public partial class Gpp
 
         // Captains are drawn now, from the people who actually voted the map in - after a map change the
         // room fills in reconnect order, and that would hand the armbands to whoever loads fastest.
+        //
+        // Anyone who put their hand up in the sign-up window keeps theirs: this draw is only for the
+        // armbands nobody volunteered for. Taking both every time is how "Gamah volunteered - the other
+        // captain is drawn at random" was followed, ninety seconds later, by two other people being made
+        // captains. A volunteer who has left in the meantime is drawn over, which is what the liveness
+        // check is for.
         if (here.Count >= 2)
         {
-            var shuffled = here.Select(Id).OrderBy(_ => _rng.Next()).ToList();
-            _captain1 = shuffled[0];
-            _captain2 = shuffled[1];
+            var ids = here.Select(Id).ToList();
+            if (_captain1 != 0 && !ids.Contains(_captain1)) _captain1 = 0;
+            if (_captain2 != 0 && !ids.Contains(_captain2)) _captain2 = 0;
+            if (_captain2 == _captain1) _captain2 = 0;
+
+            if (_captain1 == 0) _captain1 = DrawCaptain(ids, _captain2);
+            if (_captain2 == 0) _captain2 = DrawCaptain(ids, _captain1);
             foreach (var player in here) _names[Id(player)] = player.PlayerName;
             Announce($"Captains: {Colorize("{green}")}{Name(_captain1)}{Colorize("{default}")} and "
                 + $"{Colorize("{green}")}{Name(_captain2)}{Colorize("{default}")} - they knife for first pick on the new map.");
