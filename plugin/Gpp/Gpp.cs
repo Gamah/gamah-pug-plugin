@@ -274,6 +274,16 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
                 if (arg == "stop") { StopPreview(); StopHud(); Reply(command, "Preview stopped."); }
                 else HudPreview();
                 break;
+            case "panel":
+                // !pug panel [distance] [fontsize], or !pug panel stop
+                if (arg == "stop") AfterTick(StopWorldPanel);
+                else
+                {
+                    float distance = command.ArgCount > 2 && float.TryParse(command.ArgByIndex(2), out float d) ? d : 0;
+                    float font = command.ArgCount > 3 && float.TryParse(command.ArgByIndex(3), out float f) ? f : 0;
+                    AfterTick(() => WorldPanelDemo(player, distance, font));
+                }
+                break;
             case "scroll":
                 ScrollProbe();
                 break;
