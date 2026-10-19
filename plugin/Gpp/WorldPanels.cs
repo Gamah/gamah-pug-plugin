@@ -229,28 +229,31 @@ public partial class Gpp
     {
         string left = LeftBoard();
         string right = RightBoard();
-        string winner = TeamName(WinningCaptain());
-        string loser = TeamName(WinningCaptain() == _captain1 ? _captain2 : _captain1);
+        string winner = Name(WinningCaptain());
+        string on = Side(_knifeSide);
+        string other = Side(OtherSide(_knifeSide));
 
         foreach (var player in HumanPlayers())
         {
             bool mine = Id(player) == WinningCaptain()
                 || (!Config.Match.SideChoiceCaptainOnly && player.Team == _knifeSide);
 
-            string panel = WorldLayout.MainPanel(
-                mine ? "type .stay or .switch" : $"{Name(WinningCaptain())} is picking the side",
-                [
-                    WorldLayout.Section.Of($"{WorldLayout.Clip(winner)} won the knife round",
-                        $"they are on {SideName(_knifeSide)} right now"),
-                    WorldLayout.Section.Of("WHAT THE TWO DO",
-                        $".stay     {WorldLayout.Clip(winner)} starts {SideName(_knifeSide)}",
-                        $".switch   {WorldLayout.Clip(winner)} starts {SideName(OtherSide(_knifeSide))}"),
-                    WorldLayout.Section.Of("NEXT",
-                        mine ? "the match goes live the moment you pick" : $"{WorldLayout.Clip(loser)} takes whatever is left",
-                        "then everybody moves in Discord"),
-                ],
-                WorldLayout.Footer(_matchMap),
-                _hudTicks);
+            // Somebody who cannot answer does not need to be told what the two commands do. They need to
+            // know who the room is waiting on and that nothing is being asked of them - the first panel
+            // here spelled out both commands to nine people who could not type either.
+            string panel = mine
+                ? WorldLayout.MainPanel("type .stay or .switch",
+                    [
+                        WorldLayout.Section.Of($"you won the knife, on {on}"),
+                        WorldLayout.Section.Of($".stay      keep {on}", $".switch    take {other}"),
+                    ],
+                    WorldLayout.Footer(_matchMap), _hudTicks)
+                : WorldLayout.MainPanel($"{winner} is picking the side",
+                    [
+                        WorldLayout.Section.Of($"they won the knife, on {on}"),
+                        WorldLayout.Section.Of("you start on whatever is left"),
+                    ],
+                    WorldLayout.Footer(_matchMap), _hudTicks);
             WorldShow(player, panel, left, right);
         }
     }

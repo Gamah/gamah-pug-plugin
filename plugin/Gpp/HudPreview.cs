@@ -246,11 +246,8 @@ public partial class Gpp
 
             ("side choice", left => (WorldLayout.MainPanel("type .stay or .switch",
             [
-                WorldLayout.Section.Of("team ada won the knife round", "they are on CT right now"),
-                WorldLayout.Section.Of("WHAT THE TWO DO",
-                    ".stay     team ada starts CT", ".switch   team ada starts T"),
-                WorldLayout.Section.Of("NEXT",
-                    "the match goes live the moment you pick", "then everybody moves in Discord"),
+                WorldLayout.Section.Of("you won the knife, on CT"),
+                WorldLayout.Section.Of(".stay      keep CT", ".switch    take T"),
             ], WorldLayout.Footer("mirage"), _hudTicks),
                 BoardAt("A", teamA[0], teamA.Skip(1).ToList(), 4),
                 BoardAt("B", teamB[0], teamB.Skip(1).ToList(), 4))),

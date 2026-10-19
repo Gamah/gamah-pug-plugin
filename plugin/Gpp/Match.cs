@@ -533,6 +533,15 @@ public partial class Gpp
     private static bool InPostGame() => GameRules()?.GamePhase == 5;
 
     // The drafted team on a side, by name. Falls back to the side's own name for anyone who walked in.
+    // The side itself, not whoever is standing on it. SideName answers with a team name, which on the
+    // side-choice panel read as "they are on team_Blackwolf right now" where it meant CT.
+    private static string Side(CsTeam side) => side switch
+    {
+        CsTeam.CounterTerrorist => "CT",
+        CsTeam.Terrorist => "T",
+        _ => "nobody",
+    };
+
     private string SideName(CsTeam side)
     {
         if (side == CsTeam.None) return "nobody";
