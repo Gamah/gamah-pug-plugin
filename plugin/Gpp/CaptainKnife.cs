@@ -169,8 +169,16 @@ public partial class Gpp
         Logger.LogInformation("Captain knife won by {Winner} ({Why})", Name(winner), why);
         Announce($"{Colorize("{green}")}{Name(winner)}{Colorize("{default}")} picks first ({why}).");
 
-        // Spawns, weapons and freezetime are still the duel's: let the restart settle before picking.
-        AddTimer(2.0f, () => StartDraft(force: true, skipMatchCheck: true));
+        // A death in the duel ends the round, which leaves the loser dead and watching somebody else's
+        // camera for the whole draft - and a dead captain is a captain with no pick list in front of
+        // them, because the boards hang off the pawn you are looking through. So the round is restarted
+        // here rather than left as the duel finished it: both captains come back in spawn, alive, with
+        // their own camera, and the draft starts from a clean round.
+        //
+        // Spawns, weapons and freezetime are still the duel's until that restart settles, which is what
+        // the wait is for.
+        Server.ExecuteCommand("mp_restartgame 1");
+        AddTimer(2.5f, () => StartDraft(force: true, skipMatchCheck: true));
     }
 
     private void ResetKnife()

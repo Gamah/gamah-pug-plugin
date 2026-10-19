@@ -229,6 +229,25 @@ public partial class Gpp
         PromptPick();
         StartHud();
         StartSpectateGuard();
+
+        // Locked where they spawned for as long as the draft runs. A captain reading a pick list has no
+        // reason to be anywhere, and a captain wandering off during their own draft is a captain whose
+        // boards are somewhere else by the time they look up. The lock comes off when the draft ends.
+        AddTimer(1.0f, () => LockCaptains(true));
+    }
+
+    // Both captains held still, or let go. Movement only - they can still look around, which is what the
+    // boards follow.
+    private void LockCaptains(bool locked)
+    {
+        foreach (ulong steamId in new[] { _captain1, _captain2 })
+        {
+            var pawn = PlayerBySteamId(steamId)?.PlayerPawn.Value;
+            if (pawn == null || !pawn.IsValid || pawn.Health <= 0) continue;
+
+            pawn.MoveType = locked ? MoveType_t.MOVETYPE_NONE : MoveType_t.MOVETYPE_WALK;
+            Utilities.SetStateChanged(pawn, "CBaseEntity", "m_MoveType");
+        }
     }
 
     // A captain from the room, never the one already wearing the other armband.
@@ -574,6 +593,7 @@ public partial class Gpp
         _waitTimer = null;
         StopHud();
         StopSpectateGuard();
+        LockCaptains(false);
 
         // Anyone left over (a short pick order, or someone who turned up late) fills the smaller team. Only
         // a pinned team size leaves people in spectator; an auto-sized draft puts everyone in the match.
@@ -710,6 +730,9 @@ public partial class Gpp
 
     private void ResetDraft()
     {
+        // Whatever ended the draft - a finished pick order, !pug cancel, !pug stop - nobody is left
+        // standing still because of it.
+        LockCaptains(false);
         StopHud();
         StopReadyPhase();
         StopSpectateGuard();

@@ -468,13 +468,34 @@ public partial class Gpp
         var alive = player.PlayerPawn.Value;
         if (alive != null && alive.IsValid && alive.Health > 0 && alive.AbsOrigin != null) return alive;
 
+        // Dead, or in spectator. Both are ordinary states during a pug and both used to draw nothing:
+        // everybody in the pool is held in spectator for the draft, and the captain who loses the knife
+        // is dead for the whole of it - which is to say the two people who most need the pick list were
+        // the ones without it.
+        //
+        // The camera in both cases is somebody else's eyes, so the boards hang off whoever is being
+        // watched. The observer pawn is tried before m_hPawn because a dead player keeps a corpse at
+        // m_hPawn, and a board at the corpse is a board nobody is looking at.
+        var observer = player.ObserverPawn.Value;
+        var watched = Watched(observer) ?? Watched(player.Pawn.Value);
+        if (watched != null) return watched;
+
+        if (observer != null && observer.IsValid && observer.AbsOrigin != null) return observer;
+
         var pawn = player.Pawn.Value;
+        return pawn != null && pawn.IsValid && pawn.AbsOrigin != null ? pawn : null;
+    }
+
+    // Whoever this pawn is watching, if it is watching anybody.
+    private static CBasePlayerPawn? Watched(CBasePlayerPawn? pawn)
+    {
         if (pawn == null || !pawn.IsValid) return null;
 
-        var watching = pawn.ObserverServices?.ObserverTarget?.Value?.As<CBasePlayerPawn>();
-        if (watching != null && watching.IsValid && watching.AbsOrigin != null) return watching;
+        var target = pawn.ObserverServices?.ObserverTarget?.Value;
+        if (target == null || !target.IsValid) return null;
 
-        return pawn.AbsOrigin == null ? null : pawn;
+        var watched = target.As<CBasePlayerPawn>();
+        return watched.IsValid && watched.AbsOrigin != null ? watched : null;
     }
 
     // The view angle, which is the one field that is on every pawn. EyeAngles is only on CCSPlayerPawn,
