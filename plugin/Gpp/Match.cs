@@ -271,6 +271,48 @@ public partial class Gpp
         Announce($"{Colorize("{green}")}{name}{Colorize("{default}")} won the knife ({why}).");
         Prompt("Pick a side.", ".stay or .switch", $"{name} only");
         StartMatchHud();
+        StartSideClock();
+    }
+
+    // Thirty seconds to call it, then the side they are already standing on.
+    //
+    // A side choice that waits forever is a pug that waits forever: the winning captain can be loading,
+    // arguing in voice, or - on a test server - a bot that will never type anything. Staying is the
+    // choice that changes nothing, so it is the safe thing to do when nobody says otherwise.
+    private const int SideChoiceSeconds = 30;
+
+    internal int _sideSecondsLeft;
+
+    private CounterStrikeSharp.API.Modules.Timers.Timer? _sideTimer;
+
+    private void StartSideClock()
+    {
+        _sideSecondsLeft = SideChoiceSeconds;
+        _sideTimer?.Kill();
+        _sideTimer = AddTimer(1.0f, () =>
+        {
+            if (_matchPhase != MatchPhase.SideChoice)
+            {
+                AfterTick(StopSideClock);
+                return;
+            }
+            if (--_sideSecondsLeft > 0) return;
+
+            AfterTick(() =>
+            {
+                StopSideClock();
+                if (_matchPhase != MatchPhase.SideChoice) return;
+                Announce("No call in 30s - staying.");
+                ChooseSide(null, stay: true);
+            });
+        }, CounterStrikeSharp.API.Modules.Timers.TimerFlags.REPEAT);
+    }
+
+    private void StopSideClock()
+    {
+        _sideTimer?.Kill();
+        _sideTimer = null;
+        _sideSecondsLeft = 0;
     }
 
     // The side that won the knife round, while the choice is open.
@@ -329,6 +371,8 @@ public partial class Gpp
             player!.PrintToChat(Prefix() + $"{Name(WinningCaptain())} picks the side for your team.");
             return;
         }
+
+        StopSideClock();
 
         // Named before the swap: afterwards the winning side is the other team's.
         string chooser = SideName(_knifeSide);

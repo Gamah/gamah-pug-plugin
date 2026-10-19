@@ -246,10 +246,10 @@ public partial class Gpp
             string panel = mine
                 ? WorldLayout.MainPanel("you won the knife - .stay or .switch",
                     [WorldLayout.Section.Of($".stay      stay on {on}", $".switch    switch to {other}")],
-                    WorldLayout.Footer(_matchMap), _hudTicks)
+                    WorldLayout.Footer(_matchMap, $"{_sideSecondsLeft}s - staying if you say nothing"), _hudTicks)
                 : WorldLayout.MainPanel($"{winner} won the knife",
                     [WorldLayout.Section.Of("they choose to stay or switch")],
-                    WorldLayout.Footer(_matchMap), _hudTicks);
+                    WorldLayout.Footer(_matchMap, $"{_sideSecondsLeft}s"), _hudTicks);
             WorldShow(player, panel, left, right);
         }
     }
