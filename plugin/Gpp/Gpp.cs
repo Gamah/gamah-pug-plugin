@@ -301,6 +301,9 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
                 // standing in the same spot. "orient" is the default; see Config.HudAnchor.
                 Reply(command, SetAnchor(arg, command.ArgCount > 3 ? command.ArgByIndex(3) : ""));
                 break;
+            case "probe":
+                AfterTick(() => JustifyProbe(player));
+                break;
             case "sides":
                 // Where the two team boards sit, tuned on screen rather than guessed at.
                 Reply(command, SetSides(arg,

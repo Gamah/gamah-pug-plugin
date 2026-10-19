@@ -136,8 +136,8 @@ public class WorldLayoutTests
     {
         // The whole point of the fixed boards: an empty team and a full one are the same block, so the
         // furniture does not move while the draft runs.
-        string empty = WorldLayout.TeamBoard("A", "Ada", [], WorldLayout.Align.Right);
-        string full = WorldLayout.TeamBoard("A", "Ada", Names.Take(9), WorldLayout.Align.Right);
+        string empty = WorldLayout.TeamBoard("A", "Ada", []);
+        string full = WorldLayout.TeamBoard("A", "Ada", Names.Take(9));
 
         Show("team board, first pick", empty);
         Show("team board, full", full);
@@ -159,7 +159,10 @@ public class WorldLayoutTests
         Assert.Equal(WorldLayout.PanelLines, WorldLayout.LineCount(longest));
         // The footer is the bottom line of both, so the clock does not wander up the screen when a list
         // gets short.
-        Assert.EndsWith("mirage", shortest.Split('\n')[^1].TrimEnd());
+        // The bottom line is the rule that holds the board's width; the footer is the line above it.
+        Assert.EndsWith("mirage", shortest.Split('\n')[^2].TrimEnd());
+        Assert.All(new[] { shortest, longest }, panel =>
+            Assert.Equal(WorldLayout.Rule(WorldLayout.MainBoardWidth), panel.Split('\n')[^1]));
     }
 
     private static int Widest(string panel) => panel.Split('\n').Max(HudMetrics.Width);
@@ -210,7 +213,10 @@ public class WorldLayoutTests
             // Every one of them measures the same, which is only true while the widest line any panel
             // can hold still fits inside MainBoardWidth. When that stops being true this fails rather
             // than the boards quietly going back to breathing.
-            Assert.InRange(Widest(panel), WorldLayout.MainBoardWidth, WorldLayout.MainBoardWidth + HudMetrics.Width(' '));
+            // Every board measures the rule's width exactly - which is only true while the widest line a
+            // panel can hold still fits inside it. When that stops being true this fails, rather than
+            // the boards quietly going back to breathing.
+            Assert.Equal(HudMetrics.Width(WorldLayout.Rule(WorldLayout.MainBoardWidth)), Widest(panel));
         }
     }
 }

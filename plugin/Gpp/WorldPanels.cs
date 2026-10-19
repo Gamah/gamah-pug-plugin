@@ -37,14 +37,12 @@ public partial class Gpp
     //
     // They start as the two captains and grow a line per pick. A name leaving the middle panel and
     // appearing under a captain *is* the feedback that the pick landed - nothing else has to announce it.
-    private string TeamBoard(string label, ulong captain, List<ulong> team, WorldLayout.Align align) =>
-        WorldLayout.TeamBoard(label, Name(captain),
-            team.Where(steamId => steamId != captain).Select(Name), align);
+    private string TeamBoard(string label, ulong captain, List<ulong> team) =>
+        WorldLayout.TeamBoard(label, Name(captain), team.Where(steamId => steamId != captain).Select(Name));
 
-    // The left board's text is justified towards the middle one, so its padding goes on the outside.
-    private string LeftBoard() => TeamBoard(TeamALabel(), _captain1, _team1, WorldLayout.Align.Right);
+    private string LeftBoard() => TeamBoard(TeamALabel(), _captain1, _team1);
 
-    private string RightBoard() => TeamBoard(TeamBLabel(), _captain2, _team2, WorldLayout.Align.Left);
+    private string RightBoard() => TeamBoard(TeamBLabel(), _captain2, _team2);
 
     private string TeamALabel() => "A";
 

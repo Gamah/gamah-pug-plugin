@@ -52,7 +52,9 @@ internal static class HudMetrics
 
     internal static int Width(char c) => c switch
     {
-        ' ' or '|' or 'i' or 'l' or 'j' or 'I' or '.' or ',' or '\'' or ';' or ':' or '!' => Narrow,
+        // U+00A0 is the padding character the world panel holds its width with - see WorldLayout.Pad -
+        // so it has to measure as the space it is drawn as.
+        ' ' or '\u00a0' or '|' or 'i' or 'l' or 'j' or 'I' or '.' or ',' or '\'' or ';' or ':' or '!' => Narrow,
         'a' or 'e' or 'f' or 'r' or 't' or 's' or 'c' or 'z' => Mid,
         'o' or 'n' or 'b' or 'd' or 'g' or 'h' or 'k' or 'p' or 'q' or 'u' or 'v' or 'x' or 'y' => Round,
         >= '0' and <= '9' => Round,

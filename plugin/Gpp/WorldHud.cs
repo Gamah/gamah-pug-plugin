@@ -259,7 +259,7 @@ public partial class Gpp
         entity.DepthOffset = 0f;
         // The side boards are justified towards the middle one so the gap between the three stays the
         // gap you set, whatever length the names on them happen to be.
-        entity.JustifyHorizontal = which switch
+        entity.JustifyHorizontal = _probeJustify ?? which switch
         {
             Board.Left => PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_RIGHT,
             Board.Right => PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_LEFT,
@@ -624,6 +624,81 @@ public partial class Gpp
         "pawn" => "parented to the player model: the body yaw, which snaps and lags behind your aim.",
         _ => "no parent at all - moved by the server every tick, so it trails about a tenth of a second.",
     };
+
+    // !pug probe - which justification actually centres a board, and whether the padding is what moves
+    // it off.
+    //
+    // The middle board sits left of the crosshair and walks further left as its content widens. Both of
+    // those are what a block anchored at its right edge does, but JustifyHorizontal is set to CENTER
+    // before the entity spawns, so something between that field and the screen disagrees - the text
+    // plane is built with a roll of 90 and a yaw a quarter turn behind the viewer's, and which way its
+    // own horizontal axis runs is not something the schema says.
+    //
+    // So: four boards, five seconds each, one of them centred. Nothing here is a guess that ships - it
+    // is the measurement that decides which one does.
+    private int _probeStep;
+
+    internal void JustifyProbe(CCSPlayerController? player)
+    {
+        if (player == null || !player.IsValid)
+        {
+            Logger.LogInformation("!pug probe draws in front of a player - run it in game.");
+            return;
+        }
+
+        ClearWorldPanels();
+        _probeStep = 0;
+        Announce("Justify probe: 4 boards, 5s each. Say which number sits on your crosshair.");
+
+        _probeTimer?.Kill();
+        _probeTimer = AddTimer(1.0f, () =>
+        {
+            int index = _probeStep / 5;
+            bool first = _probeStep % 5 == 0;
+            _probeStep++;
+
+            if (index >= 4)
+            {
+                // Out of the tick before killing the timer, the way every other probe in this plugin
+                // does it: CSS walks its timer vector by index and a kill from inside a tick corrupts
+                // the walk.
+                AfterTick(() =>
+                {
+                    _probeTimer?.Kill();
+                    _probeTimer = null;
+                    _probeJustify = null;
+                    ClearWorldPanels();
+                    Announce("Probe done. Which number was centred - 1, 2, 3 or 4?");
+                });
+                return;
+            }
+
+            var (name, justify, padded) = index switch
+            {
+                0 => ("1 CENTER, padded wide", PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER, true),
+                1 => ("2 CENTER, no padding", PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER, false),
+                2 => ("3 LEFT, padded wide", PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_LEFT, true),
+                _ => ("4 RIGHT, padded wide", PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_RIGHT, true),
+            };
+
+            if (first)
+            {
+                Announce(name);
+                _probeJustify = justify;
+                ClearWorldPanels();
+            }
+
+            string body = "XXXX   " + name + "   XXXX\n\nthe X's mark the edges of the text.\n"
+                + "this board should sit on your crosshair.";
+            ShowWorldPanel(player, padded
+                ? WorldLayout.Fixed(body, 12, WorldLayout.MainBoardWidth)
+                : body);
+        }, CounterStrikeSharp.API.Modules.Timers.TimerFlags.REPEAT);
+    }
+
+    // Which justification the probe is currently drawing with; SpawnBoard reads it so the probe does not
+    // need a spawn path of its own.
+    private PointWorldTextJustifyHorizontal_t? _probeJustify;
 
     // !pug anchor [orient|attachment|pawn|teleport] [attachment name]
     //

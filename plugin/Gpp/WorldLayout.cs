@@ -158,14 +158,16 @@ internal static class WorldLayout
     internal static string MainPanel(string title, IEnumerable<Section> sections, string? footer, int ticks)
     {
         var rows = Panel(title, sections, footer, ticks).Split('\n').ToList();
-        if (rows.Count < PanelLines && !string.IsNullOrEmpty(footer))
+        // The footer sits on the last line above the rule, so the clock is in the same place on every
+        // panel whatever is above it.
+        if (rows.Count < PanelLines - 1 && !string.IsNullOrEmpty(footer))
         {
             string last = rows[^1];
             rows.RemoveAt(rows.Count - 1);
-            while (rows.Count < PanelLines - 1) rows.Add("");
+            while (rows.Count < PanelLines - 2) rows.Add("");
             rows.Add(last);
         }
-        return Fixed(string.Join('\n', rows), PanelLines, MainBoardWidth, Align.Centre);
+        return Fixed(string.Join('\n', rows), PanelLines, MainBoardWidth);
     }
 
     // The clock and the count that sit in the footer of nearly every panel. Seconds first because it is
@@ -195,46 +197,37 @@ internal static class WorldLayout
     internal const int TeamBoardWidth = 260;
     internal const int MainBoardWidth = 900;
 
-    // Which edge a board's text is justified to, which decides where its padding goes. Padding a
-    // centre-justified board on one side only moves the text: the block gets wider to the right, so the
-    // words walk to the left as the content changes. That was the middle panel wandering.
-    internal enum Align { Centre, Left, Right }
-
     // Pads a composed panel to exactly `lines` tall and `width` wide, padding whichever line is widest
     // so nothing already written gets re-flowed.
-    internal static string Fixed(string panel, int lines, int width, Align align = Align.Centre)
+    internal static string Fixed(string panel, int lines, int width)
     {
         var rows = panel.Split('\n').ToList();
-
-        int widest = 0;
-        for (int row = 0; row < rows.Count; row++)
-        {
-            if (HudMetrics.Width(rows[row]) > HudMetrics.Width(rows[widest])) widest = row;
-        }
-        rows[widest] = Pad(rows[widest], width, align);
-
-        while (rows.Count < lines) rows.Add("");
-        if (rows.Count > lines) rows = [.. rows.Take(lines)];
+        if (rows.Count > lines - 1) rows = [.. rows.Take(lines - 1)];
+        while (rows.Count < lines - 1) rows.Add("");
+        rows.Add(Rule(width));
         return string.Join('\n', rows);
     }
 
-    // Spaces until the line measures at least `width`, laid either side of it or after it depending on
-    // which edge the board is justified to. A space is the narrowest glyph there is, so this lands
-    // within one space of the target rather than exactly on it.
-    private static string Pad(string line, int width, Align align)
-    {
-        int have = HudMetrics.Width(line);
-        if (have >= width) return line;
+    // A board's width is held by a rule - a line of dashes as wide as the board - and not by padding
+    // the text with spaces.
+    //
+    // Padding was tried twice and measured both times. Ordinary spaces: the renderer keeps trailing ones
+    // and trims leading ones, so a centre-justified board is drawn as its content plus whatever is on
+    // the right, and the words sit left of the box. Non-breaking spaces: the box moved 556 pixels right
+    // of the crosshair at 4K. Either way the board's own width depends on which end of a line the
+    // renderer decided to believe, which is not something to build furniture on.
+    //
+    // A rule is two visible glyphs at the extremes and no ambiguity: the box is exactly as wide as the
+    // rule, the rule is the same on every board, and it centres because it is symmetrical. It costs the
+    // bottom line of the twelve, which also pins the board's height - a run of blank lines at the end
+    // would be trimmed the same way the spaces were.
+    // [SOURCE: both behaviours measured from screenshots of a 4K client, 2026-10-19.]
+    private const char RuleChar = '-';
 
-        // Rounded up, not down: landing just under the target leaves each board a different width by up
-        // to a space, which is the difference between furniture and furniture that shuffles.
-        int spaces = (int)Math.Ceiling((width - have) / (double)HudMetrics.Width(' '));
-        return align switch
-        {
-            Align.Centre => new string(' ', spaces / 2) + line + new string(' ', spaces - (spaces / 2)),
-            Align.Right => new string(' ', spaces) + line,
-            _ => line + new string(' ', spaces),
-        };
+    internal static string Rule(int width)
+    {
+        int count = Math.Max(4, (int)Math.Ceiling(width / (double)HudMetrics.Width(RuleChar)));
+        return new string(RuleChar, count);
     }
 
     // One team's board: the label, the captain under it, then ten slots that are there from the first
@@ -243,7 +236,7 @@ internal static class WorldLayout
     //
     // Composed here rather than through Panel(): Panel puts a blank line after every block, which on a
     // board exactly as tall as its content pushed the last slot off the bottom.
-    internal static string TeamBoard(string label, string captain, IEnumerable<string> picks, Align align)
+    internal static string TeamBoard(string label, string captain, IEnumerable<string> picks)
     {
         var filled = picks.Select(Clip).ToList();
         var slots = new List<string>();
@@ -253,6 +246,6 @@ internal static class WorldLayout
         }
 
         string text = $"TEAM {label.ToUpperInvariant()}\n{Clip(captain)}\n\n" + string.Join('\n', slots);
-        return Fixed(text, TeamBoardLines, TeamBoardWidth, align);
+        return Fixed(text, TeamBoardLines, TeamBoardWidth);
     }
 }

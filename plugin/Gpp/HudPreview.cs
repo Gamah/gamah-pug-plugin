@@ -151,8 +151,7 @@ public partial class Gpp
         // Boards grow over the step for the same reason: the whole idea of the side boards is that a
         // name leaves the middle and lands under a captain.
         string BoardAt(string label, string captain, List<string> team, int filled) =>
-            WorldLayout.TeamBoard(label, captain, team.Take(Math.Clamp(filled, 0, team.Count)),
-                label == "A" ? WorldLayout.Align.Right : WorldLayout.Align.Left);
+            WorldLayout.TeamBoard(label, captain, team.Take(Math.Clamp(filled, 0, team.Count)));
 
         var steps = new List<(string Name, Func<int, (string Main, string? Left, string? Right)> Boards)>
         {
