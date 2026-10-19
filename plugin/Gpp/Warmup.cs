@@ -49,8 +49,7 @@ public partial class Gpp
         // A series end restores whatever cvars MatchZy changed for it, which can put an old whitelist
         // back; re-assert after, not before.
         NeverKickAnyone();
-        KeepMatchZyAsleep();
-        AllowUnlimitedWarmupBuys();
+        PutMatchZyBackToSleep();
 
         // And land in a held warmup rather than a live round ticking down with nobody in it.
         Server.ExecuteCommand("mp_ignore_round_win_conditions 0;mp_warmup_start;"
@@ -59,20 +58,42 @@ public partial class Gpp
         Announce($"Everything stopped - back to warmup. {why}");
     }
 
-    private CounterStrikeSharp.API.Modules.Timers.Timer? _moneyTimer;
+    private CounterStrikeSharp.API.Modules.Timers.Timer? _warmupTimer;
 
-    private void StartWarmupMoney()
+    // Null until the first tick, so the buy cap is written once on load whichever phase the server is in.
+    private bool? _wasInWarmup;
+
+    private void StartWarmupWatch()
     {
-        if (Config.WarmupMoney <= 0) return;
-        _moneyTimer?.Kill();
-        _moneyTimer = AddTimer(1.0f, WarmupMoneyTick, TimerFlags.REPEAT);
+        _warmupTimer?.Kill();
+        _warmupTimer = AddTimer(1.0f, WarmupTick, TimerFlags.REPEAT);
+    }
+
+    // Warmup hands out unlimited money, so a per-round buy cap reads as a bug - it is what stops a fifth
+    // zeus, and dying does not clear it because a held warmup is one long round. mp_weapons_allow_zeus is
+    // only a 0/1 toggle; the cap is mp_weapons_allow_typecount, which defaults to 5.
+    //
+    // Followed on the warmup edge rather than asserted at load or on map start, because the server has to
+    // get the cap back for a live match and nothing else puts it back: MatchZy/warmup.cfg lifts it,
+    // live.cfg says nothing about it, and the open handoff loads no match config to say it either.
+    private void SyncBuyCap()
+    {
+        bool warmup = InWarmupPeriod();
+        if (_wasInWarmup == warmup) return;
+
+        _wasInWarmup = warmup;
+        Server.ExecuteCommand(warmup
+            ? "mp_weapons_allow_zeus 1;mp_weapons_allow_typecount -1"
+            : "mp_weapons_allow_zeus 1;mp_weapons_allow_typecount 5");
     }
 
     // Written every second rather than once a round. mp_maxmoney caps what the engine will hand out and
     // mp_startmoney is only the round-start grant, so neither survives a player actually spending it -
     // topping the account back up is the only thing that reads as "money is not a thing in warmup".
-    private void WarmupMoneyTick()
+    private void WarmupTick()
     {
+        SyncBuyCap();
+
         if (Config.WarmupMoney <= 0 || !InWarmupPeriod()) return;
 
         foreach (var player in HumanPlayers())

@@ -48,14 +48,13 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
     {
         NeverKickAnyone();
         KeepMatchZyAsleep();
-        AllowUnlimitedWarmupBuys();
 
         HookMatchZy();
         HookJoins();
         HookReadyGate();
         HookCaptainKnife();
         HookFunCommands();
-        StartWarmupMoney();
+        StartWarmupWatch();
         RegisterListener<Listeners.OnMapStart>(OnMapStart);
         RegisterListener<Listeners.OnClientDisconnect>(OnClientDisconnect);
     }
@@ -128,21 +127,19 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         Server.ExecuteCommand("matchzy_autostart_mode 0");
     }
 
-    // Warmup hands out unlimited money, so a per-round buy cap reads as a bug - it is what stops a fifth
-    // zeus, and dying does not clear it because warmup is one long round. mp_weapons_allow_zeus is only a
-    // 0/1 toggle; the cap is mp_weapons_allow_typecount, which defaults to 5 and which neither sleep.cfg
-    // nor live.cfg sets, so it sits at the default unless something asserts it. Lifted here wherever the
-    // server lands back in an idle warmup; the match config asks for 5 again at the handoff.
-    private static void AllowUnlimitedWarmupBuys()
+    // autostart_mode only decides what MatchZy does on a map start, so it is not enough on its own: the
+    // open handoff wakes MatchZy with css_match, and a match that ends leaves it awake in match mode with
+    // its ready phase - and its unready chat timer - back on. css_sleep refuses while a match is started,
+    // so this is only ever called where the match is already over or abandoned, never from Load().
+    private static void PutMatchZyBackToSleep()
     {
-        Server.ExecuteCommand("mp_weapons_allow_zeus 1;mp_weapons_allow_typecount -1");
+        Server.ExecuteCommand("matchzy_autostart_mode 0;css_sleep");
     }
 
     private void OnMapStart(string mapName)
     {
         NeverKickAnyone();
         KeepMatchZyAsleep();
-        AllowUnlimitedWarmupBuys();
         ClearFunEffects();
 
         if (!_draftPendingMapChange) return;

@@ -56,6 +56,10 @@ public partial class Gpp
             // team menu back here too, in case the draft ended without reaching ReleaseHeldSpectators.
             AfterTick(ReleaseHeldSpectators);
             ReturnDiscordTeams();
+            // Back to a quiet server. A match that ends leaves MatchZy in match mode with its ready phase
+            // available again, which is what arms the repeating "N players are not ready" chat timer on an
+            // idle server; sleep mode is what GPP keeps it in between pugs.
+            PutMatchZyBackToSleep();
             return HookResult.Continue;
         });
 

@@ -16,7 +16,27 @@ public partial class Gpp
             return;
         }
 
+        string mapLabel = _votedMap?.Label ?? Server.MapName;
+
+        // Everything that locks a MatchZy match to its roster is gated on isMatchSetup, and
+        // matchzy_loadmatch is the only thing that sets it: a loaded match kicks anyone who is not in
+        // team1/team2/spectators, forces roster players back onto their drafted side, and moves everyone
+        // else to spectator. [SOURCE: MatchZy 0.9.1 EventHandlers.cs EventPlayerConnectFullHandler,
+        // Utility.cs UpdatePlayersMap/SwitchPlayerTeam, MatchManagement.cs LoadMatchFromJSON, read
+        // 2026-10-19]
+        //
+        // This server wants the opposite: once a pug is running, anyone may walk in and pick a side. So
+        // the normal handoff loads no config at all and starts the match through MatchZy's own ready flow.
+        // Only the veto flow still needs a config, because the veto is MatchZy's and it reads its map pool
+        // from one.
         bool veto = Config.Flow == "draft_then_veto";
+        if (!veto)
+        {
+            _votedMap = null;
+            StartOpenMatch(mapLabel);
+            return;
+        }
+
         var maplist = new JsonArray();
         if (veto)
         {
@@ -58,8 +78,8 @@ public partial class Gpp
                 // Uneven teams are the point: the engine must not even the sides up or refuse a join.
                 ["mp_autoteambalance"] = "0",
                 ["mp_limitteams"] = "0",
-                // Warmup lifts the per-round buy cap (see AllowUnlimitedWarmupBuys) and no MatchZy config
-                // puts it back, so a match has to ask for the engine default itself.
+                // Warmup lifts the per-round buy cap (see SyncBuyCap) and live.cfg says nothing about it,
+                // so a match has to ask for the engine default itself.
                 ["mp_weapons_allow_typecount"] = "5",
             },
             ["team1"] = TeamObject(_captain1, _team1),
@@ -93,7 +113,6 @@ public partial class Gpp
         }
 
         Logger.LogInformation("Wrote match config {Path}", absolutePath);
-        string mapLabel = _votedMap?.Label ?? Server.MapName;
         _votedMap = null;
 
         // matchzy_loadmatch is refused outright while a match is still set up, and the refusal goes to the
@@ -116,6 +135,80 @@ public partial class Gpp
         string team1Name = (string)config["team1"]!["name"]!;
         string team2Name = (string)config["team2"]!["name"]!;
         AddTimer(0.5f, () => LoadMatch(relativePath, team1Name, team2Name, veto, mapLabel));
+    }
+
+    // The open handoff: MatchZy runs the match, the draft just decides who starts where.
+    //
+    // What a match config would have carried has to be said out loud instead - knife round, the ready
+    // threshold, team names - and two things it used to do are gone on purpose: nothing kicks a latecomer,
+    // and nothing drags a player back to their drafted side once the match is live.
+    private void StartOpenMatch(string mapLabel)
+    {
+        string team1Name = TeamName(_captain1);
+        string team2Name = TeamName(_captain2);
+
+        // Bots play the match but cannot ready up, so they do not count towards the threshold.
+        int realPlayers = _team1.Concat(_team2).Count(steamId => !IsBotId(steamId));
+        int minReady = Config.MinReady > 0 ? Math.Min(Config.MinReady, realPlayers) : realPlayers;
+
+        // Last chance before the match: nobody starts a round with a warped camera or a spun view.
+        ClearFunEffects();
+
+        // The draft ran with the round held still; hand MatchZy a normal warmup to start its ready phase in.
+        ReleaseTheRound();
+
+        // Anything still set up at the end of a draft is stale - a match from an earlier pug, or one loaded
+        // before GPP was reloaded and lost track of it.
+        Server.ExecuteCommand("get5_endmatch");
+        _matchLoaded = false;
+
+        // A series end restores the cvars MatchZy changed for it, which can put a whitelist from an older
+        // pug back on - right as this match starts, with half the server outside its roster.
+        NeverKickAnyone();
+
+        AddTimer(0.5f, () =>
+        {
+            Server.ExecuteCommand($"matchzy_knife_enabled_default {(Config.KnifeRound ? "true" : "false")};"
+                + $"matchzy_minimum_ready_required {Math.Max(1, minReady)};"
+                + "mp_autoteambalance 0;mp_limitteams 0");
+
+            // Unquoted on purpose: MatchZy takes the name from the raw argument text, and TeamName() only
+            // ever produces letters, digits and an underscore. Set before match mode, because starting it
+            // writes mp_teamname_1/2 back out of MatchZy's own team data.
+            Server.ExecuteCommand($"css_team1 {team1Name};css_team2 {team2Name}");
+
+            // css_match starts match mode from sleep or practice only, and css_sleep refuses while a match
+            // is started - so the order here is end, sleep, match, or the second pug of a session gets no
+            // ready phase at all and nobody can see why. [SOURCE: MatchZy 0.9.1 Utility.cs StartMatchMode,
+            // SleepMode.cs OnSleepCommand, read 2026-10-19]
+            Server.ExecuteCommand("css_sleep;css_match");
+            AddTimer(1.5f, () => ConfirmOpenMatch(team1Name, team2Name, mapLabel));
+        });
+    }
+
+    // MatchZy exposes no way to ask whether match mode took. css_team1/2 write our names into
+    // mp_teamname_1/2 and starting match mode writes them again, so read those back.
+    private void ConfirmOpenMatch(string team1Name, string team2Name, string mapLabel)
+    {
+        string name1 = ConVar.Find("mp_teamname_1")?.StringValue ?? "";
+        string name2 = ConVar.Find("mp_teamname_2")?.StringValue ?? "";
+
+        if (name1 != team1Name || name2 != team2Name)
+        {
+            Logger.LogError("Match mode did not take - mp_teamname_1/2 are \"{Name1}\"/\"{Name2}\", expected "
+                + "\"{Team1}\"/\"{Team2}\". Check the server console for MatchZy's reason.",
+                name1, name2, team1Name, team2Name);
+            Announce($"{Colorize("{red}")}MatchZy did not start the match{Colorize("{default}")} - teams are "
+                + "set, start it with .match (server console has the reason).");
+            return;
+        }
+
+        _matchLoaded = true;
+        NeverKickAnyone();
+        MoveDiscordTeams();
+        StartReadyGate();
+        Prompt($"Teams set on {mapLabel}.", ".ready", Everybody);
+        StartReadyHud(mapLabel);
     }
 
     private void LoadMatch(string relativePath, string team1Name, string team2Name, bool veto, string mapLabel)
