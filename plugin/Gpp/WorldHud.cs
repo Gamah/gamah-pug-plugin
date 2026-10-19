@@ -578,6 +578,49 @@ public partial class Gpp
             + $" - {rehung} viewer(s) rehung.";
     }
 
+    // What the schema probe chose at load, so the gallery can walk through the mounts and put the real
+    // one back afterwards rather than leaving the server on whatever it showed last.
+    private Follow? _probedFollow;
+
+    // Used by the gallery: switch mount without saying anything in chat, and without the guards that
+    // exist for a human typing it - a step that cannot work on this build is still worth showing, as
+    // itself, so the difference is visible.
+    internal void UseAnchor(string mode)
+    {
+        _probedFollow ??= _follow;
+        var wanted = mode switch
+        {
+            "orient" => Follow.Orient,
+            "attachment" => Follow.Attachment,
+            "pawn" => Follow.Pawn,
+            _ => Follow.Teleport,
+        };
+        if (wanted == _follow) return;
+        if ((wanted == Follow.Orient || wanted == Follow.Attachment) && Schema.GetClassSize("CPointOrient") <= 0) return;
+
+        _follow = wanted;
+        Rehang();
+    }
+
+    internal void RestoreProbedAnchor()
+    {
+        if (_probedFollow == null || _probedFollow == _follow) return;
+        _follow = _probedFollow.Value;
+        _probedFollow = null;
+        Rehang();
+    }
+
+    // One line per mount, so the panel itself says what is being looked at rather than the owner having
+    // to hold four descriptions in their head while turning round.
+    private string MountNote(string mode) => mode switch
+    {
+        "orient" => "point_orient on the pawn: position and facing both predicted by your own client.",
+        "attachment" => $"the same, hung from the model's \"{Config.HudAnchorAttachment}\" attachment."
+            + " If this looks identical to orient, the model has no such attachment.",
+        "pawn" => "parented to the player model: the body yaw, which snaps and lags behind your aim.",
+        _ => "no parent at all - moved by the server every tick, so it trails about a tenth of a second.",
+    };
+
     // !pug anchor [orient|attachment|pawn|teleport] [attachment name]
     //
     // Config is read at plugin load, so comparing four anchors through Gpp.json is four reloads and a

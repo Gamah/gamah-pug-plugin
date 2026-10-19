@@ -13,7 +13,9 @@ namespace Gpp;
 // print fades before anyone can look at it, let alone screenshot it.
 public partial class Gpp
 {
-    private const int PreviewSeconds = 10;
+    // Fifteen seconds a panel: long enough to read it, watch its clock move and decide, without the
+    // gallery becoming something you have to sit through twice.
+    private const int PreviewSeconds = 15;
 
     // Names chosen to break things: the widest glyphs in the font (m, W), a decorated name of the kind
     // people actually use, and a couple of ordinary ones for contrast.
@@ -234,7 +236,33 @@ public partial class Gpp
             ], "type one of them in chat", _hudTicks), null, null)),
         };
 
-        Announce($"World panel preview: {steps.Count} panels, {PreviewSeconds}s each. !pug preview stop ends it.");
+        // The four mounts, at the end, each holding the same three boards so the only thing that changes
+        // is how they track the view. Turn your head during these: what is being judged is the lag and
+        // the swing, not the text.
+        //
+        // These are steps rather than a command to type, so the whole thing is one !pug preview from
+        // beginning to end. The anchor is put back to whatever the schema probe chose when the gallery
+        // finishes.
+        foreach (var mount in new[] { "orient", "attachment", "pawn", "teleport" })
+        {
+            string which = mount;
+            steps.Add(($"mount: {which} - turn your head", left =>
+            {
+                UseAnchor(which);
+                return (WorldLayout.Panel($"mount: {which}",
+                [
+                    WorldLayout.Section.Of("turn your head, look up, look down.",
+                        "the boards should stay where they are relative to you."),
+                    WorldLayout.Section.Of(MountNote(which)),
+                ], WorldLayout.Footer($"{left}s"), _hudTicks),
+                    BoardAt("A", teamA[0], teamA.Skip(1).ToList(), 4),
+                    BoardAt("B", teamB[0], teamB.Skip(1).ToList(), 4));
+            }));
+        }
+
+        Announce($"Gallery: {steps.Count} panels, {PreviewSeconds}s each, "
+            + $"about {(steps.Count * PreviewSeconds) / 60}m{(steps.Count * PreviewSeconds) % 60:00}s. "
+            + "Numbers are called out as they come. !pug preview stop ends it.");
 
         int tick = 0;
         StopPreview();
@@ -250,7 +278,8 @@ public partial class Gpp
             {
                 StopPreview();
                 ClearWorldPanels();
-                Announce("Preview done.");
+                RestoreProbedAnchor();
+                Announce("Gallery done - which numbers were wrong?");
                 return;
             }
 
