@@ -173,6 +173,17 @@ public partial class Gpp
 
         foreach (var player in HumanPlayers())
         {
+            // Nobody to hang a board on - a spectator, or somebody the respawn sweep has not caught yet.
+            // Two lines of centre-screen alert instead: who the room is waiting on, and that being
+            // picked is what puts them in the game. A board drawn for them lands where their camera
+            // is not, which is worse than no board.
+            if (!HasCamera(player))
+            {
+                HideWorldPanel(player.Slot);
+                player.PrintToCenterAlert(Alert($"{Name(onClock)} IS PICKING", "YOU WILL BE SPAWNED WHEN PICKED"));
+                continue;
+            }
+
             string title = Id(player) == onClock
                 ? "your pick - type the number"
                 : $"{Name(onClock)} is picking";

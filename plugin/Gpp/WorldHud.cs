@@ -498,6 +498,10 @@ public partial class Gpp
 
     private static float EyeHeight(CBasePlayerPawn pawn) => pawn.ViewOffset.Z == 0 ? 64f : pawn.ViewOffset.Z;
 
+    // Whether the server can find a camera for this player at all. False means a spectator or somebody
+    // who has not spawned yet, and there is nowhere to hang a board for them.
+    internal bool HasCamera(CCSPlayerController player) => ViewPawn(player) != null;
+
     // Whichever pawn this player is actually looking through.
     //
     // A spectator has no PlayerPawn at all - and during the draft everybody who has not been picked yet
