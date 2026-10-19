@@ -30,14 +30,18 @@ public partial class Gpp
     // this is how that gets judged rather than asserted.
     internal void ScrollProbe()
     {
-        Announce("Scroll probe: 25s. The top line should crawl steadily; the bottom one must not "
-            + "flicker or move. !pug stop ends it.");
+        Announce($"Scroll probe: 40s. Top line ({HudMetrics.Width("SCROLLS: ....5...10....5...20....5...30....5...40....5..END")} units) "
+            + $"should crawl end to end; the bottom one ({HudMetrics.Width("STILL: this must not move")} units, "
+            + $"budget {HudMetrics.LineBudget}) must not move at all.");
 
-        string ruler = "SCROLLING: ....5...10....5...20....5...30....5...40....5...50....5...60"
-            + "....5...70....5...80....5...90...100 <- end";
-        const string still = "STILL: this line fits and must sit perfectly still";
+        // Just over the budget, so it travels end to end inside the probe rather than crawling off
+        // the far side of a minute.
+        string ruler = "SCROLLS: ....5...10....5...20....5...30....5...40....5..END";
+        // Measured, not assumed: the last version of this line was 380 units against a 340 budget, so
+        // the thing that was supposed to sit still scrolled, which is a probe lying to you.
+        const string still = "STILL: this must not move";
 
-        int left = 25;
+        int left = 40;
         _probeTimer?.Kill();
         _probeTimer = AddTimer(1.0f, () =>
         {

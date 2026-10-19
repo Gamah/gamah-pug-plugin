@@ -121,32 +121,37 @@ public class HudLayoutTests
             Assert.True(HudMetrics.Width(line) <= HudMetrics.LineBudget, line));
     }
 
+    // Written in redraws rather than in the constants, so tuning the cadence does not fail the test:
+    // what matters is that it holds still at first, moves within a second or two, never overflows, and
+    // comes back round to the beginning.
     [Fact]
     public void ScrollHoldsThenMovesThenComesBack()
     {
-        // Numbered rather than repeated: "word word word" scrolls through the same handful of windows
-        // because the text repeats, which says nothing about whether the scroll advances.
         string line = string.Join(" ", Enumerable.Range(1, 40).Select(i => $"word{i:00}"));
         int budget = HudMetrics.LineBudget;
+        const int redrawsPerSecond = 10;
 
         string atStart = HudLayout.Scroll(line, budget, 0);
-        string stillHeld = HudLayout.Scroll(line, budget, 2);
-        string moved = HudLayout.Scroll(line, budget, 10);
+        Assert.StartsWith(atStart, line);
+        Assert.Equal(atStart, HudLayout.Scroll(line, budget, 1));   // holds
 
-        Assert.Equal(atStart, stillHeld);               // holds at the start
-        Assert.NotEqual(atStart, moved);                // then moves
-        Assert.True(line.StartsWith(atStart));          // and starts at the beginning
+        int movedAt = Enumerable.Range(1, 4 * redrawsPerSecond)
+            .FirstOrDefault(tick => HudLayout.Scroll(line, budget, tick) != atStart);
+        Assert.True(movedAt > 0, "a long line should start moving within four seconds");
+        Assert.True(movedAt > 2, "it should hold still for a moment before it starts");
 
-        // every window fits, and it comes back round
         var seen = new HashSet<string>();
-        for (int tick = 0; tick < 500; tick++)
+        for (int tick = 0; tick < 2000; tick++)
         {
             string window = HudLayout.Scroll(line, budget, tick);
             Assert.True(HudMetrics.Width(window) <= budget, $"tick {tick}: {HudMetrics.Width(window)} units");
             seen.Add(window);
         }
         Assert.Equal(atStart, HudLayout.Scroll(line, budget, 0));
-        Assert.True(seen.Count > 5, "a long line should scroll through more than a handful of windows");
+        Assert.True(seen.Count > 20, $"a long line should scroll through plenty of windows, saw {seen.Count}");
+
+        // Every window is the line itself, seen through a slot - never a summary of it.
+        foreach (var window in seen) Assert.Contains(window, line);
     }
 
     [Fact]
@@ -197,9 +202,13 @@ public class HudLayoutTests
         Assert.True(first.Length <= HudLayout.AlertWidth);
         Assert.DoesNotContain("…", first);
 
-        // The panel holds still for the first couple of seconds on purpose - at four redraws a second
-        // that is eight of these - so a handful of ticks is not enough to see it move.
-        for (int tick = 0; tick < 12; tick++) HudLayout.BumpPaintTick();
-        Assert.NotEqual(first, HudLayout.Alert(title));
+        // It holds still for a moment on purpose, so bump until it moves rather than guessing how many.
+        bool moved = false;
+        for (int tick = 0; tick < 60 && !moved; tick++)
+        {
+            HudLayout.BumpPaintTick();
+            moved = HudLayout.Alert(title) != first;
+        }
+        Assert.True(moved, "a long alert line should scroll within a few seconds");
     }
 }

@@ -44,7 +44,17 @@ public partial class Gpp
     // actually move, rather than it stepping once a second when the phase clock happens to tick.
     private Action? _repaint;
 
-    private const float RepaintSeconds = 0.25f;
+    // Ten a second. Nothing is drawn unless a panel is up, and a panel is only up when the room is
+    // being asked for something - a vote, a draft, a ready, a pause - never during a live round. The
+    // send below also drops a frame that is identical to the last one, so a panel that is not moving
+    // costs one message a second per player rather than ten.
+    private const float RepaintSeconds = 0.1f;
+
+    // What each player was last sent, and when. PrintToCenter is transient - it fades in a few seconds -
+    // so an unchanged panel still has to be resent, just not ten times a second.
+    private readonly Dictionary<int, (string Text, DateTime When)> _lastSent = [];
+
+    private static readonly TimeSpan ResendAfter = TimeSpan.FromSeconds(1);
 
     private CounterStrikeSharp.API.Modules.Timers.Timer? _repaintTimer;
 
@@ -366,13 +376,13 @@ public partial class Gpp
     // says what is happening and what this player types - with the countdown in it, so a clock is on
     // screen in every phase. Center carries the body underneath, which leaves all four of its lines for
     // content instead of spending one on the instruction.
-    private static void Paint(CCSPlayerController player, string alert, List<string> panel)
+    private void Paint(CCSPlayerController player, string alert, List<string> panel)
     {
         player.PrintToCenterAlert(alert);
         Send(player, panel);
     }
 
-    private static void Broadcast(List<string> panel)
+    private void Broadcast(List<string> panel)
     {
         foreach (var player in Utilities.GetPlayers().Where(p => p.IsValid && !p.IsHLTV)) Send(player, panel);
     }
@@ -391,9 +401,23 @@ public partial class Gpp
 
     // Four lines of eighty, bottom-anchored: anything past that pushes the first line off the top, so the
     // panel is clipped here rather than by the client.
-    private static void Send(CCSPlayerController player, List<string> panel)
+    private void Send(CCSPlayerController player, List<string> panel)
     {
-        player.PrintToCenter(HudLayout.Panel(panel));
+        string text = HudLayout.Panel(panel);
+        var now = DateTime.UtcNow;
+
+        // Unchanged and sent recently: say nothing. Twenty players at ten redraws a second is two
+        // hundred messages a second for a panel that is standing still, and the only one that needs
+        // the bandwidth is the one that is moving.
+        if (_lastSent.TryGetValue(player.Slot, out var last)
+            && last.Text == text
+            && now - last.When < ResendAfter)
+        {
+            return;
+        }
+
+        _lastSent[player.Slot] = (text, now);
+        player.PrintToCenter(text);
     }
 
     // A twelve-name pick list does not fit the four-line budget as one block, so this draws the same list

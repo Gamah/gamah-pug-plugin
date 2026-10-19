@@ -31,25 +31,47 @@ internal static class HudLayout
 
     internal static void BumpPaintTick() => _paintTick++;
 
-    // Per *redraw*, not per second: the panels repaint four times a second (see Gpp.RepaintHz), so this
-    // is about twelve units - a glyph and a bit - of travel a second, in four steps rather than one lurch.
-    // The first version stepped a whole glyph on a 1Hz redraw after sitting still for three seconds,
-    // which on screen read as text that only changed when something else happened.
-    private const int ScrollUnitsPerTick = 3;
-    private const int ScrollHoldTicks = 8;   // two seconds still at each end
+    // Scrolling moves whole characters, because text does. Stepping a fixed number of *units* per
+    // redraw meant three redraws of nothing and then a jump of a wide glyph, which reads as jank
+    // however often it is drawn. One character every TicksPerChar redraws is an even cadence: the
+    // distance varies with the glyph, the timing does not, and timing is what the eye follows.
+    private const int TicksPerChar = 3;     // at 10 redraws a second, about three characters a second
+    private const int HoldTicks = 15;       // a second and a half still at each end
 
     internal static string Scroll(string line, int budget, int tick)
     {
-        int width = Width(line);
-        if (width <= budget) return line;
+        if (Width(line) <= budget) return line;
 
-        // One step per tick across the overflow, with a hold at both ends.
-        int steps = (width - budget + ScrollUnitsPerTick - 1) / ScrollUnitsPerTick;
-        int cycle = steps + (2 * ScrollHoldTicks);
+        // How many characters can be skipped before the rest fits: that is the end of the travel.
+        int last = 0;
+        for (int from = 0; from < line.Length; from++)
+        {
+            if (Width(line[from..]) <= budget) { last = from; break; }
+        }
+        if (last == 0) return line;
+
+        int steps = last * TicksPerChar;
+        int cycle = steps + (2 * HoldTicks);
         int at = ((tick % cycle) + cycle) % cycle;
-        int step = Math.Clamp(at - ScrollHoldTicks, 0, steps);
+        int chars = Math.Clamp((at - HoldTicks) / TicksPerChar, 0, last);
 
-        return HudMetrics.Window(line, budget, step * ScrollUnitsPerTick, out _);
+        return Clip(line[chars..], budget);
+    }
+
+    // The window, cut to the budget without an ellipsis - the text is not being summarised, it is being
+    // looked at through a slot.
+    private static string Clip(string text, int budget)
+    {
+        int used = 0;
+        int taken = 0;
+        foreach (char c in text)
+        {
+            int next = HudMetrics.Width(c);
+            if (used + next > budget) break;
+            used += next;
+            taken++;
+        }
+        return text[..taken];
     }
 
     private static int Width(string text) => HudMetrics.Width(text);
@@ -144,17 +166,18 @@ internal static class HudLayout
         return string.Join("\n", lines);
     }
 
-    // The alert box is drawn in a larger face nothing has measured, so it is held to a character count -
-    // and scrolls by characters for the same reason the panel scrolls by units.
+    // The alert box is drawn in a larger face nothing has measured, so it is held to a character count.
+    // Same cadence as the panel: one character every TicksPerChar redraws, still at each end.
     private static string ScrollChars(string line, int width, int tick)
     {
         if (line.Length <= width) return line;
 
-        int steps = line.Length - width;
-        int cycle = steps + (2 * ScrollHoldTicks);
+        int last = line.Length - width;
+        int steps = last * TicksPerChar;
+        int cycle = steps + (2 * HoldTicks);
         int at = ((tick % cycle) + cycle) % cycle;
-        int step = Math.Clamp(at - ScrollHoldTicks, 0, steps);
-        return line.Substring(step, width);
+        int chars = Math.Clamp((at - HoldTicks) / TicksPerChar, 0, last);
+        return line.Substring(chars, width);
     }
 
     // What actually goes to PrintToCenter: the lines that fit, each scrolled if it is too wide, capped
