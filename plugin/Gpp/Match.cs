@@ -391,6 +391,19 @@ public partial class Gpp
 
         // Nothing is being asked of anyone now, so the overlay comes down and stays down until a pause.
         StopMatchHud();
+
+        // Credit goes last or it is not read. With the Discord hold on, the last thing printed at
+        // go-live is that hold, so the credit waits for it to finish and lands when play starts.
+        if (Config.Match.OpeningPauseSeconds <= 0) AnnounceCredit();
+    }
+
+    // The last two lines in chat when a match starts.
+    internal void AnnounceCredit()
+    {
+        // Without the [GPP] prefix the rest of the plugin's chat carries: the line says who it is from
+        // already, and "[GPP] This match provided by Gamah Pug Plugin" says it twice.
+        Server.PrintToChatAll($" This match provided by {Colorize("{green}")}Gamah Pug Plugin{Colorize("{default}")}");
+        Server.PrintToChatAll($" {Colorize("{grey}")}https://github.com/Gamah/gamah-pug-plugin{Colorize("{default}")}");
     }
 
     // True when the round that just ended is the one the engine swaps sides on - the half, and every

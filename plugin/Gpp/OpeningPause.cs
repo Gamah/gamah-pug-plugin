@@ -60,6 +60,10 @@ public partial class Gpp
         Clear();
         Server.ExecuteCommand("mp_unpause_match");
         Announce($"Here we go. {why}");
+
+        // Play is actually starting, so this is the last thing in chat - which is the point of it.
+        // Not when the hold was cut short because the match stopped being live.
+        if (_matchPhase == MatchPhase.Live) AnnounceCredit();
     }
 
     // Everyone playing, which during a match is everyone on a side - not the drafted roster, because
