@@ -18,15 +18,30 @@ namespace Gpp;
 // and how the thing stays in front of a moving player.
 public partial class Gpp
 {
-    // One per viewer. The panel entity, the point_orient it hangs off when parenting is available, and
-    // the text last sent - so a 1Hz tick that changes nothing costs nothing.
-    private sealed class ViewerPanel
+    // Which of a viewer's three boards a piece of text is for. The middle one is what the room is being
+    // asked for; the two beside it are the teams, which fill as the draft runs - a name leaves the pool
+    // in the middle and appears under a captain on one side.
+    private enum Board { Main = 0, Left = 1, Right = 2 }
+
+    // One text entity per board, so the three can change independently: a pick changes one team panel
+    // and the middle one, and leaves the other team's panel alone.
+    private sealed class Slot
     {
         internal CPointWorldText? Text;
-        internal CPointOrient? Orient;
         internal string Sent = "";
-        internal float AimedAt = float.NaN;    // the eye yaw the panel was last squared up to
-        internal int ParentedTo;               // pawn index the panel was parented to, 0 for none
+    }
+
+    // One per viewer: three boards and the point_orient they all hang from. Three entities parented to
+    // one orient rather than three orients, because the orient is the expensive part - it is what has to
+    // be aimed - and all three boards share a frame of reference.
+    private sealed class ViewerPanel
+    {
+        internal readonly Slot[] Boards = [new(), new(), new()];
+        internal CPointOrient? Orient;
+        internal float AimedAt = float.NaN;    // the eye yaw the boards were last squared up to
+        internal int ParentedTo;               // pawn index they were parented to, 0 for none
+
+        internal IEnumerable<Slot> Live => Boards.Where(board => board.Text != null && board.Text.IsValid);
     }
 
     private readonly Dictionary<int, ViewerPanel> _panels = [];
@@ -58,6 +73,16 @@ public partial class Gpp
     private const float LineHeightFactor = 1.2f;
     private const int ReferenceLines = 12;
     private const float PanelDistance = 70f;
+
+    // The two team boards: out to each side with a gap, toed in to face the viewer. Not flush with the
+    // middle one - three panels touching read as one wide panel, and the whole point of the side boards
+    // is that a glance left or right is a different question from the one in front of you.
+    //
+    // All three are tunable live with !pug sides, because the only way to judge them is to stand in
+    // front of them, and a redeploy per guess is the slow version of that.
+    private float _sideGap = 62f;        // units to each side of the middle board's centre
+    private float _sideToeIn = 28f;      // degrees each side board turns inward to face the viewer
+    private float _sideBack = 0f;        // units further away than the middle board, if they want it
     private const float PanelScreenPercent = 75f;
     private const float PanelUpOffset = 9f;
 
@@ -145,20 +170,24 @@ public partial class Gpp
             foreach (var (slot, panel) in _panels)
             {
                 if (slot == receiver.Slot) continue;
-                if (panel.Text != null && panel.Text.IsValid) info.TransmitEntities.Remove(panel.Text);
+                foreach (var board in panel.Live) info.TransmitEntities.Remove(board.Text!);
                 if (panel.Orient != null && panel.Orient.IsValid) info.TransmitEntities.Remove(panel.Orient);
             }
         }
     }
 
-    // Put this text in front of this player. The text is only pushed when it has changed, which is what
-    // makes a ticking clock cheap: one networked string a second for the one line that moved.
+    // Put these boards in front of this player: the middle one, and the two team boards beside it. A
+    // null side means that board is not wanted now - during the vote there are no teams yet - and it is
+    // taken down rather than left showing the last thing it said.
+    //
+    // Text is only pushed when it has changed, which is what makes a ticking clock cheap: one networked
+    // string a second, for the one board that moved.
     //
     // Setting MessageText alone re-flows the lines correctly - measured on a client 2026-10-19 with
     // !pug paneltick, stage B. Setting MessageText *and* FontSize together does not: the glyphs are
     // re-rendered without the lines being re-spaced and the panel comes out overlapped. So the size is
     // set once, at spawn, and never again.
-    internal void ShowWorldPanel(CCSPlayerController player, string text)
+    internal void ShowWorldPanel(CCSPlayerController player, string main, string? left = null, string? right = null)
     {
         if (!player.IsValid || player.IsBot || player.IsHLTV) return;
 
@@ -168,24 +197,38 @@ public partial class Gpp
             _panels[player.Slot] = panel;
         }
 
-        if (panel.Text == null || !panel.Text.IsValid)
-        {
-            if (!SpawnPanel(player, panel, text)) return;
-            panel.Sent = text;
-            return;
-        }
-
-        if (panel.Sent != text)
-        {
-            panel.Text.MessageText = text;
-            Utilities.SetStateChanged(panel.Text, "CPointWorldText", "m_messageText");
-            panel.Sent = text;
-        }
+        Draw(player, panel, Board.Main, main);
+        Draw(player, panel, Board.Left, left);
+        Draw(player, panel, Board.Right, right);
 
         KeepUp(player, panel);
     }
 
-    private bool SpawnPanel(CCSPlayerController player, ViewerPanel panel, string text)
+    private void Draw(CCSPlayerController player, ViewerPanel panel, Board which, string? text)
+    {
+        var slot = panel.Boards[(int)which];
+
+        if (string.IsNullOrEmpty(text))
+        {
+            if (slot.Text != null && slot.Text.IsValid) slot.Text.Remove();
+            slot.Text = null;
+            slot.Sent = "";
+            return;
+        }
+
+        if (slot.Text == null || !slot.Text.IsValid)
+        {
+            if (SpawnBoard(player, panel, which, text)) slot.Sent = text;
+            return;
+        }
+
+        if (slot.Sent == text) return;
+        slot.Text.MessageText = text;
+        Utilities.SetStateChanged(slot.Text, "CPointWorldText", "m_messageText");
+        slot.Sent = text;
+    }
+
+    private bool SpawnBoard(CCSPlayerController player, ViewerPanel panel, Board which, string text)
     {
         var entity = Utilities.CreateEntityByName<CPointWorldText>("point_worldtext");
         // CreateEntityByName does not return null for a dead factory - it hands back a wrapper over a
@@ -210,91 +253,63 @@ public partial class Gpp
         entity.BackgroundBorderWidth = 0.25f;
         entity.BackgroundBorderHeight = 0.25f;
         entity.DepthOffset = 0f;
-        entity.JustifyHorizontal = PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER;
+        // The side boards are justified towards the middle one so the gap between the three stays the
+        // gap you set, whatever length the names on them happen to be.
+        entity.JustifyHorizontal = which switch
+        {
+            Board.Left => PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_RIGHT,
+            Board.Right => PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_LEFT,
+            _ => PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER,
+        };
         entity.JustifyVertical = PointWorldTextJustifyVertical_t.POINT_WORLD_TEXT_JUSTIFY_VERTICAL_CENTER;
         // The text is drawn in the entity's own plane, so without a roll of 90 it lies flat like a rug.
         // Auto-reorient does not help, because a flat panel's up axis is the wrong one.
         entity.ReorientMode = PointWorldTextReorientMode_t.POINT_WORLD_TEXT_REORIENT_NONE;
         entity.DispatchSpawn();
 
-        panel.Text = entity;
-        panel.Orient = null;
-        panel.ParentedTo = 0;
-        panel.AimedAt = float.NaN;
+        panel.Boards[(int)which].Text = entity;
 
-        Place(player, panel);
+        Hang(player, panel, which);
         return true;
     }
 
-    // Puts the panel where it belongs and attaches it, by whichever tier the probe chose.
+    // Makes sure this viewer has an orient to hang from, then hangs one board on it.
     //
     // Order matters and is what a 45-degree panel was: SetParent freezes the entity's offset from its
-    // parent at the moment it is called, so teleporting first and parenting second freezes the panel
+    // parent at the moment it is called, so teleporting first and parenting second freezes the board
     // against whatever rotation the parent happened to have in that frame. A point_orient spawned in the
-    // same frame has not been aimed at its target yet, so that rotation is arbitrary - and the panel
+    // same frame has not been aimed at its target yet, so that rotation is arbitrary - and the board
     // comes out skewed by it, consistently, for as long as it lives.
     //
     // So: parent first, then teleport, with the position and the facing both read off the orient rather
-    // than off the eyes. The orient is what the panel hangs from; the eyes are only what the orient is
+    // than off the eyes. The orient is what the boards hang from; the eyes are only what the orient is
     // following.
     // [SOURCE: shape taken from darkerz7/CS2-GameHUD HUD.cs GetPositionOrient, read 2026-10-19]
-    private void Place(CCSPlayerController player, ViewerPanel panel)
+    private void Hang(CCSPlayerController player, ViewerPanel panel, Board which)
     {
         var pawn = player.PlayerPawn.Value;
-        if (panel.Text == null || !panel.Text.IsValid || pawn == null || !pawn.IsValid || pawn.AbsOrigin == null) return;
+        var slot = panel.Boards[(int)which];
+        if (slot.Text == null || !slot.Text.IsValid || pawn == null || !pawn.IsValid || pawn.AbsOrigin == null) return;
 
         if (_follow == Follow.Teleport)
         {
-            Square(panel, pawn.AbsOrigin, pawn.EyeAngles, EyeHeight(pawn));
+            Square(slot, which, pawn.AbsOrigin, pawn.EyeAngles, EyeHeight(pawn));
+            panel.AimedAt = pawn.EyeAngles.Y;
             return;
         }
 
         if (_follow == Follow.Orient || _follow == Follow.Attachment)
         {
-            var orient = Utilities.CreateEntityByName<CPointOrient>("point_orient");
-            if (orient != null && orient.Handle != IntPtr.Zero && orient.IsValid)
+            var orient = EnsureOrient(player, panel, pawn);
+            if (orient != null)
             {
-                orient.Active = true;
-                // Aimed down the pawn's eyeline, which is what carries the panel's facing without the
-                // server sending an angle every tick.
-                orient.GoalDirection = PointOrientGoalDirectionType_t.eEyesForward;
-                // ePreserveUpAxis holds the orient's up axis at the sky, which keeps the panel upright
-                // through a pitch without Square() having to take the pitch back out of the roll.
-                orient.Constraint = Config.HudOrientConstraint.Trim().ToLowerInvariant() == "preserveupaxis"
-                    ? PointOrientConstraint_t.ePreserveUpAxis
-                    : PointOrientConstraint_t.eNone;
-                // A rate-limited orient trails a fast flick, which reads as the panel swinging out and
-                // catching up. 0 leaves whatever the engine defaults to.
-                if (Config.HudOrientTurnRate > 0f) orient.MaxTurnRate = Config.HudOrientTurnRate;
-                orient.DispatchSpawn();
-                orient.Teleport(new Vector(pawn.AbsOrigin.X, pawn.AbsOrigin.Y, pawn.AbsOrigin.Z + EyeHeight(pawn)),
-                    null, null);
-
-                // The whole difference between the two orient tiers: what the orient itself hangs from.
-                // The pawn's origin is at its feet and its rotation is the body yaw; a look attachment
-                // on the model is a head bone, which tracks where somebody is actually looking. Whether
-                // this server's player models carry the attachment is not knowable from here - a name
-                // the model does not have makes SetParentAttachmentMaintainOffset do nothing, so the
-                // panel simply stays parented at the origin and looks like the plain orient tier.
-                if (_follow == Follow.Attachment && !string.IsNullOrWhiteSpace(Config.HudAnchorAttachment))
-                {
-                    orient.AcceptInput("SetParentAttachmentMaintainOffset", pawn, null, Config.HudAnchorAttachment);
-                }
-                else
-                {
-                    orient.AcceptInput("SetParent", pawn, null, "!activator");
-                }
-                orient.AcceptInput("SetTarget", pawn, null, "!activator");
-                panel.Orient = orient;
-                panel.ParentedTo = (int)pawn.Index;
-
                 // Next frame, by which time the orient has been turned to face down the eyeline. Doing
                 // this in the same frame is exactly the bug described above.
                 Server.NextFrame(() =>
                 {
-                    if (panel.Text == null || !panel.Text.IsValid || !orient.IsValid) return;
-                    panel.Text.AcceptInput("SetParent", orient, null, "!activator");
-                    SquareToOrient(panel, orient);
+                    if (slot.Text == null || !slot.Text.IsValid || !orient.IsValid) return;
+                    slot.Text.AcceptInput("SetParent", orient, null, "!activator");
+                    SquareToOrient(slot, which, orient);
                 });
                 return;
             }
@@ -303,26 +318,78 @@ public partial class Gpp
             _follow = Follow.Pawn;
         }
 
-        panel.Text.AcceptInput("SetParent", pawn, null, "!activator");
+        slot.Text.AcceptInput("SetParent", pawn, null, "!activator");
         panel.ParentedTo = (int)pawn.Index;
-        Square(panel, pawn.AbsOrigin, pawn.EyeAngles, EyeHeight(pawn));
+        Square(slot, which, pawn.AbsOrigin, pawn.EyeAngles, EyeHeight(pawn));
+        panel.AimedAt = pawn.EyeAngles.Y;
     }
 
-    // Hangs the panel off the orient's own frame. Teleporting a parented entity re-freezes its offset,
-    // so this doubles as the correction when the freeze was taken at a bad moment.
-    private static void SquareToOrient(ViewerPanel panel, CPointOrient orient)
+    // One orient per viewer, shared by all three boards: it is the expensive half - the thing that has
+    // to be aimed - and the boards only differ by a fixed offset within its frame.
+    private CPointOrient? EnsureOrient(CCSPlayerController player, ViewerPanel panel, CCSPlayerPawn pawn)
+    {
+        if (panel.Orient != null && panel.Orient.IsValid && panel.ParentedTo == (int)pawn.Index) return panel.Orient;
+
+        ClearOrient(panel);
+        var orient = Utilities.CreateEntityByName<CPointOrient>("point_orient");
+        if (orient == null || orient.Handle == IntPtr.Zero || !orient.IsValid) return null;
+
+        orient.Active = true;
+        // Aimed down the pawn's eyeline, which is what carries the boards' facing without the server
+        // sending an angle every tick.
+        orient.GoalDirection = PointOrientGoalDirectionType_t.eEyesForward;
+        // ePreserveUpAxis holds the orient's up axis at the sky, which keeps the boards upright through
+        // a pitch without Square() having to take the pitch back out of the roll.
+        orient.Constraint = Config.HudOrientConstraint.Trim().ToLowerInvariant() == "preserveupaxis"
+            ? PointOrientConstraint_t.ePreserveUpAxis
+            : PointOrientConstraint_t.eNone;
+        // A rate-limited orient trails a fast flick, which reads as the boards swinging out and catching
+        // up. 0 leaves whatever the engine defaults to.
+        if (Config.HudOrientTurnRate > 0f) orient.MaxTurnRate = Config.HudOrientTurnRate;
+        orient.DispatchSpawn();
+        orient.Teleport(new Vector(pawn.AbsOrigin!.X, pawn.AbsOrigin.Y, pawn.AbsOrigin.Z + EyeHeight(pawn)), null, null);
+
+        // The whole difference between the two orient tiers: what the orient itself hangs from. The
+        // pawn's origin is at its feet and its rotation is the body yaw; a look attachment on the model
+        // is a head bone, which tracks where somebody is actually looking. Whether this server's player
+        // models carry the attachment is not knowable from here - a name the model does not have makes
+        // SetParentAttachmentMaintainOffset do nothing, and it stays parented at the origin.
+        if (_follow == Follow.Attachment && !string.IsNullOrWhiteSpace(Config.HudAnchorAttachment))
+        {
+            orient.AcceptInput("SetParentAttachmentMaintainOffset", pawn, null, Config.HudAnchorAttachment);
+        }
+        else
+        {
+            orient.AcceptInput("SetParent", pawn, null, "!activator");
+        }
+        orient.AcceptInput("SetTarget", pawn, null, "!activator");
+
+        panel.Orient = orient;
+        panel.ParentedTo = (int)pawn.Index;
+        return orient;
+    }
+
+    // Hangs one board in the orient's own frame. Teleporting a parented entity re-freezes its offset, so
+    // this doubles as the correction when the freeze was taken at a bad moment.
+    private void SquareToOrient(Slot slot, Board which, CPointOrient orient)
     {
         if (orient.AbsOrigin == null || orient.AbsRotation == null) return;
-        Square(panel, orient.AbsOrigin, orient.AbsRotation, 0f);
+        Square(slot, which, orient.AbsOrigin, orient.AbsRotation, 0f);
     }
 
-    // The one place the panel's position and facing are worked out, from whatever frame it is being hung
-    // in. The roll is 90 minus the pitch rather than a flat 90: 90 is what stands the text plane up when
-    // the view is level, and the pitch has to come back out of it or the panel tilts as soon as somebody
-    // looks up.
-    private static void Square(ViewerPanel panel, Vector origin, QAngle angles, float eyeHeight)
+    // The one place a board's position and facing are worked out, from whatever frame it is hanging in.
+    //
+    // The roll is 90 minus the pitch rather than a flat 90: 90 is what stands the text plane up when the
+    // view is level, and the pitch has to come back out of it or the board tilts as soon as somebody
+    // looks up. The side boards add a lateral offset and a yaw of their own, which is what toes them in
+    // to face the viewer rather than leaving them edge-on at the corner of the eye.
+    private void Square(Slot slot, Board which, Vector origin, QAngle angles, float eyeHeight)
     {
-        if (panel.Text == null || !panel.Text.IsValid) return;
+        if (slot.Text == null || !slot.Text.IsValid) return;
+
+        float sideways = which switch { Board.Left => -_sideGap, Board.Right => _sideGap, _ => 0f };
+        float toeIn = which switch { Board.Left => _sideToeIn, Board.Right => -_sideToeIn, _ => 0f };
+        float away = PanelDistance + (which == Board.Main ? 0f : _sideBack);
 
         double yaw = angles.Y * Math.PI / 180.0;
         double pitch = angles.X * Math.PI / 180.0;
@@ -330,30 +397,31 @@ public partial class Gpp
 
         var forward = new Vector((float)(cp * cy), (float)(cp * sy), (float)-sp);
         var up = new Vector((float)(sp * cy), (float)(sp * sy), (float)cp);
+        // Flat on the ground and square to the view: what the side boards are offset along.
+        var right = new Vector((float)sy, (float)-cy, 0);
 
         var at = new Vector(
-            origin.X + (forward.X * PanelDistance) + (up.X * PanelUpOffset),
-            origin.Y + (forward.Y * PanelDistance) + (up.Y * PanelUpOffset),
-            origin.Z + eyeHeight + (forward.Z * PanelDistance) + (up.Z * PanelUpOffset));
+            origin.X + (forward.X * away) + (up.X * PanelUpOffset) + (right.X * sideways),
+            origin.Y + (forward.Y * away) + (up.Y * PanelUpOffset) + (right.Y * sideways),
+            origin.Z + eyeHeight + (forward.Z * away) + (up.Z * PanelUpOffset) + (right.Z * sideways));
 
-        panel.Text.Teleport(at, new QAngle(0, angles.Y + 270f, 90f - angles.X), new Vector(0, 0, 0));
-        panel.AimedAt = angles.Y;
+        slot.Text.Teleport(at, new QAngle(0, angles.Y + 270f + toeIn, 90f - angles.X), new Vector(0, 0, 0));
     }
 
-    // Called on every text update. A parented panel usually needs nothing; this is what notices a
-    // respawn (the pawn it was parented to is gone) and, on the pawn tier, that the view has turned far
+    // Called on every text update. Parented boards usually need nothing; this is what notices a respawn
+    // (the pawn they were parented to is gone) and, on the pawn tier, that the view has turned far
     // enough to be worth re-squaring.
     private void KeepUp(CCSPlayerController player, ViewerPanel panel)
     {
         var pawn = player.PlayerPawn.Value;
-        if (panel.Text == null || !panel.Text.IsValid || pawn == null || !pawn.IsValid || pawn.AbsOrigin == null) return;
+        if (pawn == null || !pawn.IsValid || pawn.AbsOrigin == null) return;
+        if (!panel.Live.Any()) return;
 
         if (_follow != Follow.Teleport && panel.ParentedTo != (int)pawn.Index)
         {
-            // New pawn, which means a respawn or a round restart: the old parent is dead and the panel
-            // is floating where that pawn used to be.
-            ClearOrient(panel);
-            Place(player, panel);
+            // New pawn, which means a respawn or a round restart: the old parent is dead and the boards
+            // are floating where that pawn used to be.
+            Rehang(player, panel);
             return;
         }
 
@@ -361,27 +429,58 @@ public partial class Gpp
         {
             // Parented and riding the orient, so there is normally nothing to do. The check is for the
             // one case that cannot be seen from here: a freeze taken while the orient was still turning,
-            // which leaves the panel permanently off to one side. One comparison a second, and a single
+            // which leaves a board permanently off to one side. One comparison a second, and a single
             // teleport to put it right, rather than an angle on the wire every tick.
             if (panel.Orient == null || !panel.Orient.IsValid || panel.Orient.AbsRotation == null) return;
-            if (panel.Text.AbsRotation == null) return;
 
-            float want = panel.Orient.AbsRotation.Y + 270f;
-            if (Math.Abs(Delta(want, panel.Text.AbsRotation.Y)) > AimTolerance) SquareToOrient(panel, panel.Orient);
-            return;
-        }
-
-        var eyes = pawn.EyeAngles;
-        if (_follow == Follow.Pawn)
-        {
-            if (float.IsNaN(panel.AimedAt) || Math.Abs(Delta(eyes.Y, panel.AimedAt)) > AimTolerance)
+            for (int which = 0; which < panel.Boards.Length; which++)
             {
-                Square(panel, pawn.AbsOrigin, eyes, EyeHeight(pawn));
+                var slot = panel.Boards[which];
+                if (slot.Text == null || !slot.Text.IsValid || slot.Text.AbsRotation == null) continue;
+
+                float toeIn = (Board)which switch { Board.Left => _sideToeIn, Board.Right => -_sideToeIn, _ => 0f };
+                float want = panel.Orient.AbsRotation.Y + 270f + toeIn;
+                if (Math.Abs(Delta(want, slot.Text.AbsRotation.Y)) > AimTolerance)
+                {
+                    SquareToOrient(slot, (Board)which, panel.Orient);
+                }
             }
             return;
         }
 
-        Square(panel, pawn.AbsOrigin, eyes, EyeHeight(pawn));
+        var eyes = pawn.EyeAngles;
+        if (_follow == Follow.Pawn && !float.IsNaN(panel.AimedAt) && Math.Abs(Delta(eyes.Y, panel.AimedAt)) <= AimTolerance)
+        {
+            return;
+        }
+
+        for (int which = 0; which < panel.Boards.Length; which++)
+        {
+            Square(panel.Boards[which], (Board)which, pawn.AbsOrigin, eyes, EyeHeight(pawn));
+        }
+        panel.AimedAt = eyes.Y;
+    }
+
+    // Takes every board down and puts it back up where it belongs - after a respawn, or when the anchor
+    // or the side geometry changes under them. Re-parenting in place would mean unpicking the frozen
+    // offsets, which is the state that is hardest to see and easiest to get wrong.
+    private void Rehang(CCSPlayerController player, ViewerPanel panel)
+    {
+        var texts = panel.Boards.Select(board => board.Sent).ToArray();
+        for (int which = 0; which < panel.Boards.Length; which++)
+        {
+            var slot = panel.Boards[which];
+            if (slot.Text != null && slot.Text.IsValid) slot.Text.Remove();
+            slot.Text = null;
+            slot.Sent = "";
+        }
+        ClearOrient(panel);
+
+        for (int which = 0; which < texts.Length; which++)
+        {
+            if (texts[which].Length == 0) continue;
+            if (SpawnBoard(player, panel, (Board)which, texts[which])) panel.Boards[which].Sent = texts[which];
+        }
     }
 
     // The Teleport tier only: every tick, for the players who have a panel up.
@@ -419,7 +518,12 @@ public partial class Gpp
     internal void HideWorldPanel(int slot)
     {
         if (!_panels.TryGetValue(slot, out var panel)) return;
-        if (panel.Text != null && panel.Text.IsValid) panel.Text.Remove();
+        foreach (var board in panel.Boards)
+        {
+            if (board.Text != null && board.Text.IsValid) board.Text.Remove();
+            board.Text = null;
+            board.Sent = "";
+        }
         ClearOrient(panel);
         _panels.Remove(slot);
     }
@@ -444,6 +548,34 @@ public partial class Gpp
         {
             if (stray.IsValid) stray.Remove();
         }
+    }
+
+    // Puts every viewer's boards back up with whatever the geometry or the anchor is now. The text each
+    // board was showing is kept, so a tuning command does not blank the room mid-draft.
+    private int Rehang()
+    {
+        int rehung = 0;
+        foreach (var (slot, panel) in _panels)
+        {
+            var player = Utilities.GetPlayerFromSlot(slot);
+            if (player == null || !player.IsValid) continue;
+            Rehang(player, panel);
+            rehung++;
+        }
+        return rehung;
+    }
+
+    // !pug sides [gap] [toe-in] [back] - where the two team boards sit, tuned by standing in front of
+    // them. Nothing here is knowable from a schema: it is whether a glance to the left lands on a team.
+    internal string SetSides(string gap, string toeIn, string back)
+    {
+        if (float.TryParse(gap, out float parsedGap)) _sideGap = Math.Clamp(parsedGap, 0f, 400f);
+        if (float.TryParse(toeIn, out float parsedToe)) _sideToeIn = Math.Clamp(parsedToe, -90f, 90f);
+        if (float.TryParse(back, out float parsedBack)) _sideBack = Math.Clamp(parsedBack, -60f, 400f);
+
+        int rehung = Rehang();
+        return $"Side boards: gap {_sideGap:F0}, toe-in {_sideToeIn:F0} degrees, {_sideBack:F0} further back"
+            + $" - {rehung} viewer(s) rehung.";
     }
 
     // !pug anchor [orient|attachment|pawn|teleport] [attachment name]
@@ -482,16 +614,10 @@ public partial class Gpp
         // parented, so moving a live panel between anchors means unpicking exactly the state that is
         // hardest to see. A fresh panel is one spawn per viewer and no doubt about what it is hanging
         // from.
-        var showing = _panels.ToDictionary(entry => entry.Key, entry => entry.Value.Sent);
-        ClearWorldPanels();
-        foreach (var (slot, text) in showing)
-        {
-            var player = Utilities.GetPlayerFromSlot(slot);
-            if (player != null && player.IsValid && text.Length > 0) ShowWorldPanel(player, text);
-        }
+        int rehung = Rehang();
 
         return $"Anchor is now {_follow}"
             + (_follow == Follow.Attachment ? $" on \"{Config.HudAnchorAttachment}\"" : "")
-            + $", {showing.Count} panel(s) rehung.";
+            + $", {rehung} viewer(s) rehung.";
     }
 }

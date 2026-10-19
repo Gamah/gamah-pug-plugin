@@ -131,77 +131,107 @@ public partial class Gpp
     // fix - the prototype only ever drew each panel once, so nobody had seen one tick.
     internal void WorldPreview()
     {
-        var teamOne = PreviewNames.Take(5).ToList();
-        var teamTwo = PreviewNames.Skip(5).Take(5).ToList();
+        var teamA = PreviewNames.Take(5).ToList();
+        var teamB = PreviewNames.Skip(5).Take(5).ToList();
         var pool = PreviewNames.Select((name, index) => WorldLayout.Cell(index + 1, name)).ToList();
         var ballot = Config.MapPool.Select((map, index) => WorldLayout.Cell(index + 1, map.Label)).ToList();
-        var waiting = PreviewNames.Take(4).ToList();
 
-        var steps = new List<(string Name, Func<int, string> Panel)>
+        // The panels that are about a list getting shorter are the ones that have to be watched moving:
+        // a still screenshot of "waiting on four people" says nothing about whether the panel reads as
+        // alive while they trickle in. So the list shrinks over the ten seconds the step is up, which is
+        // what it does in a real pug.
+        List<string> Dwindling(IEnumerable<string> names, int left)
         {
-            ("captain sign-up", left => WorldLayout.Panel("want to captain?",
-            [
-                WorldLayout.Section.Of($"IN:  {string.Join("  ", teamOne.Take(2).Select(WorldLayout.Clip))}"),
-                WorldLayout.Section.Of("STILL TO ANSWER"),
-                WorldLayout.Section.List(WorldLayout.Grid(PreviewNames.Skip(2).Select(WorldLayout.Clip))),
-            ], WorldLayout.Footer("type !captain", $"{left}s"), _hudTicks)),
+            int keep = Math.Clamp((left * names.Count()) / PreviewSeconds, 0, names.Count());
+            return names.Take(Math.Max(1, keep)).Select(WorldLayout.Clip).ToList();
+        }
 
-            ("map vote, not voted yet", left => WorldLayout.Panel("pick a map",
+        // Boards grow over the step for the same reason: the whole idea of the side boards is that a
+        // name leaves the middle and lands under a captain.
+        string BoardAt(string label, string captain, List<string> team, int filled) =>
+            WorldLayout.Panel($"team {label}",
+                [WorldLayout.Section.List([WorldLayout.Clip(captain) + "  (c)",
+                    .. team.Take(Math.Clamp(filled, 0, team.Count)).Select(WorldLayout.Clip)])],
+                null, _hudTicks);
+
+        var steps = new List<(string Name, Func<int, (string Main, string? Left, string? Right)> Boards)>
+        {
+            ("captain sign-up", left => (WorldLayout.Panel("want to captain?",
+            [
+                WorldLayout.Section.Of($"IN:  {string.Join("  ", teamA.Take(2).Select(WorldLayout.Clip))}"),
+                WorldLayout.Section.Of("STILL TO ANSWER"),
+                WorldLayout.Section.List(WorldLayout.Grid(Dwindling(PreviewNames.Skip(2), left))),
+            ], WorldLayout.Footer("type !captain", $"{left}s"), _hudTicks), null, null)),
+
+            ("map vote, not voted yet", left => (WorldLayout.Panel("pick a map",
             [
                 WorldLayout.Section.List(WorldLayout.Grid(ballot)),
-            ], WorldLayout.Footer("type the number in chat", $"{left}s"), _hudTicks)),
+            ], WorldLayout.Footer("type the number in chat", $"{left}s"), _hudTicks), null, null)),
 
-            ("map vote, already voted", left => WorldLayout.Panel("you voted mirage",
-            [
-                WorldLayout.Section.Of($"6/10 VOTED - WAITING ON"),
-                WorldLayout.Section.List(WorldLayout.Grid(waiting.Select(WorldLayout.Clip))),
-                WorldLayout.Section.Of("LEADING", "mirage ***    nuke **"),
-            ], WorldLayout.Footer("!1-!9 changes your vote", $"{left}s"), _hudTicks)),
+            ("map vote, already voted", left =>
+            {
+                var missing = Dwindling(PreviewNames.Skip(2), left);
+                return (WorldLayout.Panel("you voted mirage",
+                [
+                    WorldLayout.Section.Of($"{PreviewNames.Length - missing.Count}/{PreviewNames.Length} VOTED - WAITING ON"),
+                    WorldLayout.Section.List(WorldLayout.Grid(missing)),
+                    WorldLayout.Section.Of("LEADING", "mirage ***    nuke **"),
+                ], WorldLayout.Footer("!1-!9 changes your vote", $"{left}s"), _hudTicks), null, null);
+            }),
 
-            ("waiting to reconnect", left => WorldLayout.Panel("waiting for players",
-            [
-                WorldLayout.Section.Of("6/10 BACK - STILL TO CONNECT"),
-                WorldLayout.Section.List(WorldLayout.Grid(waiting.Select(WorldLayout.Clip))),
-            ], WorldLayout.Footer("drafting anyway in", $"{left}s"), _hudTicks)),
+            ("waiting to reconnect", left =>
+            {
+                var missing = Dwindling(PreviewNames.Skip(2), left);
+                return (WorldLayout.Panel("waiting for players",
+                [
+                    WorldLayout.Section.Of($"{PreviewNames.Length - missing.Count}/{PreviewNames.Length} BACK - STILL TO CONNECT"),
+                    WorldLayout.Section.List(WorldLayout.Grid(missing)),
+                ], WorldLayout.Footer("drafting anyway in", $"{left}s"), _hudTicks), null, null);
+            }),
 
-            ("draft, your pick", left => WorldLayout.Panel("your pick",
-            [
-                WorldLayout.Section.List(WorldLayout.Grid(pool)),
-                new([.. WorldLayout.Rosters("YOU", teamOne.Take(2), "THEM", teamTwo.Take(2))]),
-            ], WorldLayout.Footer("type the number", $"{left}s", $"{pool.Count} left"), _hudTicks)),
+            // The draft is the step the side boards exist for, so the pool empties and the two boards
+            // fill as it runs.
+            ("draft, picks landing", left =>
+            {
+                int picked = PreviewSeconds - left;
+                return (WorldLayout.Panel(left % 4 < 2 ? "your pick - type the number" : "Ada is picking",
+                [
+                    WorldLayout.Section.List(WorldLayout.Grid(pool.Skip(picked))),
+                ], WorldLayout.Footer($"{left}s", $"{Math.Max(0, pool.Count - picked)} still to pick"), _hudTicks),
+                    BoardAt("A", teamA[0], teamA.Skip(1).ToList(), picked / 2),
+                    BoardAt("B", teamB[0], teamB.Skip(1).ToList(), picked / 2));
+            }),
 
-            ("draft, in the pool", left => WorldLayout.Panel("Rouchard is picking",
-            [
-                new([.. WorldLayout.Pair("TEAM ROUCHARD", teamOne, "TEAM ADA", teamTwo)]),
-                WorldLayout.Section.Of("you are in the pool - you play as soon as a captain picks you"),
-            ], WorldLayout.Footer($"{left}s", "6 still in the pool"), _hudTicks)),
+            ("ready", left =>
+            {
+                var unready = Dwindling(PreviewNames.Skip(2), left);
+                return (WorldLayout.Panel("type .ready in chat",
+                [
+                    WorldLayout.Section.Of($"{PreviewNames.Length - unready.Count}/{PreviewNames.Length} READY - STILL TO READY"),
+                    WorldLayout.Section.List(WorldLayout.Grid(unready)),
+                ], WorldLayout.Footer("mirage"), _hudTicks),
+                    BoardAt("A", teamA[0], teamA.Skip(1).ToList(), 4),
+                    BoardAt("B", teamB[0], teamB.Skip(1).ToList(), 4));
+            }),
 
-            ("ready", left => WorldLayout.Panel("type .ready in chat",
-            [
-                WorldLayout.Section.Of("6/10 READY - STILL TO READY"),
-                WorldLayout.Section.List(WorldLayout.Grid(waiting.Select(WorldLayout.Clip))),
-                new([.. WorldLayout.Rosters("TEAM ROUCHARD", teamOne, "TEAM ADA", teamTwo)]),
-            ], WorldLayout.Footer("mirage"), _hudTicks)),
-
-            ("side choice", left => WorldLayout.Panel("type .stay or .switch",
+            ("side choice", left => (WorldLayout.Panel("type .stay or .switch",
             [
                 WorldLayout.Section.Of("CT won the knife round", ".stay keeps this side, .switch takes the other"),
-                new([.. WorldLayout.Rosters("TEAM ROUCHARD", teamOne, "TEAM ADA", teamTwo)]),
-            ], WorldLayout.Footer("mirage", "0-0"), _hudTicks)),
+            ], WorldLayout.Footer("mirage"), _hudTicks),
+                BoardAt("A", teamA[0], teamA.Skip(1).ToList(), 4),
+                BoardAt("B", teamB[0], teamB.Skip(1).ToList(), 4))),
 
-            ("move in discord", left => WorldLayout.Panel(MatchRules.OpeningLines(3)[0],
-            [
-                WorldLayout.Section.Of(MatchRules.OpeningLines(3)[1], MatchRules.OpeningLines(3)[2]),
-                WorldLayout.Section.Of("STILL MOVING"),
-                WorldLayout.Section.List(WorldLayout.Grid(waiting.Select(WorldLayout.Clip))),
-                new([.. WorldLayout.Rosters("TEAM ROUCHARD", teamOne, "TEAM ADA", teamTwo)]),
-            ], WorldLayout.Footer("type .ready when you are in", $"live in {left}s"), _hudTicks)),
+            ("move in discord, 3 boards", left => (OpeningPreview(left), 
+                BoardAt("A", teamA[0], teamA.Skip(1).ToList(), 4),
+                BoardAt("B", teamB[0], teamB.Skip(1).ToList(), 4))),
 
-            ("idle server", left => WorldLayout.Panel("idle server - fix it",
+            ("move in discord, 1 board", left => (OpeningPreview(left), null, null)),
+
+            ("idle server", left => (WorldLayout.Panel("idle server - fix it",
             [
                 WorldLayout.Section.Of("the server has been idle for 3 hours,", "which makes the first round behave oddly"),
                 WorldLayout.Section.Of("!reload   - load de_mirage again", "!restart  - restart the server", "!skip     - leave it as it is"),
-            ], "type one of them in chat", _hudTicks)),
+            ], "type one of them in chat", _hudTicks), null, null)),
         };
 
         Announce($"World panel preview: {steps.Count} panels, {PreviewSeconds}s each. !pug preview stop ends it.");
@@ -226,8 +256,19 @@ public partial class Gpp
 
             var step = steps[index];
             if (first) Announce($"[{index + 1}/{steps.Count}] {step.Name}");
-            string panel = step.Panel(left);
-            foreach (var player in HumanPlayers()) ShowWorldPanel(player, panel);
+            var (main, boardLeft, boardRight) = step.Boards(left);
+            foreach (var player in HumanPlayers()) ShowWorldPanel(player, main, boardLeft, boardRight);
         }, TimerFlags.REPEAT);
+    }
+
+    private string OpeningPreview(int left)
+    {
+        var lines = MatchRules.OpeningLines(3);
+        return WorldLayout.Panel(lines[0],
+        [
+            WorldLayout.Section.Of(lines[1], lines[2]),
+            WorldLayout.Section.Of("STILL MOVING"),
+            WorldLayout.Section.List(WorldLayout.Grid(PreviewNames.Take(Math.Max(1, left / 2)).Select(WorldLayout.Clip))),
+        ], WorldLayout.Footer("type .ready when you are in", $"live in {left}s"), _hudTicks);
     }
 }

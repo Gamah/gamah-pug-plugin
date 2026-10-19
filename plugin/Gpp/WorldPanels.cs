@@ -27,7 +27,29 @@ public partial class Gpp
     // is the one part of a pug that is aim.
     private void WorldHide() => ClearWorldPanels();
 
-    private void WorldShow(CCSPlayerController player, string panel) => ShowWorldPanel(player, panel);
+    private void WorldShow(CCSPlayerController player, string panel, string? left = null, string? right = null) =>
+        ShowWorldPanel(player, panel, left, right);
+
+    // The two team boards, one to each side. Team A is always the left one for everybody, whatever side
+    // they end up on and whoever they are: ten people looking at the same board is what makes "you're on
+    // A" mean something out loud, and it is the label the Discord bot will want when it comes to move
+    // people into voice.
+    //
+    // They start as the two captains and grow a line per pick. A name leaving the middle panel and
+    // appearing under a captain *is* the feedback that the pick landed - nothing else has to announce it.
+    private string TeamBoard(string label, ulong captain, List<ulong> team)
+    {
+        var names = new List<string> { WorldLayout.Clip(Name(captain)) + "  (c)" };
+        names.AddRange(team.Where(steamId => steamId != captain).Select(steamId => WorldLayout.Clip(Name(steamId))));
+
+        return WorldLayout.Panel($"team {label}",
+            [WorldLayout.Section.List(names)],
+            null, _hudTicks);
+    }
+
+    private string TeamALabel() => "A";
+
+    private string TeamBLabel() => "B";
 
     // --- captain sign-up ---------------------------------------------------------------------------
 
@@ -135,43 +157,21 @@ public partial class Gpp
         var pool = PickList().Select(entry => WorldLayout.Cell(entry.Number, Name(entry.Id))).ToList();
         string clock = _pickSecondsLeft > 0 ? $"{_pickSecondsLeft}s" : "";
 
+        // The same board for the whole room, bar its top line. Everyone is watching the same draft, and
+        // a pool that only the two captains can see is a room full of people guessing whether they have
+        // been picked yet. The one line that differs is the one addressed to whoever has to type.
+        var body = new List<WorldLayout.Section> { WorldLayout.Section.List(WorldLayout.Grid(pool)) };
+        string footer = WorldLayout.Footer(clock, $"{UndraftedCount()} still to pick");
+
+        string left = TeamBoard(TeamALabel(), _captain1, _team1);
+        string right = TeamBoard(TeamBLabel(), _captain2, _team2);
+
         foreach (var player in HumanPlayers())
         {
-            bool captain = Id(player) == _captain1 || Id(player) == _captain2;
-            string panel;
-
-            if (captain)
-            {
-                // The captain gets the list, and under it both teams as they fill - a captain picking
-                // blind to what the other side has taken is how a pug ends up with five AWPers.
-                bool theirs = Id(player) == onClock;
-                panel = WorldLayout.Panel(
-                    theirs ? "your pick" : $"{Name(onClock)} is picking",
-                    [
-                        WorldLayout.Section.List(WorldLayout.Grid(pool)),
-                        new([.. WorldLayout.Rosters(
-                            $"YOU", TeamOf(Id(player)).Select(Name),
-                            $"THEM", TeamOf(Other(Id(player))).Select(Name))]),
-                    ],
-                    WorldLayout.Footer(theirs ? "type the number" : "waiting on them", clock, $"{UndraftedCount()} left"),
-                    _hudTicks);
-            }
-            else
-            {
-                // Everybody else is in spectator and cannot act on the list at all. What they want to
-                // know is whether they have been picked yet and how long this will take.
-                panel = WorldLayout.Panel($"{Name(onClock)} is picking",
-                    [
-                        new([.. WorldLayout.Pair(
-                            Clip(TeamName(_captain1)), _team1.Select(Name),
-                            Clip(TeamName(_captain2)), _team2.Select(Name))]),
-                        WorldLayout.Section.Of(WhySpectating(Id(player))),
-                    ],
-                    WorldLayout.Footer(clock, $"{UndraftedCount()} still in the pool"),
-                    _hudTicks);
-            }
-
-            WorldShow(player, panel);
+            string title = Id(player) == onClock
+                ? "your pick - type the number"
+                : $"{Name(onClock)} is picking";
+            WorldShow(player, WorldLayout.Panel(title, body, footer, _hudTicks), left, right);
         }
     }
 
@@ -189,6 +189,9 @@ public partial class Gpp
         var unready = roster.Where(steamId => !_readied.Contains(steamId)).Select(Name).ToList();
         int ready = roster.Count - unready.Count;
 
+        string left = TeamBoard(TeamALabel(), _captain1, _team1);
+        string right = TeamBoard(TeamBLabel(), _captain2, _team2);
+
         foreach (var player in HumanPlayers())
         {
             bool drafted = _roster.ContainsKey(Id(player));
@@ -201,13 +204,10 @@ public partial class Gpp
                         ? "everybody is ready - here we go"
                         : $"{ready}/{roster.Count} READY - STILL TO READY"),
                     WorldLayout.Section.List(WorldLayout.Grid(unready.Select(WorldLayout.Clip))),
-                    new([.. WorldLayout.Rosters(
-                        Clip(TeamName(_captain1)), _team1.Select(Name),
-                        Clip(TeamName(_captain2)), _team2.Select(Name))]),
                 ],
                 WorldLayout.Footer(_readyHudMap, drafted ? null : "you are not in this match"),
                 _hudTicks);
-            WorldShow(player, panel);
+            WorldShow(player, panel, left, right);
         }
     }
 
@@ -215,7 +215,9 @@ public partial class Gpp
 
     private void WorldSidePanel()
     {
-        var (score1, score2) = (0, 0);
+        string left = TeamBoard(TeamALabel(), _captain1, _team1);
+        string right = TeamBoard(TeamBLabel(), _captain2, _team2);
+
         foreach (var player in HumanPlayers())
         {
             bool mine = Id(player) == WinningCaptain()
@@ -226,13 +228,10 @@ public partial class Gpp
                 [
                     WorldLayout.Section.Of($"{SideName(_knifeSide)} won the knife round",
                         mine ? ".stay keeps this side, .switch takes the other" : "waiting on their call"),
-                    new([.. WorldLayout.Rosters(
-                        Clip(_team1Name), _team1.Select(Name),
-                        Clip(_team2Name), _team2.Select(Name))]),
                 ],
-                WorldLayout.Footer(_matchMap, $"{score1}-{score2}"),
+                WorldLayout.Footer(_matchMap),
                 _hudTicks);
-            WorldShow(player, panel);
+            WorldShow(player, panel, left, right);
         }
     }
 
@@ -248,6 +247,12 @@ public partial class Gpp
             .Select(player => player.PlayerName)
             .ToList();
 
+        // Whether the team boards earn their place here is the open question: by now everybody knows who
+        // they are playing with, and what matters is which voice channel to be in. _openingBoards is what
+        // !pug discord switches, so both can be looked at on a screen rather than argued about.
+        string? left = _openingBoards ? TeamBoard(TeamALabel(), _captain1, _team1) : null;
+        string? right = _openingBoards ? TeamBoard(TeamBLabel(), _captain2, _team2) : null;
+
         foreach (var player in HumanPlayers())
         {
             bool mine = _openingReady.Contains(Id(player));
@@ -256,14 +261,24 @@ public partial class Gpp
                     WorldLayout.Section.Of(lines[1], lines[2]),
                     WorldLayout.Section.Of(waiting.Count == 0 ? "everybody is in" : "STILL MOVING"),
                     WorldLayout.Section.List(WorldLayout.Grid(waiting.Select(WorldLayout.Clip))),
-                    new([.. WorldLayout.Rosters(
-                        Clip(_team1Name), _team1.Select(Name),
-                        Clip(_team2Name), _team2.Select(Name))]),
                 ],
                 WorldLayout.Footer(mine ? "you are in" : "type .ready when you are in", $"live in {_openingSecondsLeft}s"),
                 _hudTicks);
-            WorldShow(player, panel);
+            WorldShow(player, panel, left, right);
         }
+    }
+
+    // Three boards at the Discord hold, or just the one. Live, because this is the one placement nobody
+    // has an opinion about until they are standing in front of it.
+    private bool _openingBoards = true;
+
+    internal string SetOpeningBoards(string arg)
+    {
+        if (arg is "1" or "one" or "off") _openingBoards = false;
+        else if (arg is "3" or "three" or "on") _openingBoards = true;
+        else return $"Discord hold shows {(_openingBoards ? "3 boards" : "1 board")} - !pug discord 1 or 3.";
+
+        return $"Discord hold now shows {(_openingBoards ? "3 boards" : "1 board")}.";
     }
 
     // --- the two panels that are not part of a pug at all --------------------------------------------

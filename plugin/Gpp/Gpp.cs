@@ -301,6 +301,15 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
                 // standing in the same spot. "orient" is the default; see Config.HudAnchor.
                 Reply(command, SetAnchor(arg, command.ArgCount > 3 ? command.ArgByIndex(3) : ""));
                 break;
+            case "sides":
+                // Where the two team boards sit, tuned on screen rather than guessed at.
+                Reply(command, SetSides(arg,
+                    command.ArgCount > 3 ? command.ArgByIndex(3) : "",
+                    command.ArgCount > 4 ? command.ArgByIndex(4) : ""));
+                break;
+            case "discord":
+                Reply(command, SetOpeningBoards(arg));
+                break;
             case "scroll":
                 ScrollProbe();
                 break;
