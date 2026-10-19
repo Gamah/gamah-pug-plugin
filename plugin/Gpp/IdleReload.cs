@@ -113,6 +113,7 @@ public partial class Gpp
     {
         if (!Config.Hud) return;
         _repaint = IdlePromptPanel;
+        if (WorldStyle) { WorldIdlePanel(); return; }
 
         // The alert box explains; the lower panel carries what to type. Three lines up there because the
         // sentence does not fit two and the clock is the part people care about.

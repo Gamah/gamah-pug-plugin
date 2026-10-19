@@ -103,6 +103,7 @@ public partial class Gpp
     {
         if (!Config.Hud) return;
         _repaint = OptInPanel;
+        if (WorldStyle) { WorldOptInPanel(); return; }
 
         var names = _volunteers.Where(steamId => PlayerBySteamId(steamId) != null).Select(Name).ToList();
         var body = names.Count == 0

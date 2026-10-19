@@ -72,6 +72,7 @@ public partial class Gpp
     {
         if (!Config.Hud) return;
         _repaint = RestartPanel;
+        if (WorldStyle) { WorldRestartPanel(); return; }
 
         foreach (var player in HumanPlayers())
         {

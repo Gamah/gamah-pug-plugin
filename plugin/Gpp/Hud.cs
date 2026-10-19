@@ -90,6 +90,7 @@ public partial class Gpp
     private void Clear()
     {
         _repaint = null;
+        ClearWorldPanels();
         foreach (var player in HumanPlayers())
         {
             player.PrintToCenter(" ");
@@ -112,6 +113,19 @@ public partial class Gpp
     private void PaintPhase()
     {
         _repaint = PaintPhase;
+
+        if (WorldStyle)
+        {
+            switch (_phase)
+            {
+                // The captains are knifing for first pick: nothing on screen for anybody. The panel is a
+                // solid object in front of the face and this is the one part of the pug that is aim.
+                case PugPhase.CaptainKnife: WorldHide(); break;
+                case PugPhase.MapVote: WorldVotePanel(); break;
+                case PugPhase.Draft: WorldDraftPanel(); break;
+            }
+            return;
+        }
 
         foreach (var player in HumanPlayers())
         {
@@ -276,6 +290,8 @@ public partial class Gpp
     {
         _repaint = ReadyHudPaint;
 
+        if (WorldStyle) { WorldReadyPanel(); return; }
+
         // Bots cannot ready up, so they are neither counted nor named.
         var roster = _roster.Keys.Where(steamId => !IsBotId(steamId)).ToList();
         var unready = roster.Where(steamId => !_readied.Contains(steamId)).Select(Name).ToList();
@@ -333,6 +349,16 @@ public partial class Gpp
     private void MatchHudPaint()
     {
         _repaint = MatchHudPaint;
+
+        if (WorldStyle)
+        {
+            // Side choice gets the panel; the knife round does not, and a pause keeps the centre panel
+            // on purpose - the match is live, and a board in front of ten people's faces when the round
+            // is about to resume is the one place this overlay must not be.
+            if (_matchPhase == MatchPhase.SideChoice) { WorldSidePanel(); return; }
+            WorldHide();
+            if (_matchPhase == MatchPhase.Knife) return;
+        }
 
         var (score1, score2) = _matchPhase == MatchPhase.Live ? Score() : (0, 0);
 

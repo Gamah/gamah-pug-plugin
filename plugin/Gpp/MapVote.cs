@@ -176,6 +176,8 @@ public partial class Gpp
         var here = HumanPlayers();
         _expectedPlayers = here.Count;
         _expectedBots = here.Count(player => player.IsBot);
+        _expectedRoster.Clear();
+        foreach (var player in here.Where(player => !player.IsBot)) _expectedRoster[Id(player)] = player.PlayerName;
         ResetVote();
         StopHud();
         _phase = PugPhase.Idle;

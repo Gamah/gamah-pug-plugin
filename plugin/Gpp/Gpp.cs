@@ -58,6 +58,13 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         RegisterListener<Listeners.OnMapStart>(OnMapStart);
         RegisterListener<Listeners.OnClientDisconnect>(OnClientDisconnect);
 
+        // The world panel. CheckTransmit is what keeps each panel to the one person it is addressed to -
+        // without it a ten-man pug is ten boards hanging in the same room - and OnTick only does any work
+        // on the fallback tier that has to move the panel itself.
+        ProbeFollow();
+        RegisterListener<Listeners.CheckTransmit>(WorldPanelTransmit);
+        RegisterListener<Listeners.OnTick>(WorldPanelTick);
+
         // Who holds the warmup open on a server that has only just started: nothing else does now. The
         // OnMapStart listener above is no use for it - a plugin loads after the map it loads into - and
         // the gamerules entity does not exist for the first moment or two, so the check waits.
@@ -68,6 +75,14 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         {
             if (!MatchRunning && InWarmupPeriod()) ExecWarmupCfg();
         });
+    }
+
+    // A hot reload is how this plugin is deployed - writing the dll *is* the reload - so unload has to
+    // take the world panels with it. CSS does not remove a plugin's entities, and a point_worldtext left
+    // behind hangs in front of somebody's face until the map changes, with no plugin left to clear it.
+    public override void Unload(bool hotReload)
+    {
+        ClearWorldPanels();
     }
 
     // MatchZy is still installed next to GPP until a pug has been run without it. Asleep it does nothing,
@@ -133,6 +148,10 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
     private void OnMapStart(string mapName)
     {
         QuietenMatchZy();
+        // Entities do not survive a map change, but the dictionary pointing at them does, and a stale
+        // wrapper is how a panel ends up being updated into a dead handle. Sweeping the world as well
+        // catches anything a crash or a hot reload left behind.
+        SweepStrayPanels();
         ClearFunEffects();
         CloseIdlePrompt();
         // The new map is as fresh as it gets, so the clock starts again from here.
@@ -158,6 +177,9 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         var player = Utilities.GetPlayerFromSlot(slot);
         if (player == null || !player.IsValid) return;
         var steamId = Id(player);
+        // Their panel goes with them: a point_worldtext left parented to a pawn that no longer exists
+        // stays in the world until the map does.
+        HideWorldPanel(slot);
 
         // Next frame: this runs before the player is actually gone, so liveness checks still see them.
         Server.NextFrame(() =>
@@ -273,12 +295,6 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
             case "preview":
                 if (arg == "stop") { StopPreview(); StopHud(); Reply(command, "Preview stopped."); }
                 else HudPreview();
-                break;
-            case "panel":
-                // No arguments on purpose: the numbers below are the ones that looked right, and a
-                // command nobody types with arguments does not need to parse any.
-                if (arg == "stop") AfterTick(StopWorldPanel);
-                else AfterTick(() => WorldPanelDemo(player));
                 break;
             case "scroll":
                 ScrollProbe();

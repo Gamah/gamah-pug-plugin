@@ -140,6 +140,12 @@ public class GppConfig : BasePluginConfig
     // Show each captain the pick list on a redrawing centre-screen panel instead of in chat.
     [JsonPropertyName("hud")] public bool Hud { get; set; } = true;
 
+    // Which overlay draws the panels: "center" is PrintToCenter, four lines of eighty characters with a
+    // measured glyph table behind it; "world" is a point_worldtext in front of each player, twelve lines
+    // and no width budget. The centre panel is kept so a pug night can be rescued by flipping this back
+    // rather than rolling the plugin back.
+    [JsonPropertyName("hud_style")] public string HudStyle { get; set; } = "world";
+
     // "alternate" = 1,2,1,2 ... ; "snake" = 1,2,2,1,1,2,2,1 ...
     [JsonPropertyName("pick_order")] public string PickOrder { get; set; } = "alternate";
 

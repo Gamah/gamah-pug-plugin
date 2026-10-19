@@ -35,6 +35,10 @@ public partial class Gpp
     // were bots, so a test run can ask the engine for the same number again on the new map.
     private int _expectedPlayers;
     private int _expectedBots;
+
+    // Who those players were, by name, so the reconnect panel can say who the room is waiting on rather
+    // than only how many. A headcount tells nobody whether to go and poke someone in Discord.
+    private readonly Dictionary<ulong, string> _expectedRoster = [];
     private int _waitSecondsLeft;
 
     // Seconds of the reconnect window left over when the draft started early, and the moment it closes.
@@ -89,8 +93,13 @@ public partial class Gpp
             {
                 Announce($"Waiting: {here}/{_expectedPlayers} back, {_waitSecondsLeft}s.");
             }
+            // The one phase that never had a panel: a chat line every fifteen seconds, to a room that
+            // has just reconnected and is looking at a warmup. Whoever is back can see who is not.
+            if (WorldStyle) WorldWaitPanel();
             return;
         }
+
+        if (WorldStyle) ClearWorldPanels();
 
         _waitTimer?.Kill();
         _waitTimer = null;

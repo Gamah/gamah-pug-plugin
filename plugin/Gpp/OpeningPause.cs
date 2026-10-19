@@ -112,6 +112,7 @@ public partial class Gpp
     {
         if (!Config.Hud) return;
         _repaint = OpeningPanel;
+        if (WorldStyle) { WorldOpeningPanel(); return; }
 
         // Their words, in the box people actually read. The lower panel carries the clock and who it is
         // aimed at, so the alert box can be the three lines and nothing else.

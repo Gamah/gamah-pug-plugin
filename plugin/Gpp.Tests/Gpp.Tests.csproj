@@ -19,6 +19,7 @@
     <Compile Include="../Gpp/StatsStore.cs" />
     <Compile Include="../Gpp/HudLayout.cs" />
     <Compile Include="../Gpp/HudMetrics.cs" />
+    <Compile Include="../Gpp/WorldLayout.cs" />
   </ItemGroup>
 
   <ItemGroup>
