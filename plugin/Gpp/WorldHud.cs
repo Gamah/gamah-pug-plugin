@@ -120,7 +120,7 @@ public partial class Gpp
     // per-player too.
     private void WorldPanelTransmit(CCheckTransmitInfoList infos)
     {
-        if (_panels.Count == 0) return;
+        if (Retired || _panels.Count == 0) return;
 
         foreach (var (info, receiver) in infos)
         {
@@ -243,14 +243,14 @@ public partial class Gpp
     // [SOURCE: shape taken from darkerz7/CS2-GameHUD HUD.cs GetPositionOrient, read 2026-10-19]
     private void Hang(CCSPlayerController player, ViewerPanel panel, Board which)
     {
-        var pawn = player.PlayerPawn.Value;
+        var pawn = ViewPawn(player);
         var slot = panel.Boards[(int)which];
-        if (slot.Text == null || !slot.Text.IsValid || pawn == null || !pawn.IsValid || pawn.AbsOrigin == null) return;
+        if (slot.Text == null || !slot.Text.IsValid || pawn == null || pawn.AbsOrigin == null) return;
 
         if (_follow == Follow.Teleport)
         {
-            Square(slot, which, pawn.AbsOrigin, pawn.EyeAngles, EyeHeight(pawn));
-            panel.AimedAt = pawn.EyeAngles.Y;
+            Square(slot, which, pawn.AbsOrigin, Eyes(pawn), EyeHeight(pawn));
+            panel.AimedAt = Eyes(pawn).Y;
             return;
         }
 
@@ -275,13 +275,13 @@ public partial class Gpp
             _follow = Follow.Teleport;
         }
 
-        Square(slot, which, pawn.AbsOrigin, pawn.EyeAngles, EyeHeight(pawn));
-        panel.AimedAt = pawn.EyeAngles.Y;
+        Square(slot, which, pawn.AbsOrigin, Eyes(pawn), EyeHeight(pawn));
+        panel.AimedAt = Eyes(pawn).Y;
     }
 
     // One orient per viewer, shared by all three boards: it is the expensive half - the thing that has
     // to be aimed - and the boards only differ by a fixed offset within its frame.
-    private CPointOrient? EnsureOrient(CCSPlayerController player, ViewerPanel panel, CCSPlayerPawn pawn)
+    private CPointOrient? EnsureOrient(CCSPlayerController player, ViewerPanel panel, CBasePlayerPawn pawn)
     {
         if (panel.Orient != null && panel.Orient.IsValid && panel.ParentedTo == (int)pawn.Index) return panel.Orient;
 
@@ -356,8 +356,8 @@ public partial class Gpp
     // enough to be worth re-squaring.
     private void KeepUp(CCSPlayerController player, ViewerPanel panel)
     {
-        var pawn = player.PlayerPawn.Value;
-        if (pawn == null || !pawn.IsValid || pawn.AbsOrigin == null) return;
+        var pawn = ViewPawn(player);
+        if (pawn == null || pawn.AbsOrigin == null) return;
         if (!panel.Live.Any()) return;
 
         if (_follow != Follow.Teleport && panel.ParentedTo != (int)pawn.Index)
@@ -391,7 +391,7 @@ public partial class Gpp
             return;
         }
 
-        var eyes = pawn.EyeAngles;
+        var eyes = Eyes(pawn);
         for (int which = 0; which < panel.Boards.Length; which++)
         {
             Square(panel.Boards[which], (Board)which, pawn.AbsOrigin, eyes, EyeHeight(pawn));
@@ -424,7 +424,7 @@ public partial class Gpp
     // The Teleport tier only: every tick, for the players who have a panel up.
     private void WorldPanelTick()
     {
-        if (_follow != Follow.Teleport || _panels.Count == 0) return;
+        if (Retired || _follow != Follow.Teleport || _panels.Count == 0) return;
         foreach (var (slot, panel) in _panels)
         {
             var player = Utilities.GetPlayerFromSlot(slot);
@@ -433,7 +433,35 @@ public partial class Gpp
         }
     }
 
-    private static float EyeHeight(CCSPlayerPawn pawn) => pawn.ViewOffset.Z == 0 ? 64f : pawn.ViewOffset.Z;
+    private static float EyeHeight(CBasePlayerPawn pawn) => pawn.ViewOffset.Z == 0 ? 64f : pawn.ViewOffset.Z;
+
+    // Whichever pawn this player is actually looking through.
+    //
+    // A spectator has no PlayerPawn at all - and during the draft everybody who has not been picked yet
+    // is held in spectator, which is to say the people the panel most needs to reach were the only ones
+    // not getting it. m_hPawn is whichever pawn the engine is using, observer or alive, so that is the
+    // one to ask.
+    //
+    // Somebody watching another player in first person is looking through that player's eyes, so the
+    // boards hang off the target's pawn rather than the observer's: parented to the observer pawn they
+    // would sit wherever the observer entity happens to be, which is not where the camera is.
+    private static CBasePlayerPawn? ViewPawn(CCSPlayerController player)
+    {
+        var alive = player.PlayerPawn.Value;
+        if (alive != null && alive.IsValid && alive.Health > 0 && alive.AbsOrigin != null) return alive;
+
+        var pawn = player.Pawn.Value;
+        if (pawn == null || !pawn.IsValid) return null;
+
+        var watching = pawn.ObserverServices?.ObserverTarget?.Value?.As<CBasePlayerPawn>();
+        if (watching != null && watching.IsValid && watching.AbsOrigin != null) return watching;
+
+        return pawn.AbsOrigin == null ? null : pawn;
+    }
+
+    // The view angle, which is the one field that is on every pawn. EyeAngles is only on CCSPlayerPawn,
+    // so reading it was the other half of why spectators got nothing.
+    private static QAngle Eyes(CBasePlayerPawn pawn) => pawn.V_angle;
 
     private static float Delta(float now, float then)
     {

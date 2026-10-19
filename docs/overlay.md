@@ -99,3 +99,21 @@ the dll *is* a reload, so `Unload` has to take the boards with it or a hot deplo
 everybody's face with no plugin left to clear it. `SweepStrayPanels` runs on map start and removes any
 `point_worldtext` or `point_orient` left behind by a crash or a bad deploy. A respawn means a new pawn,
 which means the old parent is gone - `KeepUp` notices and rehangs.
+
+## Open
+
+**The boards still come out different sizes** (observed 2026-10-19, after the rule and the filler marks
+went in). Every board is the same twelve lines and the same rule width, and the scale is a constant, so
+they are the same size *in the world* - but the two side boards are further from the eye than the middle
+one, and perspective does the rest. At seventy units forward and about forty-five to the side, a side
+board is eighty-three units away rather than seventy: roughly fifteen per cent smaller on screen, which
+is about what it looks like.
+
+The fix is to hang all three at the same radial distance from the eye rather than the same forward
+distance - put them on an arc, not a line - so the lateral offset moves a board around the viewer rather
+than away from them. Each board's own yaw then has to come from where it sits on that arc, which is what
+the toe-in has been approximating by hand.
+
+Worth re-checking after that, because they share a cause: whether a board that is toed in reads as
+narrower than the middle one simply because it is turned away, and whether the toe-in should be exactly
+the angle the board sits at rather than a number that was picked by eye.

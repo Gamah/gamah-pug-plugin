@@ -49,6 +49,9 @@ public partial class Gpp
 
     private HookResult OnSay(CCSPlayerController? player, CommandInfo command)
     {
+        // An instance that has been unloaded is still registered here until the server restarts - see
+        // Unload. Its answer would be the second, third and sixth copy of the same reply.
+        if (Retired) return HookResult.Continue;
         if (player == null || !player.IsValid || player.IsBot) return HookResult.Continue;
         if (command.ArgCount < 2) return HookResult.Continue;
 

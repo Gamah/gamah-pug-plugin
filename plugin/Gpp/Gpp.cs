@@ -82,8 +82,21 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
     // behind hangs in front of somebody's face until the map changes, with no plugin left to clear it.
     public override void Unload(bool hotReload)
     {
+        // A listener registered by this instance can outlive it. CounterStrikeSharp does not reliably
+        // take command listeners with the plugin, so after six hot reloads in a session a dot command
+        // was answered six times - once per instance still listening. The dedupe in Fun.cs cannot see
+        // that, because each instance has its own copy of it and each one thinks the message is new.
+        //
+        // Unload is called on the old instance before the new one loads, so this is the one moment an
+        // outgoing instance can be told to stop answering. Everything it still listens to checks it.
+        _unloaded = true;
         ClearWorldPanels();
     }
+
+    // Set by Unload: this instance has been replaced and must not act on anything it still hears.
+    private bool _unloaded;
+
+    internal bool Retired => _unloaded;
 
     // MatchZy is still installed next to GPP until a pug has been run without it. Asleep it does nothing,
     // but two of its cvars outlive the match that set them and kick people on connect - the whitelist for
