@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Utils;
@@ -181,6 +182,7 @@ public partial class Gpp
             {
                 HideWorldPanel(player.Slot);
                 player.PrintToCenterAlert(Alert($"{Name(onClock)} IS PICKING", "YOU WILL BE SPAWNED WHEN PICKED"));
+                DraftDrawn(player, "alert (no pawn of their own)");
                 continue;
             }
 
@@ -188,7 +190,23 @@ public partial class Gpp
                 ? "your pick - type the number"
                 : $"{Name(onClock)} is picking";
             WorldShow(player, WorldLayout.MainPanel(title, body, footer, _hudTicks), left, right);
+            DraftDrawn(player, "boards");
         }
+    }
+
+    // What was drawn for whom, logged when it changes rather than every tick. "I saw nothing" and "the
+    // plugin drew nothing" are different problems and this is the line that tells them apart.
+    private readonly Dictionary<int, string> _drewForDraft = [];
+
+    private void DraftDrawn(CCSPlayerController player, string what)
+    {
+        if (_drewForDraft.TryGetValue(player.Slot, out var last) && last == what) return;
+        _drewForDraft[player.Slot] = what;
+
+        var pawn = player.PlayerPawn.Value;
+        Logger.LogInformation("Draft overlay for {Name}: {What} (team {Team}, pawn {Pawn})",
+            player.PlayerName, what, player.Team,
+            pawn == null || !pawn.IsValid ? "none" : $"health {pawn.Health}");
     }
 
     private List<ulong> TeamOf(ulong captain) => captain == _captain1 ? _team1 : _team2;
