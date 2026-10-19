@@ -1,25 +1,31 @@
 using Microsoft.Extensions.Logging;
 using CounterStrikeSharp.API;
+using CounterStrikeSharp.API.Core;
+using CounterStrikeSharp.API.Core.Attributes.Registration;
+using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Timers;
 
 namespace Gpp;
 
-// A server nobody has been on for ten hours does not behave like one that has just started. The warmup
-// has been held open that whole time, the round has been restarted by every phase that came and went, and
-// the first people to connect get a round that does odd things - which is what gets complained about, and
-// what a map load fixes outright.
+// A server nobody has been on for hours does not behave like one that has just started. The warmup has
+// been held open that whole time, the round has been restarted by every phase that came and went, and the
+// first people to connect get a round that does odd things - which is what gets complained about, and
+// what a map load or a restart fixes outright.
 //
-// So: the moment somebody arrives on a server that has been empty longer than idle_reload_minutes, say
-// what is about to happen, give them half a minute to read it, and load the map fresh. The warning is the
-// point. Reloading the map under someone with no notice is the same bug from their side.
+// It asks rather than acts. Reloading the map under whoever just connected, or restarting the server on
+// them, is the same complaint from the other side - so the panel stays up until somebody picks:
+//
+//   !reload    load this map again - keeps everyone connected
+//   !restart   restart the server  - everyone reconnects, clears everything
+//   !skip      leave it alone      - until the next time the server has sat empty
+//
+// Anyone can pick. None of the three does anything unless the panel is up, so !restart is not a command
+// players have; it is one of three answers to a question the server asked.
 public partial class Gpp
 {
     // When the server last had a real player on it, or null while it has one. Starts at "empty now", so a
     // plugin load is not mistaken for ten hours of idling.
     private DateTime? _emptySince = DateTime.UtcNow;
-
-    private int _idleReloadSecondsLeft;
-    private CounterStrikeSharp.API.Modules.Timers.Timer? _idleReloadTimer;
 
     // Occupancy is only a question about an idle server, so it is not asked while a match is on - and not
     // every tick either. The threshold is half an hour; five-second resolution is plenty, and it keeps a
@@ -27,11 +33,12 @@ public partial class Gpp
     private const int IdleCheckSeconds = 5;
     private int _idleCheckTicks;
 
-    internal bool IdleReloadPending => _idleReloadTimer != null;
+    // How long the server had been empty when somebody turned up, while the panel is asking about it.
+    private TimeSpan _idleWas;
+    private CounterStrikeSharp.API.Modules.Timers.Timer? _idlePromptTimer;
 
-    // Called once a second from the warmup watch. The transition is followed here rather than from the
-    // connect hook because the two race: by the time a connect is handled, the tick has already seen the
-    // player and forgotten how long the server was empty.
+    internal bool IdlePromptUp => _idlePromptTimer != null;
+
     private void TrackIdleTime()
     {
         // A match means the server is occupied by definition. Clearing the stamp here is also what stops
@@ -57,93 +64,134 @@ public partial class Gpp
         var idle = DateTime.UtcNow - _emptySince.Value;
         _emptySince = null;
 
-        if (Config.IdleRestartHours > 0 && idle.TotalHours >= Config.IdleRestartHours)
-        {
-            // Long enough that a fresh map is not obviously enough. A restart costs whoever just
-            // connected a reconnect, which is why it is not what half an hour of idling gets.
-            AskForRestart($"the server had been idle for {Describe(idle)}");
-            return;
-        }
-
         if (Config.IdleReloadMinutes <= 0) return;
         if (idle.TotalMinutes < Config.IdleReloadMinutes) return;
-        // Nothing is reloaded out from under a pug. An empty server cannot have had one running, but a
-        // reload armed and then cancelled leaves this the only guard that matters.
-        if (MatchRunning || _phase != PugPhase.Idle || CaptainOptInOpen) return;
+        // Nothing is offered over the top of a pug.
+        if (MatchRunning || _phase != PugPhase.Idle || CaptainOptInOpen || RestartPending) return;
 
-        ArmIdleReload(idle);
+        OpenIdlePrompt(idle);
     }
 
-    private void ArmIdleReload(TimeSpan idle)
+    private void OpenIdlePrompt(TimeSpan idle)
     {
-        _idleReloadSecondsLeft = Math.Max(5, Config.IdleReloadWarningSeconds);
-        Logger.LogInformation("Server was empty for {Hours:F1}h - reloading {Map} in {Seconds}s.",
-            idle.TotalHours, Config.IdleReloadMap, _idleReloadSecondsLeft);
-        Announce($"Server has been idle for {Describe(idle)} - reloading "
-            + $"{Colorize("{green}")}{Config.IdleReloadMap}{Colorize("{default}")} in {_idleReloadSecondsLeft}s "
-            + "so the first round behaves.");
+        _idleWas = idle;
+        Logger.LogInformation("Server was empty for {Hours:F1}h - offering reload/restart/skip.", idle.TotalHours);
+        Announce($"Server has been idle for {Describe(idle)}, which makes the first round behave oddly.");
+        Prompt("Fix it:", "!reload / !restart / !skip", Everybody);
 
-        _idleReloadTimer?.Kill();
-        _idleReloadTimer = AddTimer(1.0f, IdleReloadTick, TimerFlags.REPEAT);
-        IdleReloadPanel();
+        _idlePromptTimer?.Kill();
+        _idlePromptTimer = AddTimer(1.0f, IdlePromptTick, TimerFlags.REPEAT);
+        IdlePromptPanel();
     }
 
-    internal void CancelIdleReload(string why)
+    private void CloseIdlePrompt()
     {
-        if (_idleReloadTimer == null) return;
-        _idleReloadTimer?.Kill();
-        _idleReloadTimer = null;
-        _idleReloadSecondsLeft = 0;
+        _idlePromptTimer?.Kill();
+        _idlePromptTimer = null;
         Clear();
-        Announce($"Map reload cancelled. {why}");
     }
 
-    private void IdleReloadTick()
+    // The panel stays up until one of the three is picked. The only thing that takes it down by itself is
+    // a pug starting, which answers the question a different way.
+    private void IdlePromptTick()
     {
-        // An admin who starts a pug inside the warning window means it now, not after a map change.
         if (_phase != PugPhase.Idle || MatchRunning || CaptainOptInOpen)
         {
-            AfterTick(() => CancelIdleReload("A pug is starting."));
+            AfterTick(CloseIdlePrompt);
             return;
         }
-
-        if (--_idleReloadSecondsLeft > 0)
+        if (!HumanPlayers().Any(player => !player.IsBot))
         {
-            if (_idleReloadSecondsLeft % 10 == 0 || _idleReloadSecondsLeft == 5)
-            {
-                Announce($"Reloading {Config.IdleReloadMap} in {_idleReloadSecondsLeft}s.");
-            }
-            IdleReloadPanel();
+            // Everybody left again. The server is idling once more, so the question will be asked afresh.
+            AfterTick(CloseIdlePrompt);
             return;
         }
-
-        AfterTick(() =>
-        {
-            _idleReloadTimer?.Kill();
-            _idleReloadTimer = null;
-            Clear();
-
-            string map = Config.IdleReloadMap;
-            Logger.LogInformation("Reloading the map after an idle spell: {Map}", map);
-            // A workshop map is addressed by id, the same as the vote does it.
-            if (long.TryParse(map, out _)) Server.ExecuteCommand($"host_workshop_map \"{map}\"");
-            else Server.ExecuteCommand($"changelevel \"{map}\"");
-        });
+        IdlePromptPanel();
     }
 
-    private void IdleReloadPanel()
+    private void IdlePromptPanel()
     {
         if (!Config.Hud) return;
         BumpPaintTick();
 
-        foreach (var player in HumanPlayers())
+        // The alert box explains; the lower panel carries what to type. Three lines up there because the
+        // sentence does not fit two and the clock is the part people care about.
+        string alert = Alert("IDLE SERVER FIX", "server has been idle for", Describe(_idleWas));
+        var panel = Columns(
+        [
+            $"!reload - load {Server.MapName} again",
+            "!restart - restart the server",
+            "!skip - leave it",
+        ]);
+
+        foreach (var player in HumanPlayers()) Paint(player, alert, panel);
+    }
+
+    // --- the three answers ------------------------------------------------------------------------
+
+    [ConsoleCommand("css_reload", "Reload the current map (offered when the server has been idle)")]
+    public void OnReloadCommand(CCSPlayerController? player, CommandInfo command) =>
+        AfterTick(() => AnswerIdlePrompt(Caller(player), "reload"));
+
+    [ConsoleCommand("css_restart", "Restart the server (offered when the server has been idle)")]
+    public void OnRestartServerCommand(CCSPlayerController? player, CommandInfo command) =>
+        AfterTick(() => AnswerIdlePrompt(Caller(player), "restart"));
+
+    [ConsoleCommand("css_skip", "Leave an idle server as it is")]
+    public void OnSkipCommand(CCSPlayerController? player, CommandInfo command) =>
+        AfterTick(() => AnswerIdlePrompt(Caller(player), "skip"));
+
+    internal void AnswerIdlePrompt(CCSPlayerController? player, string answer)
+    {
+        if (!IdlePromptUp)
         {
-            Paint(player, TwoLine("SERVER WAS IDLE", $"reloading in {_idleReloadSecondsLeft}s"),
-            [
-                $"loading {Config.IdleReloadMap} fresh - an idle server plays a strange first round",
-                "you will reconnect on your own",
-            ]);
+            // Not a standing command. Without the panel up there is nothing being asked, and !restart in
+            // particular is not something anybody gets to type at a server mid-pug.
+            Tell(player, "Nothing to answer - that is offered when the server has been sitting empty.");
+            return;
         }
+
+        string who = player != null && player.IsValid ? player.PlayerName : "An admin";
+        CloseIdlePrompt();
+
+        switch (answer)
+        {
+            case "reload":
+                Announce($"{Colorize("{green}")}{who}{Colorize("{default}")} picked a map reload - loading "
+                    + $"{Server.MapName} again.");
+                AfterTick(ReloadThisMap);
+                break;
+
+            case "restart":
+                // Ten seconds rather than the usual thirty: whoever asked for it is standing there
+                // waiting, and anyone else who has just connected is still loading in anyway.
+                AskForRestart($"{who} asked for a restart on an idle server", 10);
+                break;
+
+            default:
+                Announce($"{who} left it as it is. Ask again next time the server has been empty a while.");
+                break;
+        }
+    }
+
+    // The map that is running, loaded again. A workshop map is addressed by its id, so the id comes from
+    // the pool rather than from Server.MapName, which is the map's own name and not something
+    // host_workshop_map will take.
+    private void ReloadThisMap()
+    {
+        string running = Server.MapName;
+        var pooled = Config.MapPool.FirstOrDefault(map =>
+            map.IsWorkshop && map.Name.Equals(running, StringComparison.OrdinalIgnoreCase));
+
+        if (pooled != null)
+        {
+            Logger.LogInformation("Reloading workshop map {Id} ({Name})", pooled.WorkshopId, running);
+            Server.ExecuteCommand($"host_workshop_map \"{pooled.WorkshopId}\"");
+            return;
+        }
+
+        Logger.LogInformation("Reloading map {Map}", running);
+        Server.ExecuteCommand($"changelevel \"{running}\"");
     }
 
     // "10 hours", "45 minutes" - the number people would use when complaining about it.

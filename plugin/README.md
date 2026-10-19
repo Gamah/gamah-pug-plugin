@@ -28,7 +28,8 @@ not yet run with ten people on it.
 | `!pug stop` | admin | **Nuke everything.** Ends the match, clears bots, drops every phase, frees spectators and lands in a held warmup. Works from any state |
 | `!pug cancel` | admin | Abandon the running vote or draft, and nothing else |
 | `!pug status` | admin | What phase it is in, and the score if a match is live |
-| `!pug keepmap` | admin | Call off the map reload or restart that has just been announced |
+| `!pug keepmap` | admin | Call off a restart that has just been announced |
+| `!reload` / `!restart` / `!skip` | everyone | The three answers to the idle-server panel. They do nothing when it is not up |
 | `!pug restart` | admin | Restart the whole server after a warning and a countdown |
 | `!<number>` | everyone | **The main one.** Votes for that map during a vote, makes that pick during a draft. Silent outside both |
 | `!vote <number\|map>` | everyone | Vote during a map vote. `!<number>` is shorter |
@@ -122,16 +123,10 @@ went with MatchZy; `!pug draft` still drafts on whatever map the server is alrea
 - `knife_round` (true) — knife round for sides once everybody has readied. Off goes straight live on the
   drafted sides
 - `min_ready` (2) — `.ready` needed to start the match. 0 means every drafted player
-- `idle_reload_minutes` (30), `idle_reload_warning_seconds` (30), `idle_reload_map` (`de_dust2`) — when
-  the first person connects to a server that has been empty this long, GPP warns for half a minute and
-  then loads that map. A server left idle for hours plays a strange first round: the warmup has been held
-  open the whole time and every phase that came and went restarted the round. A map load is the whole
-  fix, and the warning is why it is not just a reload in someone's face. 0 minutes turns it off,
-  `!pug keepmap` calls off one that has been announced, and starting a pug inside the window cancels it
-- `idle_restart_hours` (0 = off), `restart_warning_seconds` (30) — above that many hours of idling the
-  first person to connect gets the **server restarted** rather than the map reloaded, which costs them a
-  reconnect and is why half an hour of idling does not get it. Needs `Restart=always` on the unit; see
-  below
+- `idle_reload_minutes` (30) — how long the server has to have been empty before the first person to
+  connect is offered the fix for it. 0 turns it off. See below
+- `restart_warning_seconds` (30) — the countdown on `!pug restart`. The idle panel's `!restart` uses 10,
+  since whoever picked it is standing there waiting
 - `captain_opt_in_seconds` (30) — the sign-up window `!pug start` opens before the map vote: anyone can
   `!captain`, and the two captains are drawn from whoever did. Fewer than two volunteers and the rest of
   the draw is at random as before. 0 turns it off; `!pug start force` skips it
@@ -186,6 +181,33 @@ Reload by index, never by name: `css_plugins reload 3`. `css_plugins reload Gpp`
   noise rather than a conflict. It goes away with MatchZy.
 
 Nothing in GPP reads MatchZy state any more, and nothing in GPP kicks anyone.
+
+## The idle-server panel
+
+A server left alone for hours plays a strange first round — the warmup has been held open the whole time
+and every phase that came and went restarted the round. The fix is a map load or a restart, and the first
+person to connect to a server that has been empty longer than `idle_reload_minutes` gets asked which:
+
+    IDLE SERVER FIX                 <- the alert box explains
+    server has been idle for
+    10 hours
+
+    !reload - load de_mirage again  !restart - restart the server  !skip - leave it
+
+**It asks rather than acts.** Reloading the map under whoever just walked in, or restarting the server on
+them, is the same complaint from the other side. The panel stays up until one of the three is picked —
+there is no timer on it — and **anyone** can pick, admin or not. The three commands do nothing at all
+while the panel is not up, so `!restart` is not a command players have; it is one of three answers to a
+question the server asked. `!skip` leaves it until the next time the server has sat empty.
+
+The panel also comes down by itself if a pug starts (that answers the question another way) or if
+everybody leaves again, in which case the server is idling afresh and will ask the next person.
+
+Occupancy is followed on the empty→occupied transition rather than from the connect hook, because those
+two race: by the time a connect is handled, the tick has already seen the player and forgotten how long
+the server was empty. It is not checked at all while a match is on, and otherwise every five seconds
+rather than every one — the threshold is half an hour, so that is plenty, and it keeps a per-second walk
+of the player list off a server that is busy.
 
 ## Restarting the server from the plugin
 

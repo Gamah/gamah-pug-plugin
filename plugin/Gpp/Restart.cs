@@ -21,12 +21,12 @@ public partial class Gpp
 
     internal bool RestartPending => _restartTimer != null;
 
-    internal void AskForRestart(string why)
+    internal void AskForRestart(string why, int seconds = 0)
     {
         if (RestartPending) return;
 
         _restartWhy = why;
-        _restartSecondsLeft = Math.Max(5, Config.RestartWarningSeconds);
+        _restartSecondsLeft = Math.Max(5, seconds > 0 ? seconds : Config.RestartWarningSeconds);
         Logger.LogInformation("Restarting the server in {Seconds}s: {Why}", _restartSecondsLeft, why);
         Announce($"{Colorize("{red}")}Server restarting{Colorize("{default}")} in {_restartSecondsLeft}s "
             + $"- {why}. Reconnect in about a minute.");

@@ -83,6 +83,12 @@ public partial class Gpp
             // what everyone types - it is what MatchZy answered for years - and "." is still not one of
             // CounterStrikeSharp's chat triggers (configs/core.json: "!" and "/"), so nothing turns
             // ".ready" into css_ready. This listener is the only route for it.
+            // The three answers to the idle-server panel. They do nothing while it is not up.
+            case "reload":
+            case "restart":
+            case "skip":
+                AfterTick(() => AnswerIdlePrompt(PlayerBySteamId(who), verb));
+                return HookResult.Continue;
             case "captain":
                 AfterTick(() => Volunteer(PlayerBySteamId(who)));
                 return HookResult.Continue;

@@ -133,8 +133,7 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
     {
         QuietenMatchZy();
         ClearFunEffects();
-        _idleReloadTimer?.Kill();
-        _idleReloadTimer = null;
+        CloseIdlePrompt();
         // The new map is as fresh as it gets, so the clock starts again from here.
         _emptySince = HumanPlayers().Any(player => !player.IsBot) ? null : DateTime.UtcNow;
 
@@ -239,11 +238,7 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
                 AfterTick(() => AbandonMatch("An admin ended it."));
                 break;
             case "keepmap":
-                AfterTick(() =>
-                {
-                    CancelIdleReload("An admin kept the map.");
-                    CancelRestart("An admin kept the server up.");
-                });
+                AfterTick(() => CancelRestart("An admin kept the server up."));
                 break;
             case "restart":
                 AfterTick(() => AskForRestart($"an admin asked for it"));
@@ -299,9 +294,9 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         {
             return $"Server restarting in {_restartSecondsLeft}s - {_restartWhy}.";
         }
-        if (IdleReloadPending)
+        if (IdlePromptUp)
         {
-            return $"Server was idle - reloading {Config.IdleReloadMap} in {_idleReloadSecondsLeft}s.";
+            return $"Server was idle for {Describe(_idleWas)} - waiting for !reload, !restart or !skip.";
         }
 
         return _phase switch
