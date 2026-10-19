@@ -137,6 +137,16 @@ public partial class Gpp
 
         foreach (var player in HumanPlayers())
         {
+            // Everyone who is not a captain is in spectator for this, so almost nobody has a pawn to
+            // hang a board on. Two lines of alert says the same thing and needs none.
+            if (!HasCamera(player))
+            {
+                HideWorldPanel(player.Slot);
+                player.PrintToCenterAlert(Alert("WAITING FOR CAPTAINS",
+                    waiting.Count == 1 ? $"{waiting[0]} IS LOADING" : "THEY ARE STILL LOADING"));
+                continue;
+            }
+
             string panel = WorldLayout.MainPanel("waiting for the captains",
                 [
                     WorldLayout.Section.Of(waiting.Count == 0
