@@ -164,6 +164,18 @@ public partial class Gpp
     {
         if (!player.IsValid || player.IsBot || player.IsHLTV) return;
 
+        // Nothing to hang a board on. A spectator's camera is driven client-side and the observer pawn
+        // does not reliably carry a position the server can read, so rather than spawn boards at the map
+        // origin where nobody is looking, this falls back to the centre-screen panel - which needs no
+        // pawn at all. Better the old overlay than no overlay for the people waiting to be picked.
+        if (ViewPawn(player) == null)
+        {
+            HideWorldPanel(player.Slot);
+            player.PrintToCenter(CentreFallback(main));
+            ReportNoPawn(player);
+            return;
+        }
+
         if (!_panels.TryGetValue(player.Slot, out var panel))
         {
             panel = new ViewerPanel();
@@ -449,6 +461,39 @@ public partial class Gpp
             if (player == null || !player.IsValid) continue;
             KeepUp(player, panel);
         }
+    }
+
+    // The first few lines of a board, for the centre panel: it holds four lines of about eighty
+    // characters, so the title and what follows it is what survives the trip.
+    private static string CentreFallback(string panel)
+    {
+        var lines = panel.Split('\n')
+            .Where(line => line.Length > 0 && line != WorldLayout.Filler && !line.StartsWith("---"))
+            .Take(HudLayout.PanelLines)
+            .ToList();
+        return string.Join('\n', lines);
+    }
+
+    // Logged once per player per minute, because the alternative is a line a tick. This is the state
+    // that cannot be seen from a screenshot: whether the server can find a camera for somebody at all.
+    private readonly Dictionary<int, DateTime> _toldAboutPawn = [];
+
+    private void ReportNoPawn(CCSPlayerController player)
+    {
+        var now = DateTime.UtcNow;
+        if (_toldAboutPawn.TryGetValue(player.Slot, out var last) && now - last < TimeSpan.FromMinutes(1)) return;
+        _toldAboutPawn[player.Slot] = now;
+
+        var pawn = player.Pawn.Value;
+        var observer = player.ObserverPawn.Value;
+        Logger.LogInformation(
+            "No view pawn for {Name} (team {Team}): PlayerPawn {Player}, Pawn {Base} at {Origin}, ObserverPawn {Observer}, watching {Target}. Centre panel instead.",
+            player.PlayerName, player.Team,
+            player.PlayerPawn.Value?.IsValid == true ? player.PlayerPawn.Value.Health.ToString() : "none",
+            pawn?.IsValid == true ? pawn.DesignerName : "none",
+            pawn?.AbsOrigin == null ? "nowhere" : $"{pawn.AbsOrigin.X:F0},{pawn.AbsOrigin.Y:F0},{pawn.AbsOrigin.Z:F0}",
+            observer?.IsValid == true ? observer.DesignerName : "none",
+            pawn?.ObserverServices?.ObserverTarget?.Value?.DesignerName ?? "nobody");
     }
 
     private static float EyeHeight(CBasePlayerPawn pawn) => pawn.ViewOffset.Z == 0 ? 64f : pawn.ViewOffset.Z;

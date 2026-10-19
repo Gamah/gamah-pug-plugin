@@ -123,9 +123,11 @@ public partial class Gpp
         {
             switch (_phase)
             {
-                // The captains are knifing for first pick: nothing on screen for anybody. The panel is a
-                // solid object in front of the face and this is the one part of the pug that is aim.
-                case PugPhase.CaptainKnife: WorldHide(); break;
+                // The captains are knifing for first pick, so the boards come down - a board is a solid
+                // object in front of the face and this is the one part of the pug that is aim. Two lines
+                // of centre-screen alert stay, because nothing on screen at all leaves the nine people
+                // watching with no idea what is being decided.
+                case PugPhase.CaptainKnife: WorldHide(); KnifeAlert(); break;
                 case PugPhase.MapVote: WorldVotePanel(); break;
                 case PugPhase.Draft: WorldDraftPanel(); break;
             }
@@ -146,6 +148,20 @@ public partial class Gpp
                     PaintDraft(player);
                     break;
             }
+        }
+    }
+
+    // Two lines over the captain duel: who is in it for the pair fighting it, and who to watch for
+    // everybody else. The boards are down for this, so this is all there is.
+    private void KnifeAlert()
+    {
+        foreach (var player in HumanPlayers())
+        {
+            bool duelling = Id(player) == _captain1 || Id(player) == _captain2;
+            ulong other = Id(player) == _captain1 ? _captain2 : _captain1;
+            player.PrintToCenterAlert(duelling
+                ? Alert("KNIFE FOR FIRST PICK", $"vs {Name(other)} - first blood takes it")
+                : Alert("CAPTAINS ARE KNIFING", $"{Name(_captain1)} vs {Name(_captain2)}"));
         }
     }
 
@@ -362,7 +378,14 @@ public partial class Gpp
             // is about to resume is the one place this overlay must not be.
             if (_matchPhase == MatchPhase.SideChoice) { WorldSidePanel(); return; }
             WorldHide();
-            if (_matchPhase == MatchPhase.Knife) return;
+            if (_matchPhase == MatchPhase.Knife)
+            {
+                foreach (var player in HumanPlayers())
+                {
+                    player.PrintToCenterAlert(Alert("KNIFE ROUND", "winner picks the side"));
+                }
+                return;
+            }
         }
 
         var (score1, score2) = _matchPhase == MatchPhase.Live ? Score() : (0, 0);
