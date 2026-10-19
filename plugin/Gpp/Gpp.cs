@@ -131,9 +131,15 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
     // open handoff wakes MatchZy with css_match, and a match that ends leaves it awake in match mode with
     // its ready phase - and its unready chat timer - back on. css_sleep refuses while a match is started,
     // so this is only ever called where the match is already over or abandoned, never from Load().
-    private static void PutMatchZyBackToSleep()
+    private void PutMatchZyBackToSleep()
     {
         Server.ExecuteCommand("matchzy_autostart_mode 0;css_sleep");
+
+        // css_sleep refuses while MatchZy still thinks a match is started, and the match that just ended
+        // only clears that flag when EndSeries gets round to ResetMatch - up to mp_match_restart_delay
+        // later. Asking again a few times costs a re-exec of sleep.cfg on an idle server and nothing else.
+        AddTimer(5.0f, () => Server.ExecuteCommand("css_sleep"));
+        AddTimer(15.0f, () => Server.ExecuteCommand("css_sleep"));
     }
 
     private void OnMapStart(string mapName)

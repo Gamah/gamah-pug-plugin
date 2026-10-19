@@ -166,38 +166,55 @@ public partial class Gpp
         // pug back on - right as this match starts, with half the server outside its roster.
         NeverKickAnyone();
 
-        AddTimer(0.5f, () =>
-        {
-            Server.ExecuteCommand($"matchzy_knife_enabled_default {(Config.KnifeRound ? "true" : "false")};"
-                + $"matchzy_minimum_ready_required {Math.Max(1, minReady)};"
-                + "mp_autoteambalance 0;mp_limitteams 0");
+        Server.ExecuteCommand($"matchzy_knife_enabled_default {(Config.KnifeRound ? "true" : "false")};"
+            + $"matchzy_minimum_ready_required {Math.Max(1, minReady)};"
+            + "mp_autoteambalance 0;mp_limitteams 0");
 
-            // Unquoted on purpose: MatchZy takes the name from the raw argument text, and TeamName() only
-            // ever produces letters, digits and an underscore. Set before match mode, because starting it
-            // writes mp_teamname_1/2 back out of MatchZy's own team data.
-            Server.ExecuteCommand($"css_team1 {team1Name};css_team2 {team2Name}");
+        AddTimer(0.5f, () => TryOpenMatch(team1Name, team2Name, mapLabel, 1));
+    }
 
-            // css_match starts match mode from sleep or practice only, and css_sleep refuses while a match
-            // is started - so the order here is end, sleep, match, or the second pug of a session gets no
-            // ready phase at all and nobody can see why. [SOURCE: MatchZy 0.9.1 Utility.cs StartMatchMode,
-            // SleepMode.cs OnSleepCommand, read 2026-10-19]
-            Server.ExecuteCommand("css_sleep;css_match");
-            AddTimer(1.5f, () => ConfirmOpenMatch(team1Name, team2Name, mapLabel));
-        });
+    // Attempts per pug and the gap between them. get5_endmatch does not clear MatchZy's matchStarted flag
+    // on the spot: a match that was live ends through EndSeries, which only calls ResetMatch after
+    // mp_match_restart_delay (12s stock). Until that lands css_sleep refuses, so css_match refuses too, and
+    // the handoff after a finished match would fail for a reason nobody can see. So keep asking, long
+    // enough to outlast the delay. [SOURCE: MatchZy 0.9.1 Utility.cs HandleMatchEnd/EndSeries/ResetMatch,
+    // SleepMode.cs OnSleepCommand, read 2026-10-19]
+    private const int OpenMatchAttempts = 8;
+    private const float OpenMatchRetrySeconds = 3.0f;
+
+    private void TryOpenMatch(string team1Name, string team2Name, string mapLabel, int attempt)
+    {
+        // Unquoted on purpose: MatchZy takes the name from the raw argument text, and TeamName() only ever
+        // produces letters, digits and an underscore. Set before match mode, because starting it writes
+        // mp_teamname_1/2 back out of MatchZy's own team data.
+        Server.ExecuteCommand($"css_team1 {team1Name};css_team2 {team2Name}");
+
+        // End, sleep, match, in that order: css_match starts match mode from sleep or practice only.
+        Server.ExecuteCommand("css_sleep;css_match");
+        AddTimer(1.5f, () => ConfirmOpenMatch(team1Name, team2Name, mapLabel, attempt));
     }
 
     // MatchZy exposes no way to ask whether match mode took. css_team1/2 write our names into
     // mp_teamname_1/2 and starting match mode writes them again, so read those back.
-    private void ConfirmOpenMatch(string team1Name, string team2Name, string mapLabel)
+    private void ConfirmOpenMatch(string team1Name, string team2Name, string mapLabel, int attempt)
     {
         string name1 = ConVar.Find("mp_teamname_1")?.StringValue ?? "";
         string name2 = ConVar.Find("mp_teamname_2")?.StringValue ?? "";
 
         if (name1 != team1Name || name2 != team2Name)
         {
-            Logger.LogError("Match mode did not take - mp_teamname_1/2 are \"{Name1}\"/\"{Name2}\", expected "
-                + "\"{Team1}\"/\"{Team2}\". Check the server console for MatchZy's reason.",
-                name1, name2, team1Name, team2Name);
+            if (attempt < OpenMatchAttempts)
+            {
+                Logger.LogWarning("Match mode has not taken yet (attempt {Attempt}) - mp_teamname_1/2 are "
+                    + "\"{Name1}\"/\"{Name2}\". Retrying.", attempt, name1, name2);
+                AddTimer(OpenMatchRetrySeconds,
+                    () => TryOpenMatch(team1Name, team2Name, mapLabel, attempt + 1));
+                return;
+            }
+
+            Logger.LogError("Match mode did not take after {Attempts} attempts - mp_teamname_1/2 are "
+                + "\"{Name1}\"/\"{Name2}\", expected \"{Team1}\"/\"{Team2}\". Check the server console for "
+                + "MatchZy's reason.", OpenMatchAttempts, name1, name2, team1Name, team2Name);
             Announce($"{Colorize("{red}")}MatchZy did not start the match{Colorize("{default}")} - teams are "
                 + "set, start it with .match (server console has the reason).");
             return;
