@@ -28,12 +28,32 @@ public partial class Gpp
         AddCommandListener("say_team", OnSay, HookMode.Post);
     }
 
+    // The same chat line can reach this listener more than once - a say listener is registered per plugin
+    // load, and a hot reload leaves the previous registration live until the server restarts, so after two
+    // reloads every dot command answered twice. Rather than depend on how CounterStrikeSharp cleans up,
+    // the same player saying the same thing inside a couple of frames is treated as the one message.
+    private readonly Dictionary<int, (string Text, DateTime When)> _lastSaid = [];
+
+    private bool AlreadySaid(CCSPlayerController player, string message)
+    {
+        var now = DateTime.UtcNow;
+        if (_lastSaid.TryGetValue(player.Slot, out var last)
+            && last.Text == message
+            && (now - last.When).TotalMilliseconds < 250)
+        {
+            return true;
+        }
+        _lastSaid[player.Slot] = (message, now);
+        return false;
+    }
+
     private HookResult OnSay(CCSPlayerController? player, CommandInfo command)
     {
         if (player == null || !player.IsValid || player.IsBot) return HookResult.Continue;
         if (command.ArgCount < 2) return HookResult.Continue;
 
         string message = command.GetArg(1).Trim();
+        if (AlreadySaid(player, message)) return HookResult.Continue;
         if (message.Length < 2 || (message[0] != '.' && message[0] != '!')) return HookResult.Continue;
 
         // A bare number is the whole command during a vote or a draft: !3 votes for map 3, and !3 picks

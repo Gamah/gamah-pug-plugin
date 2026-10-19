@@ -71,6 +71,32 @@ internal static class HudMetrics
         return total;
     }
 
+    // A window into a line too long to fit, starting `skip` units in: the scrolling alternative to
+    // cutting it off. Returns as much as fits from there, and how many units were actually skipped, so
+    // the caller can tell when it has reached the end.
+    internal static string Window(string text, int budget, int skip, out int skipped)
+    {
+        int from = 0;
+        skipped = 0;
+        foreach (char c in text)
+        {
+            if (skipped >= skip) break;
+            skipped += Width(c);
+            from++;
+        }
+
+        int used = 0;
+        int taken = 0;
+        foreach (char c in text[from..])
+        {
+            int next = Width(c);
+            if (used + next > budget) break;
+            used += next;
+            taken++;
+        }
+        return text.Substring(from, taken);
+    }
+
     // Cut to a width rather than to a character count, keeping room for the ellipsis that says so.
     internal static string Clip(string text, int budget)
     {

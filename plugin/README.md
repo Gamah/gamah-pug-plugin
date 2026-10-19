@@ -133,9 +133,9 @@ went with MatchZy; `!pug draft` still drafts on whatever map the server is alrea
   - `ready_after_sides` (false) — a second ready check between the side choice and going live
   - `pauses_enabled` (true), `max_tech_pauses` (0 = unlimited), `tech_pause_seconds` (0 = both sides
     always have to `.unpause`)
-  - `demos_enabled` (true), `demo_path` (`gpp-demos`, relative to `csgo/`), `demo_name_format`
-    (`{TIME}_{MAP}_{TEAM1}_vs_{TEAM2}`). Needs `tv_enable 1`, or `tv_record` does nothing and the log
-    says so once
+  - `demos_enabled` (**false** on this server, see below), `demo_path` (`gpp-demos`, relative to
+    `csgo/`), `demo_name_format` (`{TIME}_{MAP}_{TEAM1}_vs_{TEAM2}`). Needs `tv_enable 1`, or `tv_record`
+    does nothing and the log says so once
   - `stats_enabled` (true), `stats_database` (`gpp.db`, next to the plugin dll)
   - `matchzy_installed` (true) — while MatchZy is still on the server, keep it asleep and keep its two
     kick cvars off. Set it false once its plugin folder is gone
@@ -175,6 +175,16 @@ Reload by index, never by name: `css_plugins reload 3`. `css_plugins reload Gpp`
 
 Nothing in GPP reads MatchZy state any more, and nothing in GPP kicks anyone.
 
+## Demos do not work on this server yet
+
+The plugin does its part: at go-live it waits out the restart, then runs `tv_record` with an absolute
+quoted path and `tv_record_immediate 1`, and stops it inside the GOTV flush window at the end. With
+`tv_enable 1` and SourceTV reporting `broadcast active`, **the engine wrote no file and printed no
+error** — reproduced by hand over rcon with both an absolute and a `csgo/`-relative path, so it is not
+the plugin. Demos are off (`match.demos_enabled false`) and so is GOTV, which costs a player slot;
+`examples/cfg/gpp/*.cfg` carry the `tv_` lines commented out with the same note. Worth another look by
+someone who knows what CS2 wants from `tv_record`. [SOURCE: measured 2026-10-19]
+
 ## HUD widths
 
 The centre panel font is proportional and CS2 ships it as `stratum2.uifont`, an obfuscated container
@@ -191,6 +201,11 @@ one of them a whole number of pixels:
 
 Digits are tabular, so every one is 9. The widest glyph is 3.5x the narrowest, which is why counting
 characters never worked: a line holds 125 `i` or 35 `m`.
+
+A line too wide for the panel **scrolls** rather than being cut off with an ellipsis: it slides across
+at about a glyph per redraw and holds still for three seconds at each end, and every panel scrolls in
+step off one shared paint counter. The alert box scrolls by character count, since that larger face has
+never been measured.
 
 `hud_line_budget` (default 340) is the usable width of a line in those units, and it is a setting
 rather than a constant because **it depends on the viewer's resolution and HUD scale, not on the
@@ -226,6 +241,14 @@ Optional and off by default. With `discord.base_url` empty the plugin makes no n
   is the only thing that answers it. So the admin commands answer `!` (and `/` silently) unless
   `core.json`'s `PublicChatTrigger` says otherwise, while the match commands and the warmup toys answer
   both.
+- **A hot reload leaves the old `say` listener live.** CounterStrikeSharp registers one per plugin
+  load, so after two reloads every `.` command answered twice until the server restarted. The listener
+  now ignores the same player saying the same thing twice inside 250ms, which makes it independent of
+  how CSS cleans up.
+- **`.pause` does not pause anything until the round ends** — `mp_pause_match` is a request. The panel
+  says `PAUSE AT END OF ROUND` until the engine actually freezes and `Paused.` lands in chat when it
+  does; a technical pause is only counted against a team once it has landed, so taking one back before
+  the round ends is free.
 - **A chat command must not do its work inline.** The engine gives netchan message processing a CPU
   budget and drops the client whose message overran it: `!pug start` spent ~800ms building the vote and
   the admin who typed it was disconnected with `NETWORK_DISCONNECT_OVERFLOW` while the vote came up

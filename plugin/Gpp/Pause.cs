@@ -137,9 +137,17 @@ public partial class Gpp
         if (!(GameRules()?.FreezePeriod ?? false)) return;
 
         _pauseSeconds++;
-        if (_pauseIsTechnical && _pauseSeconds == 0 && _pausingSide != CsTeam.None)
+        if (_pauseSeconds == 0)
         {
-            _techPausesUsed[TeamNumberOf(_pausingSide)]++;
+            // The round the pause was called in has ended and the engine is actually holding the game
+            // now. Worth saying out loud: between the call and this, play carries on, and a panel that
+            // said PAUSED through all of it was simply wrong.
+            Announce($"{Colorize("{green}")}Paused.{Colorize("{default}")} "
+                + (_pausingSide == CsTeam.None ? "An admin" : SideName(_pausingSide)) + " called it.");
+            if (_pauseIsTechnical && _pausingSide != CsTeam.None)
+            {
+                _techPausesUsed[TeamNumberOf(_pausingSide)]++;
+            }
         }
     }
 
@@ -162,11 +170,15 @@ public partial class Gpp
 
         CsTeam side = player != null && player.IsValid ? player.Team : CsTeam.None;
 
-        // An admin (or the console) resumes it outright; so does the caller taking back a pause that has
-        // not landed yet.
-        if (side == CsTeam.None || (player != null && IsAdmin(player)))
+        // The console resumes it outright - that is an admin over rcon, with no side in the match.
+        //
+        // An admin who is *playing* does not: half the regulars on this server are in admins.json, so an
+        // admin bypass would mean "both sides have to agree" held only for whoever had not been given a
+        // flag. They ask like everybody else, and an admin who wants to override does it from rcon or
+        // with !pug.
+        if (side == CsTeam.None)
         {
-            Unpause(side == CsTeam.None ? "An admin" : $"{player!.PlayerName} (admin)");
+            Unpause("An admin");
             return;
         }
         // Checked before anything that names a side: a spectator is on neither, and a pause is not
@@ -216,10 +228,14 @@ public partial class Gpp
     }
 
     // What the pause panel says, and the only place the tech-pause count is spelled out.
+    // True once the engine is actually holding the game, rather than a pause having been asked for.
+    internal bool PauseHasLanded => _paused && _pauseSeconds >= 0;
+
     internal string PauseLine()
     {
         if (!_paused) return "";
         string who = _pausingSide == CsTeam.None ? "an admin" : SideName(_pausingSide);
+        if (!PauseHasLanded) return $"{who} called it - the round finishes first";
         if (!_pauseIsTechnical) return $"paused by {who}";
 
         int used = _pausingSide == CsTeam.None ? 0 : _techPausesUsed[TeamNumberOf(_pausingSide)];

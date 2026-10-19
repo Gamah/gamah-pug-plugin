@@ -60,6 +60,7 @@ public partial class Gpp
     private void HudTick()
     {
         _hudTicks++;
+        _paintTick++;
         if (_phase == PugPhase.Idle || (_phase == PugPhase.Draft && _pickIndex >= _pickOrder.Count))
         {
             StopHud();
@@ -189,11 +190,8 @@ public partial class Gpp
         };
     }
 
-    private static string Join(List<string> names)
-    {
-        string joined = string.Join(", ", names);
-        return joined.Length <= 64 ? joined : $"{joined[..61]}...";
-    }
+    // No truncation of its own any more: a line too long for the panel scrolls (see Scroll).
+    private static string Join(List<string> names) => string.Join(", ", names);
 
     // ".ready in chat" is exactly the instruction a room full of people not reading chat will sit on
     // forever, so the ready phase gets a panel of its own naming who is still holding it up.
@@ -222,6 +220,7 @@ public partial class Gpp
 
     private void ReadyHudTick()
     {
+        _paintTick++;
         if (--_readyHudSecondsLeft <= 0)
         {
             // Five minutes of a panel nobody has acted on is a panel nobody is reading. The phase stays
@@ -278,6 +277,7 @@ public partial class Gpp
 
     private void MatchHudTick()
     {
+        _paintTick++;
         bool wanted = _matchPhase == MatchPhase.Knife
             || _matchPhase == MatchPhase.SideChoice
             || (_matchPhase == MatchPhase.Live && _paused);
@@ -314,7 +314,7 @@ public partial class Gpp
                 }
 
                 default:
-                    Paint(player, Alert("PAUSED", PauseLine()),
+                    Paint(player, TwoLine(PauseHasLanded ? "PAUSED" : "PAUSE AT END OF ROUND", PauseLine()),
                     [
                         "both sides have to type .unpause to resume",
                         $"{_team1Name} {score1} - {score2} {_team2Name}",
@@ -323,6 +323,36 @@ public partial class Gpp
             }
         }
     }
+
+    // A line too wide for the panel scrolls instead of being cut off with an ellipsis. Four lines of
+    // eighty is not a lot to say a map vote and nine names in, and "still to ready: Ada, Baz, Cosm…" is
+    // the part of the message that mattered.
+    //
+    // Driven by a paint counter rather than wall-clock time so every panel scrolls in step, and it holds
+    // still at each end for a couple of seconds - a line that starts moving the instant it appears is
+    // unreadable, and one that wraps round without a pause reads as a glitch.
+    private static int _paintTick;
+
+    internal static void BumpPaintTick() => _paintTick++;
+
+    private const int ScrollUnitsPerTick = 12;   // about one glyph per redraw
+    private const int ScrollHoldTicks = 3;
+
+    internal static string Scroll(string line, int budget, int tick)
+    {
+        int width = Width(line);
+        if (width <= budget) return line;
+
+        // One step per tick across the overflow, with a hold at both ends.
+        int steps = (width - budget + ScrollUnitsPerTick - 1) / ScrollUnitsPerTick;
+        int cycle = steps + (2 * ScrollHoldTicks);
+        int at = ((tick % cycle) + cycle) % cycle;
+        int step = Math.Clamp(at - ScrollHoldTicks, 0, steps);
+
+        return HudMetrics.Window(line, budget, step * ScrollUnitsPerTick, out _);
+    }
+
+    private static int Width(string text) => HudMetrics.Width(text);
 
     // Lay cells out in rows of `perRow`, padded so the columns line up in a fixed-width HUD font.
     // Pack cells onto as few lines as fit, never splitting one. The old version padded each cell to a
@@ -381,9 +411,22 @@ public partial class Gpp
     {
         var lines = parts
             .Where(part => !string.IsNullOrWhiteSpace(part))
-            .Select(part => part!.Length > AlertWidth ? part[..AlertWidth] : part)
+            .Select(part => ScrollChars(part!, AlertWidth, _paintTick))
             .Take(HudLines);
         return string.Join("\n", lines);
+    }
+
+    // The alert box is drawn in a larger face nothing has measured, so it is held to a character count -
+    // and scrolls by characters for the same reason the panel scrolls by units.
+    private static string ScrollChars(string line, int width, int tick)
+    {
+        if (line.Length <= width) return line;
+
+        int steps = line.Length - width;
+        int cycle = steps + (2 * ScrollHoldTicks);
+        int at = ((tick % cycle) + cycle) % cycle;
+        int step = Math.Clamp(at - ScrollHoldTicks, 0, steps);
+        return line.Substring(step, width);
     }
 
     private static void Broadcast(List<string> panel)
@@ -409,7 +452,7 @@ public partial class Gpp
     {
         var lines = panel
             .Where(line => !string.IsNullOrEmpty(line))
-            .Select(line => HudMetrics.Clip(line, HudMetrics.LineBudget))
+            .Select(line => Scroll(line, HudMetrics.LineBudget, _paintTick))
             .Take(HudLines);
         player.PrintToCenter(string.Join("\n", lines));
     }

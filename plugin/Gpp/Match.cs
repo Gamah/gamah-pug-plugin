@@ -512,7 +512,9 @@ public partial class Gpp
             MatchPhase.Ready => $"ready phase, {ReadyCount()}/{ReadyNeeded()} ready",
             MatchPhase.Knife => "knife round",
             MatchPhase.SideChoice => $"{SideName(_knifeSide)} picking a side",
-            MatchPhase.Live => _paused ? $"live, paused ({score1}-{score2})" : $"live {score1}-{score2}",
+            MatchPhase.Live when PauseHasLanded => $"live, paused ({score1}-{score2})",
+            MatchPhase.Live when _paused => $"live, pause called for the end of the round ({score1}-{score2})",
+            MatchPhase.Live => $"live {score1}-{score2}",
             _ => "finishing up",
         };
         return $"{_team1Name} vs {_team2Name} on {_matchMap}: {where}.";

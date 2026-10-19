@@ -100,7 +100,7 @@
     "pauses_enabled": true,
     "max_tech_pauses": 0,
     "tech_pause_seconds": 0,
-    "demos_enabled": true,
+    "demos_enabled": false,
     "demo_path": "gpp-demos",
     "demo_name_format": "{TIME}_{MAP}_{TEAM1}_vs_{TEAM2}",
     "stats_enabled": true,
