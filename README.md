@@ -24,7 +24,7 @@ The bot does need the plugin: it has no way to know who drafted whom otherwise.
 plugin/Gpp/        CounterStrikeSharp plugin (C#, .NET 10)
 plugin/Gpp.Tests/  the engine-free rules and the stats SQL, under xunit
 bot/               Discord companion (Python) - optional
-docs/              deployment, the match engine, and the plugin <-> bot contract
+docs/              deployment, the match engine, the overlay, and the plugin <-> bot contract
 examples/          a filled-in Gpp.json, the three phase cfgs, and an install script to adapt
 ```
 
@@ -41,6 +41,11 @@ dotnet test Gpp.Tests
 
 See [`plugin/README.md`](plugin/README.md) for commands and configuration, and
 [`docs/deploy.md`](docs/deploy.md) for installing it on a server.
+
+Everything the pug asks for is drawn in the world - three `point_worldtext` boards in front of each
+player, one of them the question and two of them the teams. [`docs/overlay.md`](docs/overlay.md) is how
+that works and what was measured to get there; `!pug preview` plays every panel in order without
+needing a pug.
 
 With the Discord bot as well: [`docs/discord.md`](docs/discord.md).
 

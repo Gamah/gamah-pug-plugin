@@ -30,6 +30,8 @@ not yet run with ten people on it.
 | `!pug status` | admin | What phase it is in, and the score if a match is live |
 | `!pug keepmap` | admin | Call off a restart that has just been announced |
 | `!pug idle` | admin | Put the idle-server panel up on demand, for working on it |
+| `!pug preview` | admin | Play every panel in order, 15s each, without running a pug. `!pug preview stop` ends it |
+| `!pug sides <gap> [toe-in] [back]` | admin | Move the two team boards live. `!pug sides auto` hands the derived numbers back |
 | `!reload` / `!restart` / `!skip` | everyone | The three answers to the idle-server panel. They do nothing when it is not up |
 | `!pug restart` | admin | Restart the whole server after a warning and a countdown |
 | `!<number>` | everyone | **The main one.** Votes for that map during a vote, makes that pick during a draft. Silent outside both |
@@ -116,8 +118,14 @@ went with MatchZy; `!pug draft` still drafts on whatever map the server is alrea
 - `reconnect_wait_seconds` (90) — after a map change, how long latecomers have. Picking starts as soon
   as `min_players` are back, and anyone who connects inside the window joins the pool instead of being
   locked out; teams do not lock until everyone expected is in or the window closes
-- `hud` (true) — each captain gets the numbered pick list on a centre-screen panel, redrawn every
-  second, instead of in chat. With it off the list is printed to chat on every pick as before
+- `hud` (true) — draw the overlay at all. With it off, lists go to chat on every pick as before
+- `hud_style` (`world`) — `world` draws three `point_worldtext` boards in front of each player (the
+  question in the middle, the two teams either side); `center` draws the older `PrintToCenter` panels,
+  which is there to rescue a night by flipping a setting rather than rolling the plugin back. See
+  [`../docs/overlay.md`](../docs/overlay.md)
+- `hud_side_gap` (0 = work it out) — world units either side of the middle board. The plugin derives it
+  from how wide the boards are, which is what it should be doing; this is for the night somebody wants
+  them further apart without a redeploy
 - `pick_order` — `snake` (1,2,2,1,1,2,2,1) or `alternate`
 - `force_spectate` (true) — everyone not yet drafted is held in spectator for the whole draft:
   `jointeam` is blocked and a sweep puts anyone sitting in the team-select menu back
@@ -250,6 +258,10 @@ the plugin. Demos are off (`match.demos_enabled false`) and so is GOTV, which co
 someone who knows what CS2 wants from `tv_record`. [SOURCE: measured 2026-10-19]
 
 ## HUD widths
+
+These are the `hud_style: center` panel's measurements. The world boards are laid out by
+[`docs/overlay.md`](../docs/overlay.md) and measured in the same units, but they have no width budget to
+fight - a board is as wide as its rule.
 
 The centre panel font is proportional and CS2 ships it as `stratum2.uifont`, an obfuscated container
 rather than a readable TTF, so the glyph advances cannot be read off disk. `!pug ruler` measures them
