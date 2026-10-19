@@ -210,6 +210,10 @@ public class WorldLayoutTests
         {
             Show(name, panel);
             Assert.Equal(WorldLayout.PanelLines, WorldLayout.LineCount(panel));
+            // And every one of those lines is drawn. An empty line is not rendered at all, so a board
+            // padded with blanks is as tall as its content - which is a board that shrinks as a list
+            // empties, and the whole point of these is that they do not move.
+            Assert.All(panel.Split('\n'), line => Assert.NotEqual(0, line.Length));
             // Every one of them measures the same, which is only true while the widest line any panel
             // can hold still fits inside MainBoardWidth. When that stops being true this fails rather
             // than the boards quietly going back to breathing.

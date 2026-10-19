@@ -99,14 +99,16 @@ public partial class Gpp
         foreach (var player in voters)
         {
             string panel = _votes.TryGetValue(Id(player), out int mine)
+                // Somebody who has voted gets the whole ballot with its tally against it - every map,
+                // every time, so the board is one shape and the stars are the only thing moving - and
+                // who is holding the vote up underneath.
                 ? WorldLayout.MainPanel($"you voted {_ballot[mine].Label}",
                     [
+                        new([.. WorldLayout.Grid(Tally(tally))]),
                         WorldLayout.Section.Of($"{_votes.Count}/{voters.Count} VOTED - WAITING ON"),
                         WorldLayout.Section.List(WorldLayout.Grid(missing.Select(WorldLayout.Clip))),
-                        WorldLayout.Section.Of("VOTES"),
-                        new([.. WorldLayout.Grid(Tally(tally))]),
                     ],
-                    WorldLayout.Footer("!1-!9 changes your vote", $"{_voteSecondsLeft}s"),
+                    WorldLayout.Footer($"{_voteSecondsLeft}s"),
                     _hudTicks)
                 : WorldLayout.MainPanel("pick a map",
                     [WorldLayout.Section.List(WorldLayout.Grid(ballot))],
@@ -116,17 +118,11 @@ public partial class Gpp
         }
     }
 
-    // Every map that has a vote, most first, as cells - so somebody who has voted watches the tally move
-    // rather than reading one line that says who is winning. The board has the room for it.
-    private List<string> Tally(int[] tally)
-    {
-        return _ballot
-            .Select((map, index) => (map.Label, Votes: tally[index]))
-            .Where(entry => entry.Votes > 0)
-            .OrderByDescending(entry => entry.Votes)
-            .Select(entry => $"{WorldLayout.Clip(entry.Label)} {new string('*', Math.Min(entry.Votes, 9))}")
-            .ToList();
-    }
+    // Every map with its votes against it, in ballot order so a map does not move as the votes land -
+    // somebody watching for their own vote to appear should not have to find the map again first.
+    private List<string> Tally(int[] tally) =>
+        _ballot.Select((map, index) =>
+            $"{WorldLayout.Clip(map.Label)} {new string('*', Math.Min(tally[index], 5))}".TrimEnd()).ToList();
 
     // --- waiting for the room to come back after the map change -------------------------------------
 
@@ -163,7 +159,13 @@ public partial class Gpp
         // The same board for the whole room, bar its top line. Everyone is watching the same draft, and
         // a pool that only the two captains can see is a room full of people guessing whether they have
         // been picked yet. The one line that differs is the one addressed to whoever has to type.
-        var body = new List<WorldLayout.Section> { WorldLayout.Section.List(WorldLayout.Grid(pool)) };
+        // Eighteen slots, which is a twenty-man pug once the captains are out of the pool. They empty
+        // as picks land rather than the list closing up, so the board is the same height throughout and
+        // the number against a name never moves.
+        var body = new List<WorldLayout.Section>
+        {
+            new([.. WorldLayout.Slots(pool, Math.Max(pool.Count, _pool.Count))]),
+        };
         string footer = WorldLayout.Footer(clock, $"{UndraftedCount()} still to pick");
 
         string left = LeftBoard();
@@ -189,8 +191,13 @@ public partial class Gpp
     private void WorldReadyPanel()
     {
         var roster = ReadyRoster();
-        var unready = roster.Where(steamId => !_readied.Contains(steamId)).Select(Name).ToList();
-        int ready = roster.Count - unready.Count;
+        int ready = roster.Count(_readied.Contains);
+
+        // Everybody, with their state against their name, rather than a list of who is missing. The
+        // roster is a fixed ten lines whatever happens, so the board does not shrink a line every time
+        // somebody readies - and seeing your own name with a cross next to it is harder to ignore than
+        // being absent from a list.
+        var marked = roster.Select(steamId => (_readied.Contains(steamId) ? "+ " : "X ") + Name(steamId));
 
         string left = LeftBoard();
         string right = RightBoard();
@@ -203,10 +210,8 @@ public partial class Gpp
             string panel = WorldLayout.MainPanel(
                 !drafted ? "match starting" : mine ? "you are ready" : "type .ready in chat",
                 [
-                    WorldLayout.Section.Of(unready.Count == 0
-                        ? "everybody is ready - here we go"
-                        : $"{ready}/{roster.Count} READY - STILL TO READY"),
-                    WorldLayout.Section.List(WorldLayout.Grid(unready.Select(WorldLayout.Clip))),
+                    WorldLayout.Section.Of($"{ready}/{roster.Count} READY"),
+                    new([.. WorldLayout.Slots(marked, WorldLayout.TeamSlots, 2)]),
                 ],
                 WorldLayout.Footer(_readyHudMap, drafted ? null : "you are not in this match"),
                 _hudTicks);

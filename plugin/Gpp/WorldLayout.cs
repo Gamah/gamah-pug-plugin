@@ -255,11 +255,19 @@ internal static class WorldLayout
 
     // Pads a composed panel to exactly `lines` tall and `width` wide, padding whichever line is widest
     // so nothing already written gets re-flowed.
+    // A line with nothing on it is not drawn at all, so a board padded with blank lines is as tall as
+    // its content and no taller - which is a board that shrinks as a list empties. Every blank line
+    // carries a mark instead: the gaps between sections, the filler under short content, all of it.
+    //
+    // It is the quietest glyph there is and it sits on its own in the middle of the board, so a panel
+    // with room to spare reads as a board with room to spare rather than as a smaller board.
+    internal const string Filler = "\u00b7";
+
     internal static string Fixed(string panel, int lines, int width)
     {
-        var rows = panel.Split('\n').ToList();
+        var rows = panel.Split('\n').Select(row => row.Length == 0 ? Filler : row).ToList();
         if (rows.Count > lines - 1) rows = [.. rows.Take(lines - 1)];
-        while (rows.Count < lines - 1) rows.Add("");
+        while (rows.Count < lines - 1) rows.Add(Filler);
         rows.Add(Rule(width));
         return string.Join('\n', rows);
     }
@@ -292,6 +300,21 @@ internal static class WorldLayout
     //
     // Composed here rather than through Panel(): Panel puts a blank line after every block, which on a
     // board exactly as tall as its content pushed the last slot off the bottom.
+    // A list that always has the same number of rows, whatever is in it: the ones that are not filled
+    // yet carry a dash, the way the team boards' slots do. A list that shrinks as it empties takes the
+    // board's height with it, and a board that changes height is the thing the eye follows instead of
+    // the words.
+    internal static List<string> Slots(IEnumerable<string> cells, int slots, int perRow = PerRow)
+    {
+        var filled = cells.ToList();
+        var all = new List<string>();
+        for (int slot = 0; slot < Math.Max(slots, filled.Count); slot++)
+        {
+            all.Add(slot < filled.Count ? filled[slot] : "-");
+        }
+        return Grid(all, perRow);
+    }
+
     internal static string TeamBoard(string label, string captain, IEnumerable<string> picks)
     {
         var filled = picks.Select(Clip).ToList();
