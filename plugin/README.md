@@ -28,6 +28,8 @@ not yet run with ten people on it.
 | `!pug stop` | admin | **Nuke everything.** Ends the match, clears bots, drops every phase, frees spectators and lands in a held warmup. Works from any state |
 | `!pug cancel` | admin | Abandon the running vote or draft, and nothing else |
 | `!pug status` | admin | What phase it is in, and the score if a match is live |
+| `!pug keepmap` | admin | Call off the map reload or restart that has just been announced |
+| `!pug restart` | admin | Restart the whole server after a warning and a countdown |
 | `!<number>` | everyone | **The main one.** Votes for that map during a vote, makes that pick during a draft. Silent outside both |
 | `!vote <number\|map>` | everyone | Vote during a map vote. `!<number>` is shorter |
 | `!draft <number\|name>` | captain on the clock | Make a pick by name; no argument reprints the list |
@@ -120,6 +122,16 @@ went with MatchZy; `!pug draft` still drafts on whatever map the server is alrea
 - `knife_round` (true) — knife round for sides once everybody has readied. Off goes straight live on the
   drafted sides
 - `min_ready` (2) — `.ready` needed to start the match. 0 means every drafted player
+- `idle_reload_minutes` (30), `idle_reload_warning_seconds` (30), `idle_reload_map` (`de_dust2`) — when
+  the first person connects to a server that has been empty this long, GPP warns for half a minute and
+  then loads that map. A server left idle for hours plays a strange first round: the warmup has been held
+  open the whole time and every phase that came and went restarted the round. A map load is the whole
+  fix, and the warning is why it is not just a reload in someone's face. 0 minutes turns it off,
+  `!pug keepmap` calls off one that has been announced, and starting a pug inside the window cancels it
+- `idle_restart_hours` (0 = off), `restart_warning_seconds` (30) — above that many hours of idling the
+  first person to connect gets the **server restarted** rather than the map reloaded, which costs them a
+  reconnect and is why half an hour of idling does not get it. Needs `Restart=always` on the unit; see
+  below
 - `captain_opt_in_seconds` (30) — the sign-up window `!pug start` opens before the map vote: anyone can
   `!captain`, and the two captains are drawn from whoever did. Fewer than two volunteers and the rest of
   the draw is at random as before. 0 turns it off; `!pug start force` skips it
@@ -174,6 +186,22 @@ Reload by index, never by name: `css_plugins reload 3`. `css_plugins reload Gpp`
   noise rather than a conflict. It goes away with MatchZy.
 
 Nothing in GPP reads MatchZy state any more, and nothing in GPP kicks anyone.
+
+## Restarting the server from the plugin
+
+`!pug restart` (and `idle_restart_hours`) warn, count down, and then run `quit` on the console. Bringing
+it back is systemd's job, and **that needs `Restart=always` on the unit.** The stock unit here was
+`Restart=on-failure`, under which a clean `quit` would leave the server down for good — the only reason
+it appeared to work is that **CS2 exits 139 (SIGSEGV) on shutdown**, so systemd saw a failure. Depending
+on a crash is not a plan, so this server has a drop-in:
+
+    /etc/systemd/system/cs2.service.d/restart-always.conf
+    [Service]
+    Restart=always
+
+`cs2.sh` also relaunches the engine itself while it exits 42, which is the engine asking for a restart —
+`quit 42` does **not** reach that path (the argument is not an exit code; the process still came out
+139). Measured 2026-10-19.
 
 ## Demos do not work on this server yet
 

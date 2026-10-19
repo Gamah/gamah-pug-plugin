@@ -97,6 +97,7 @@ public partial class Gpp
     private void WarmupTick()
     {
         SyncBuyCap();
+        TrackIdleTime();
 
         if (Config.WarmupMoney <= 0 || !InWarmupPeriod()) return;
 

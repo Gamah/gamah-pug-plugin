@@ -138,6 +138,26 @@ public class GppConfig : BasePluginConfig
     // "alternate" = 1,2,1,2 ... ; "snake" = 1,2,2,1,1,2,2,1 ...
     [JsonPropertyName("pick_order")] public string PickOrder { get; set; } = "alternate";
 
+    // How long the server has to have been empty before the first person to connect gets the map
+    // reloaded under them. A server idle for ten hours plays a strange first round - the warmup has been
+    // held open that whole time - and a map load is the whole fix. 0 turns it off.
+    [JsonPropertyName("idle_reload_minutes")] public int IdleReloadMinutes { get; set; } = 30;
+
+    // Seconds of warning first. The warning is the point: a map reloading under someone unannounced is
+    // the same complaint from the other side.
+    [JsonPropertyName("idle_reload_warning_seconds")] public int IdleReloadWarningSeconds { get; set; } = 30;
+
+    // What to load. A workshop id works here the same as it does in map_pool.
+    [JsonPropertyName("idle_reload_map")] public string IdleReloadMap { get; set; } = "de_dust2";
+
+    // Hours of idling after which the first person to connect gets the whole server restarted rather
+    // than the map reloaded. 0 is off, which is the default: a restart costs them a reconnect, so it is
+    // for the case a fresh map demonstrably does not fix.
+    [JsonPropertyName("idle_restart_hours")] public int IdleRestartHours { get; set; } = 0;
+
+    // Seconds of warning before a restart (!pug restart, or idle_restart_hours).
+    [JsonPropertyName("restart_warning_seconds")] public int RestartWarningSeconds { get; set; } = 30;
+
     // Seconds after !pug start that anyone can !captain to volunteer, before the captains are drawn
     // from whoever put their hand up. 0 turns the grace period off and captains are drawn at random, as
     // they always were. !pug start force skips it either way.

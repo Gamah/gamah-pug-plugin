@@ -133,6 +133,10 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
     {
         QuietenMatchZy();
         ClearFunEffects();
+        _idleReloadTimer?.Kill();
+        _idleReloadTimer = null;
+        // The new map is as fresh as it gets, so the clock starts again from here.
+        _emptySince = HumanPlayers().Any(player => !player.IsBot) ? null : DateTime.UtcNow;
 
         // A map change ends any match that was running - including the restart at the end of one - and the
         // new map starts in whatever state its own cfgs leave it. The held warmup is this plugin's job now
@@ -234,6 +238,16 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
             case "endmatch":
                 AfterTick(() => AbandonMatch("An admin ended it."));
                 break;
+            case "keepmap":
+                AfterTick(() =>
+                {
+                    CancelIdleReload("An admin kept the map.");
+                    CancelRestart("An admin kept the server up.");
+                });
+                break;
+            case "restart":
+                AfterTick(() => AskForRestart($"an admin asked for it"));
+                break;
             case "cancel":
                 AfterTick(() => Cancel("An admin cancelled it."));
                 break;
@@ -280,6 +294,14 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         if (CaptainOptInOpen)
         {
             return $"Picking captains - {_optInSecondsLeft}s left, {VolunteerCount()} volunteer(s).";
+        }
+        if (RestartPending)
+        {
+            return $"Server restarting in {_restartSecondsLeft}s - {_restartWhy}.";
+        }
+        if (IdleReloadPending)
+        {
+            return $"Server was idle - reloading {Config.IdleReloadMap} in {_idleReloadSecondsLeft}s.";
         }
 
         return _phase switch
