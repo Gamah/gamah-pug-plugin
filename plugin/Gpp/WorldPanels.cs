@@ -66,14 +66,14 @@ public partial class Gpp
         {
             bool mine = _volunteers.Contains(Id(player));
             string panel = WorldLayout.MainPanel(
-                mine ? "you are up for captain" : "want to captain?",
+                mine ? "YOU ARE IN THE CAPTAIN POOL" : "TYPE !captain TO JOIN THE CAPTAIN POOL",
                 [
-                    WorldLayout.Section.Of(volunteers.Count == 0 ? "nobody yet - captains drawn at random" : "IN"),
+                    WorldLayout.Section.Of(volunteers.Count == 0
+                        ? "NOBODY YET - CAPTAINS DRAWN AT RANDOM"
+                        : "IN"),
                     WorldLayout.Section.List(WorldLayout.Grid(volunteers.Select(WorldLayout.Clip))),
-                    WorldLayout.Section.Of(quiet.Count == 0 ? null : "STILL TO ANSWER"),
-                    WorldLayout.Section.List(WorldLayout.Grid(quiet.Select(WorldLayout.Clip))),
                 ],
-                WorldLayout.Footer(mine ? "!captain takes it back" : "type !captain", $"{_optInSecondsLeft}s"),
+                WorldLayout.Footer($"{_optInSecondsLeft}s"),
                 _hudTicks);
             WorldShow(player, panel);
         }
@@ -255,11 +255,9 @@ public partial class Gpp
         var roster = ReadyRoster();
         int ready = roster.Count(_readied.Contains);
 
-        // Everybody, with their state against their name, rather than a list of who is missing. The
-        // roster is a fixed ten lines whatever happens, so the board does not shrink a line every time
-        // somebody readies - and seeing your own name with a cross next to it is harder to ignore than
-        // being absent from a list.
-        var marked = roster.Select(steamId => (_readied.Contains(steamId) ? "+ " : "X ") + Name(steamId));
+        // Who is holding it up, named. The marked ten-line roster it replaced was a board of crosses to
+        // read through for the one name that mattered.
+        var notReady = roster.Where(steamId => !_readied.Contains(steamId)).Select(Name).ToList();
         var absent = AbsentRoster();
 
         string left = LeftBoard();
@@ -271,15 +269,16 @@ public partial class Gpp
             bool mine = _readied.Contains(Id(player));
 
             string panel = WorldLayout.MainPanel(
-                !drafted ? "match starting" : mine ? "you are ready" : "type .ready in chat",
+                !drafted ? "MATCH STARTING" : mine ? "YOU ARE READY" : "TYPE .ready IN CHAT",
                 [
                     WorldLayout.Section.Of($"{ready}/{roster.Count} READY"),
-                    new([.. WorldLayout.Slots(marked, WorldLayout.TeamSlots, 2)]),
+                    WorldLayout.Section.Of(notReady.Count == 0 ? null : "NOT READY"),
+                    WorldLayout.Section.List(WorldLayout.Grid(notReady.Select(WorldLayout.Clip))),
                     // Named, not waited on: the match can start without them, and the room decides
                     // whether to hold for somebody who has gone.
                     WorldLayout.Section.Of(absent.Count == 0 ? null : $"NOT HERE: {string.Join("  ", absent.Select(WorldLayout.Clip))}"),
                 ],
-                WorldLayout.Footer(_readyHudMap, drafted ? null : "you are not in this match"),
+                WorldLayout.Footer(drafted ? null : "YOU ARE NOT IN THIS MATCH"),
                 _hudTicks);
             WorldShow(player, panel, left, right);
         }
@@ -307,12 +306,13 @@ public partial class Gpp
             // Two lines for the captain who has to type, one line for everybody else. What each command
             // does is only worth saying to the person who can use one.
             string panel = mine
-                ? WorldLayout.MainPanel("you won the knife - .stay or .switch",
-                    [WorldLayout.Section.Of($".stay      stay on {on}", $".switch    switch to {other}")],
-                    WorldLayout.Footer(_matchMap, $"{_sideSecondsLeft}s - staying if you say nothing"), _hudTicks)
-                : WorldLayout.MainPanel($"{winner} won the knife",
-                    [WorldLayout.Section.Of("they choose to stay or switch")],
-                    WorldLayout.Footer(_matchMap, $"{_sideSecondsLeft}s"), _hudTicks);
+                ? WorldLayout.MainPanel("YOU WON THE KNIFE",
+                    [WorldLayout.Section.Of($".stay      STAY ON {on.ToString().ToUpperInvariant()}",
+                        $".switch    SWITCH TO {other.ToString().ToUpperInvariant()}")],
+                    WorldLayout.Footer($"{_sideSecondsLeft}s - STAYING IF YOU SAY NOTHING"), _hudTicks)
+                : WorldLayout.MainPanel($"{winner} WON THE KNIFE",
+                    [WorldLayout.Section.Of("THEY CHOOSE TO STAY OR SWITCH")],
+                    WorldLayout.Footer($"{_sideSecondsLeft}s"), _hudTicks);
             WorldShow(player, panel, left, right);
         }
     }
@@ -344,11 +344,14 @@ public partial class Gpp
             bool mine = _openingReady.Contains(Id(player));
             string panel = WorldLayout.MainPanel(lines[0],
                 [
-                    WorldLayout.Section.Of(lines[1], lines[2]),
-                    WorldLayout.Section.Of(waiting.Count == 0 ? "everybody is in" : "STILL MOVING"),
+                    WorldLayout.Section.Of("STFU AND MOVE IN DISCORD"),
+                    WorldLayout.Section.Of("MATCH STARTS WHEN EVERYONE IS READY",
+                        $"{playing.Count - waiting.Count}/{playing.Count} READY"),
+                    WorldLayout.Section.Of(waiting.Count == 0 ? null : "NOT READY:"),
                     WorldLayout.Section.List(WorldLayout.Grid(waiting.Select(WorldLayout.Clip))),
                 ],
-                WorldLayout.Footer(mine ? "you are in" : "type .ready when you are in", $"live in {_openingSecondsLeft}s"),
+                WorldLayout.Footer(mine ? null : "TYPE .ready WHEN YOU ARE IN",
+                    $"AUTO STARTING IN {_openingSecondsLeft}s"),
                 _hudTicks);
             WorldShow(player, panel, left, right);
         }
