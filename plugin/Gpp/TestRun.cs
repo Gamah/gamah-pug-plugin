@@ -118,21 +118,24 @@ public partial class Gpp
 
         if (sweep)
         {
-            Announce($"Test run: bots get swept every round, {Name(_testCaller)}'s side last. "
+            Announce($"Test run: bots get killed every round, {Name(_testCaller)}'s side last. "
                 + "!pug test off when you are done.");
-            // A sweep makes the round as long as it takes to end it, so the freeze in front of it is the
-            // whole round. live.cfg puts the real freeze time back at the next go-live.
+            // A killed round is as long as it takes to end it, so the freeze in front of it is the whole
+            // round. live.cfg puts the real freeze time back at the next go-live.
             Server.ExecuteCommand("mp_freezetime 1");
         }
         else
         {
             Announce(timedOut
-                ? $"Test run: {TestRunSize} with bots, nobody being swept."
+                ? $"Test run: {TestRunSize} with bots, nobody being killed."
                 : "Test run: bots stay in. !pug test sweep if you change your mind.");
         }
         _keepCentred = false;
         WorldHide();
         StopHud();
+
+        // The test is the whole suite, not the bots half of it: there is nothing to type !pug start for.
+        StartThePugWhenTheBotsAreIn();
     }
 
     private void TestAskPanel()
