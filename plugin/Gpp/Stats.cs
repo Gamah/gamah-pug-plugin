@@ -2,15 +2,16 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Data.Sqlite;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
+using CounterStrikeSharp.API.Modules.Timers;
 
 namespace Gpp;
 
 // Match and player stats in a SQLite file of our own, written twice per pug: a row when the match goes
 // live, the scores and the player rows when it ends. MatchZy's tables carried forty columns of Get5
 // bookkeeping (entry duels, utility successes, 1vN counts) off events GPP does not follow; this keeps the
-// handful a pug actually gets asked about and nothing that cannot be read straight off a kill or a hurt.
+// handful a pug actually gets asked about, read off the engine's own counters at the end of a round.
 //
-// Nothing here runs on the game thread except the counting. The writes take a snapshot of plain numbers
+// Nothing here runs while a round is live. The writes take a snapshot of plain numbers
 // and hand it to a task, because a disk hitch inside a round is a visible stutter - and because a
 // CCSPlayerController must never be touched off-thread.
 public partial class Gpp
@@ -29,60 +30,113 @@ public partial class Gpp
 
     private readonly Dictionary<ulong, PlayerStat> _stats = [];
 
+    // What the engine had counted for each player when the match went live.
+    private readonly Dictionary<ulong, PlayerStat> _baseline = [];
+
+    // Read off the engine at the end of a round, not counted off kills and hurts as they happen. The
+    // engine keeps the same figures the scoreboard shows, so nothing of ours has to run while a round
+    // is live - and intra-round detail, which was never stored anyway, is what a demo is for.
     private void HookMatchStats()
     {
-        RegisterEventHandler<EventPlayerDeath>((@event, _) =>
+        RegisterEventHandler<EventRoundEnd>((_, _) =>
         {
-            if (!CountingStats()) return HookResult.Continue;
-
-            var victim = @event.Userid;
-            var attacker = @event.Attacker;
-            var assister = @event.Assister;
-
-            if (victim != null && victim.IsValid) Stat(victim).Deaths++;
-            // Team kills count as a death for the victim and nothing for the killer, as the scoreboard
-            // does - minus one kill is how the engine scores it, and a negative pug stat reads as a bug.
-            if (attacker != null && attacker.IsValid && victim != null && attacker.Team != victim.Team)
-            {
-                var stat = Stat(attacker);
-                stat.Kills++;
-                if (@event.Headshot) stat.Headshots++;
-            }
-            if (assister != null && assister.IsValid && victim != null && assister.Team != victim.Team)
-            {
-                Stat(assister).Assists++;
-            }
-            return HookResult.Continue;
-        });
-
-        RegisterEventHandler<EventPlayerHurt>((@event, _) =>
-        {
-            if (!CountingStats()) return HookResult.Continue;
-
-            var victim = @event.Userid;
-            var attacker = @event.Attacker;
-            if (attacker == null || !attacker.IsValid || victim == null || !victim.IsValid) return HookResult.Continue;
-            if (attacker.Team == victim.Team) return HookResult.Continue;
-
-            // DmgHealth is already capped at the health the victim had, so this is damage dealt rather
-            // than damage swung.
-            Stat(attacker).Damage += @event.DmgHealth;
-            return HookResult.Continue;
-        });
-
-        RegisterEventHandler<EventRoundMvp>((@event, _) =>
-        {
-            if (!CountingStats()) return HookResult.Continue;
-            var player = @event.Userid;
-            if (player != null && player.IsValid) Stat(player).Mvps++;
+            if (Config.Match.StatsEnabled && _matchPhase == MatchPhase.Live) AfterTick(QueueStats);
             return HookResult.Continue;
         });
     }
 
-    // Only a live, unpaused match counts. Warmup kills and knife-round kills are not stats.
-    private bool CountingStats()
+    // MatchStats is cumulative and outlives a round, so what the match went live on is subtracted:
+    // warmup and the knife round are not stats. A player who turns up mid-match baselines on the first
+    // round end that sees them, which is the same rule - nothing before they arrived is theirs.
+    private void CaptureStatsBaseline()
     {
-        return Config.Match.StatsEnabled && _matchPhase == MatchPhase.Live && !_paused && !InWarmupPeriod();
+        _baseline.Clear();
+        if (!Config.Match.StatsEnabled) return;
+        foreach (var player in HumanPlayers()) Baseline(player);
+    }
+
+    private PlayerStat? Baseline(CCSPlayerController player)
+    {
+        if (player.IsBot || player.IsHLTV || !player.IsValid) return null;
+        var tracking = player.ActionTrackingServices;
+        if (tracking == null) return null;
+
+        ulong id = Id(player);
+        if (_baseline.TryGetValue(id, out var known)) return known;
+
+        var stats = tracking.MatchStats;
+        var from = new PlayerStat
+        {
+            Kills = stats.Kills,
+            Deaths = stats.Deaths,
+            Assists = stats.Assists,
+            Damage = stats.Damage,
+            Headshots = stats.HeadShotKills,
+            Mvps = player.MVPs,
+        };
+        _baseline[id] = from;
+        return from;
+    }
+
+    // One player per tick-and-a-bit rather than ten reads in the frame a round ends on. Freeze time is
+    // seconds long and nothing is waiting on these numbers until the match ends, so the queue is
+    // drained at a trickle. A fresh round end replaces whatever is left of the last one: the engine's
+    // counters are cumulative, so the newer read is the better one anyway.
+    private const float StatsDrainSeconds = 0.1f;
+
+    private readonly Queue<int> _statsQueue = new();
+    private CounterStrikeSharp.API.Modules.Timers.Timer? _statsDrainTimer;
+
+    private void QueueStats()
+    {
+        if (!Config.Match.StatsEnabled) return;
+
+        _statsQueue.Clear();
+        foreach (var player in HumanPlayers())
+        {
+            if (player.IsBot || player.IsHLTV || !player.IsValid) continue;
+            _statsQueue.Enqueue(player.Slot);
+        }
+
+        _statsDrainTimer ??= AddTimer(StatsDrainSeconds, DrainStats, TimerFlags.REPEAT);
+    }
+
+    private void DrainStats()
+    {
+        if (_statsQueue.Count == 0)
+        {
+            _statsDrainTimer?.Kill();
+            _statsDrainTimer = null;
+            return;
+        }
+
+        CollectOne(Utilities.GetPlayerFromSlot(_statsQueue.Dequeue()));
+    }
+
+    // The match is over and the row is about to be written, so whatever is left in the queue is read
+    // now: one frame, once a match, against a win panel nobody is playing through.
+    private void FlushStats()
+    {
+        _statsDrainTimer?.Kill();
+        _statsDrainTimer = null;
+        while (_statsQueue.Count > 0) CollectOne(Utilities.GetPlayerFromSlot(_statsQueue.Dequeue()));
+    }
+
+    private void CollectOne(CCSPlayerController? player)
+    {
+        if (player == null || !player.IsValid) return;
+
+        var from = Baseline(player);
+        if (from == null) return;
+
+        var stats = player.ActionTrackingServices!.MatchStats;
+        var stat = Stat(player);
+        stat.Kills = stats.Kills - from.Kills;
+        stat.Deaths = stats.Deaths - from.Deaths;
+        stat.Assists = stats.Assists - from.Assists;
+        stat.Damage = stats.Damage - from.Damage;
+        stat.Headshots = stats.HeadShotKills - from.Headshots;
+        stat.Mvps = player.MVPs - from.Mvps;
     }
 
     // Bots have no SteamID, so they are counted into nothing: a test run's numbers are not worth a row.
@@ -99,7 +153,14 @@ public partial class Gpp
         return stat;
     }
 
-    private void ClearStats() => _stats.Clear();
+    private void ClearStats()
+    {
+        _stats.Clear();
+        _baseline.Clear();
+        _statsQueue.Clear();
+        _statsDrainTimer?.Kill();
+        _statsDrainTimer = null;
+    }
 
     private string DatabasePath()
     {
@@ -124,6 +185,8 @@ public partial class Gpp
     private void RecordMatchEnd(int score1, int score2, string winner)
     {
         if (!Config.Match.StatsEnabled) return;
+
+        FlushStats();
 
         long matchId = _matchId;
         string path = DatabasePath();

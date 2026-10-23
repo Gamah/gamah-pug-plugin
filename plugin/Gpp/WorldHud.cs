@@ -180,6 +180,7 @@ public partial class Gpp
         {
             panel = new ViewerPanel();
             _panels[player.Slot] = panel;
+            SyncPanelListeners();
         }
 
         Draw(player, panel, Board.Main, main);
@@ -358,7 +359,9 @@ public partial class Gpp
     // middle.
     private (float Sideways, float ToeIn, float Away) Placement(Board which)
     {
-        var (sideways, toeIn, away) = Placement(which);
+        float sideways = which switch { Board.Left => -SideGap, Board.Right => SideGap, _ => 0f };
+        float toeIn = which switch { Board.Left => _sideToeIn, Board.Right => -_sideToeIn, _ => 0f };
+        float away = PanelDistance + (which == Board.Main ? 0f : _sideBack);
 
         if (PanelsFloat)
         {
@@ -373,6 +376,38 @@ public partial class Gpp
     // Held still by the draft means the middle is harmless; anything else and the boards move aside.
     private bool PanelsFloat => Config.HudFloatLeft && _lockTimer == null;
 
+    // Attached while there are boards to keep up, and not otherwise. CheckTransmit is the reason this
+    // is worth doing: the engine calls it for every client every tick, and a live match has no panels
+    // at all - so between go-live and the win panel the plugin asks for nothing per tick.
+    private Listeners.CheckTransmit? _transmitListener;
+    private Listeners.OnTick? _tickListener;
+
+    private void SyncPanelListeners()
+    {
+        bool wanted = !Retired && _panels.Count > 0;
+        if (wanted == (_transmitListener != null)) return;
+
+        if (wanted)
+        {
+            _transmitListener = WorldPanelTransmit;
+            RegisterListener(_transmitListener);
+
+            // Only the fallback tier moves the boards itself; a parented board needs no tick.
+            if (_follow == Follow.Teleport)
+            {
+                _tickListener = WorldPanelTick;
+                RegisterListener(_tickListener);
+            }
+            return;
+        }
+
+        RemoveListener(_transmitListener!);
+        _transmitListener = null;
+        if (_tickListener == null) return;
+        RemoveListener(_tickListener);
+        _tickListener = null;
+    }
+
     // The one place a board's position and facing are worked out, from whatever frame it is hanging in.
     //
     // The roll is 90 minus the pitch rather than a flat 90: 90 is what stands the text plane up when the
@@ -383,9 +418,7 @@ public partial class Gpp
     {
         if (slot.Text == null || !slot.Text.IsValid) return;
 
-        float sideways = which switch { Board.Left => -SideGap, Board.Right => SideGap, _ => 0f };
-        float toeIn = which switch { Board.Left => _sideToeIn, Board.Right => -_sideToeIn, _ => 0f };
-        float away = PanelDistance + (which == Board.Main ? 0f : _sideBack);
+        var (sideways, toeIn, away) = Placement(which);
 
         double yaw = angles.Y * Math.PI / 180.0;
         double pitch = angles.X * Math.PI / 180.0;
@@ -569,12 +602,14 @@ public partial class Gpp
         }
         ClearOrient(panel);
         _panels.Remove(slot);
+        SyncPanelListeners();
     }
 
     internal void ClearWorldPanels()
     {
         foreach (int slot in _panels.Keys.ToList()) HideWorldPanel(slot);
         _panels.Clear();
+        SyncPanelListeners();
     }
 
     // Belt and braces for the one failure that cannot be cleaned up later: a panel left behind by a
@@ -583,6 +618,7 @@ public partial class Gpp
     internal void SweepStrayPanels()
     {
         _panels.Clear();
+        SyncPanelListeners();
         foreach (var stray in Utilities.FindAllEntitiesByDesignerName<CPointWorldText>("point_worldtext").ToList())
         {
             if (stray.IsValid) stray.Remove();
