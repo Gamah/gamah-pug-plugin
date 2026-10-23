@@ -22,108 +22,23 @@ namespace Gpp;
 // widths it produces want re-measuring after a CS2 update, and a tool nobody can find never gets re-run.
 public partial class Gpp
 {
-    // !pug scroll - does a long line actually move, and does a faster redraw flicker?
-    //
-    // The scroll steps once per redraw, so what it looks like depends entirely on how often the panel is
-    // painted. At 1Hz it stepped a glyph a second after holding still for three, which on screen read as
-    // text that only changed when something else happened. The panels repaint four times a second now;
-    // this is how that gets judged rather than asserted.
-    internal void ScrollProbe()
+    // The ruler is the last thing that writes to the centre channel: it is a measuring tool, and the
+    // glyph widths it measures are what the world boards pad themselves with. Both of these moved here
+    // when the centre panel itself went.
+    // Four lines, unclipped, to everybody: the ruler exists to be measured off a screenshot, so nothing
+    // may trim it on the way out.
+    internal static void BroadcastRaw(string alert, List<string> panel)
     {
-        Announce($"Scroll probe: 40s. Top line ({HudMetrics.Width("SCROLLS: ....5...10....5...20....5...30....5...40....5..END")} units) "
-            + $"should crawl end to end; the bottom one ({HudMetrics.Width("STILL: this must not move")} units, "
-            + $"budget {HudMetrics.LineBudget}) must not move at all.");
-
-        // Just over the budget, so it travels end to end inside the probe rather than crawling off
-        // the far side of a minute.
-        string ruler = "SCROLLS: ....5...10....5...20....5...30....5...40....5..END";
-        // Measured, not assumed: the last version of this line was 380 units against a 340 budget, so
-        // the thing that was supposed to sit still scrolled, which is a probe lying to you.
-        const string still = "STILL: this must not move";
-
-        int left = 40;
-        _probeTimer?.Kill();
-        _probeTimer = AddTimer(1.0f, () =>
+        string body = string.Join("\n", panel.Take(HudLayout.PanelLines));
+        foreach (var player in Utilities.GetPlayers().Where(p => p.IsValid && !p.IsHLTV))
         {
-            if (--left <= 0)
-            {
-                _probeTimer?.Kill();
-                _probeTimer = null;
-                StopHud();
-                Announce("Scroll probe done. Did the top line move smoothly, and did the bottom one "
-                    + "hold still?");
-            }
-        }, TimerFlags.REPEAT);
-
-        // The repaint loop does the drawing, four times a second, exactly as it does for a real panel.
-        _repaint = () =>
-        {
-            foreach (var player in HumanPlayers())
-            {
-                player.PrintToCenterAlert(Alert("SCROLL PROBE", $"{left}s"));
-            }
-        };
-    }
-
-    // !pug wrap - where does this client actually wrap?
-    //
-    // hud_line_budget is the one number in the layout that is not a property of the font: it depends on
-    // the viewer's resolution and HUD scale, and 340 is a guess that sat below the widest line seen to
-    // fit on one client. A line at 339 units is then one bad guess away from the client wrapping it in
-    // the middle of a word, which is what "weird wraps" in a pick list is.
-    //
-    // So rather than guess again: four lines of known width, labelled with that width, one screenshot.
-    // Whichever is the last one that fits on a single line is the budget for that client, minus a little.
-    private static readonly int[] WrapWidths = [260, 290, 320, 350, 380, 410];
-
-    internal void WrapProbe()
-    {
-        Announce("Wrap probe: lines labelled with their width in HUD units. "
-            + "Screenshot it - the widest one that does NOT wrap is this client's budget.");
-
-        var lines = WrapWidths.Select(BuildWrapLine).ToList();
-        int step = 0;
-
-        _probeTimer?.Kill();
-        _probeTimer = AddTimer(1.0f, () =>
-        {
-            int page = (step / ProbeSeconds) % 2;
-            step++;
-            if (step > ProbeSeconds * 2)
-            {
-                _probeTimer?.Kill();
-                _probeTimer = null;
-                StopHud();
-                Announce($"Wrap probe done. Set hud_line_budget to the widest that fit "
-                    + $"(current: {HudMetrics.LineBudget}).");
-                return;
-            }
-            BroadcastRaw(Alert("WRAP PROBE", page == 0 ? "260 - 320" : "350 - 410"),
-                lines.Skip(page * 3).Take(3).ToList());
-        }, TimerFlags.REPEAT);
-    }
-
-    // "320|nnnnnn...n|" padded to exactly that many units, so what you see is what it measures.
-    private static string BuildWrapLine(int width)
-    {
-        string label = $"{width}|";
-        var line = new System.Text.StringBuilder(label);
-        int used = HudMetrics.Width(label) + HudMetrics.Width("|");
-        while (used + HudMetrics.Width('n') <= width)
-        {
-            line.Append('n');
-            used += HudMetrics.Width('n');
+            player.PrintToCenterAlert(alert);
+            player.PrintToCenter(body);
         }
-        // Pad the last few units with the narrowest glyph there is, so the line lands on its number.
-        while (used + HudMetrics.Width('i') <= width)
-        {
-            line.Append('i');
-            used += HudMetrics.Width('i');
-        }
-        return line.Append('|').ToString();
     }
 
     private const int RulerRepeats = 20;
+
     private const int RulerHoldSeconds = 20;
 
     // Three characters a page. The first line is always forty pipes, which is the scale: the pipe

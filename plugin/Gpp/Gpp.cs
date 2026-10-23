@@ -35,7 +35,6 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
     public void OnConfigParsed(GppConfig config)
     {
         Config = config;
-        if (Config.HudLineBudget > 0) HudMetrics.LineBudget = Config.HudLineBudget;
         if (Config.PlayersPerTeam < 0) Config.PlayersPerTeam = 0;
         if (Config.MinPlayers < 2) Config.MinPlayers = 2;
         Config.MapPool = Config.MapPool.Where(m => !string.IsNullOrWhiteSpace(m.Name) || m.IsWorkshop).ToList();
@@ -202,8 +201,8 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         });
     }
 
-    [ConsoleCommand("css_pug", "GPP admin command: start | vote | draft | captains | match | endmatch | stop | cancel | status | test [sweep|off] | bots <n> | hudsize | hudboth | hudlist [abcd]")]
-    [CommandHelper(minArgs: 0, usage: "<start|vote|draft|captains|match|endmatch|stop|cancel|status|hudsize|hudlist>")]
+    [ConsoleCommand("css_pug", "GPP admin command: start | vote | draft | captains | match | endmatch | stop | cancel | status | test [sweep|off] | bots <n>")]
+    [CommandHelper(minArgs: 0, usage: "<start|vote|draft|captains|match|endmatch|stop|cancel|status>")]
     public void OnPugCommand(CCSPlayerController? player, CommandInfo command)
     {
         if (!IsAdmin(player))
@@ -335,23 +334,8 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
             case "discord":
                 Reply(command, SetOpeningBoards(arg));
                 break;
-            case "scroll":
-                ScrollProbe();
-                break;
-            case "wrap":
-                WrapProbe();
-                break;
             case "ruler":
                 HudRulerProbe(arg, size);
-                break;
-            case "hudsize":
-                HudSizeProbe();
-                break;
-            case "hudboth":
-                HudBothProbe();
-                break;
-            case "hudlist":
-                HudListProbe(arg);
                 break;
             case "status":
             default:
