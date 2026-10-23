@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Data.Sqlite;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
+using CounterStrikeSharp.API.Modules.Timers;
 
 namespace Gpp;
 
@@ -39,7 +40,7 @@ public partial class Gpp
     {
         RegisterEventHandler<EventRoundEnd>((_, _) =>
         {
-            if (Config.Match.StatsEnabled && _matchPhase == MatchPhase.Live) AfterTick(CollectStats);
+            if (Config.Match.StatsEnabled && _matchPhase == MatchPhase.Live) AfterTick(QueueStats);
             return HookResult.Continue;
         });
     }
@@ -77,24 +78,65 @@ public partial class Gpp
         return from;
     }
 
-    private void CollectStats()
+    // One player per tick-and-a-bit rather than ten reads in the frame a round ends on. Freeze time is
+    // seconds long and nothing is waiting on these numbers until the match ends, so the queue is
+    // drained at a trickle. A fresh round end replaces whatever is left of the last one: the engine's
+    // counters are cumulative, so the newer read is the better one anyway.
+    private const float StatsDrainSeconds = 0.1f;
+
+    private readonly Queue<int> _statsQueue = new();
+    private CounterStrikeSharp.API.Modules.Timers.Timer? _statsDrainTimer;
+
+    private void QueueStats()
     {
         if (!Config.Match.StatsEnabled) return;
 
+        _statsQueue.Clear();
         foreach (var player in HumanPlayers())
         {
-            var from = Baseline(player);
-            if (from == null) continue;
-
-            var stats = player.ActionTrackingServices!.MatchStats;
-            var stat = Stat(player);
-            stat.Kills = stats.Kills - from.Kills;
-            stat.Deaths = stats.Deaths - from.Deaths;
-            stat.Assists = stats.Assists - from.Assists;
-            stat.Damage = stats.Damage - from.Damage;
-            stat.Headshots = stats.HeadShotKills - from.Headshots;
-            stat.Mvps = player.MVPs - from.Mvps;
+            if (player.IsBot || player.IsHLTV || !player.IsValid) continue;
+            _statsQueue.Enqueue(player.Slot);
         }
+
+        _statsDrainTimer ??= AddTimer(StatsDrainSeconds, DrainStats, TimerFlags.REPEAT);
+    }
+
+    private void DrainStats()
+    {
+        if (_statsQueue.Count == 0)
+        {
+            _statsDrainTimer?.Kill();
+            _statsDrainTimer = null;
+            return;
+        }
+
+        CollectOne(Utilities.GetPlayerFromSlot(_statsQueue.Dequeue()));
+    }
+
+    // The match is over and the row is about to be written, so whatever is left in the queue is read
+    // now: one frame, once a match, against a win panel nobody is playing through.
+    private void FlushStats()
+    {
+        _statsDrainTimer?.Kill();
+        _statsDrainTimer = null;
+        while (_statsQueue.Count > 0) CollectOne(Utilities.GetPlayerFromSlot(_statsQueue.Dequeue()));
+    }
+
+    private void CollectOne(CCSPlayerController? player)
+    {
+        if (player == null || !player.IsValid) return;
+
+        var from = Baseline(player);
+        if (from == null) return;
+
+        var stats = player.ActionTrackingServices!.MatchStats;
+        var stat = Stat(player);
+        stat.Kills = stats.Kills - from.Kills;
+        stat.Deaths = stats.Deaths - from.Deaths;
+        stat.Assists = stats.Assists - from.Assists;
+        stat.Damage = stats.Damage - from.Damage;
+        stat.Headshots = stats.HeadShotKills - from.Headshots;
+        stat.Mvps = player.MVPs - from.Mvps;
     }
 
     // Bots have no SteamID, so they are counted into nothing: a test run's numbers are not worth a row.
@@ -115,6 +157,9 @@ public partial class Gpp
     {
         _stats.Clear();
         _baseline.Clear();
+        _statsQueue.Clear();
+        _statsDrainTimer?.Kill();
+        _statsDrainTimer = null;
     }
 
     private string DatabasePath()
@@ -140,6 +185,8 @@ public partial class Gpp
     private void RecordMatchEnd(int score1, int score2, string winner)
     {
         if (!Config.Match.StatsEnabled) return;
+
+        FlushStats();
 
         long matchId = _matchId;
         string path = DatabasePath();
