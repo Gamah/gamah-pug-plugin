@@ -184,11 +184,14 @@ public partial class Gpp
             SyncPanelListeners();
         }
 
-        // Moving between the middle and the floated position is a different place, not a different
-        // angle, so the boards are hung again rather than re-aimed. Twice a pug.
-        if (panel.Floated != PanelsFloat)
+        // A lone board floats; the moment it has team boards beside it, the three of them are a layout
+        // and the layout stays where it was built. Moving between the two is a different place rather
+        // than a different angle, so the boards are hung again rather than re-aimed.
+        bool floated = PanelsFloat && string.IsNullOrEmpty(left) && string.IsNullOrEmpty(right);
+        _floatingNow = floated;
+        if (panel.Floated != floated)
         {
-            panel.Floated = PanelsFloat;
+            panel.Floated = floated;
             Rehang(player, panel);
         }
 
@@ -375,7 +378,7 @@ public partial class Gpp
         // Flat to the view and shifted left, which is the idiom of the engine's own timeout and kick
         // votes rather than the tilted triple-panel mount: a single board is read at a glance, and a
         // toe-in on it reads as a board somebody has knocked askew.
-        if (PanelsFloat) sideways -= FloatGap;
+        if (_floatingNow) sideways -= FloatGap;
 
         return (sideways, toeIn, away);
     }
@@ -383,6 +386,10 @@ public partial class Gpp
     // Held still by the draft means the middle is harmless, so the draft keeps it. So does the opening
     // pause: being told to get into a voice channel is the one panel that should be in the way.
     private bool PanelsFloat => Config.HudFloatLeft && _lockTimer == null && !OpeningPauseRunning;
+
+    // Which panel is being drawn right now: three boards are a layout and stay put, a lone board is a
+    // notice and moves aside. Set by whoever is about to place boards, read by Placement.
+    private bool _floatingNow;
 
     // How far left a floated board sits. Aimed at the space the engine puts a vote in, which is a
     // judgement in front of a client rather than anything derivable: !pug sides float <units>.
@@ -456,6 +463,7 @@ public partial class Gpp
     // enough to be worth re-squaring.
     private void KeepUp(CCSPlayerController player, ViewerPanel panel)
     {
+        _floatingNow = panel.Floated;
         var pawn = ViewPawn(player);
         if (pawn == null || pawn.AbsOrigin == null) return;
         if (!panel.Live.Any()) return;
@@ -503,6 +511,7 @@ public partial class Gpp
     // offsets, which is the state that is hardest to see and easiest to get wrong.
     private void Rehang(CCSPlayerController player, ViewerPanel panel)
     {
+        _floatingNow = panel.Floated;
         var texts = panel.Boards.Select(board => board.Sent).ToArray();
         for (int which = 0; which < panel.Boards.Length; which++)
         {
