@@ -81,6 +81,12 @@ public class MatchSettings
     // cannot move somebody who has not joined voice yet.
     [JsonPropertyName("opening_pause_seconds")] public int OpeningPauseSeconds { get; set; } = 30;
 
+    // Seconds the final scoreboard is left up before the server goes back to a held warmup. The engine's
+    // own intermission is mp_match_restart_delay long and nothing can be sent during it, so this is how
+    // long after the win panel the warmup is asked for - and if the panel will not let go, how long
+    // before the map is reloaded to clear it.
+    [JsonPropertyName("post_match_seconds")] public int PostMatchSeconds { get; set; } = 5;
+
     [JsonPropertyName("pauses_enabled")] public bool PausesEnabled { get; set; } = true;
 
     // Technical pauses a side may call per match. 0 is unlimited.
