@@ -425,6 +425,64 @@ public partial class Gpp
         }
     }
 
+    // --- the result ------------------------------------------------------------------------------
+
+    // What the engine's end-of-match screen would have said, on our own panel, in a warmup that is
+    // already open. It is the only panel that goes up when nothing is being asked of anybody: a match
+    // ending with no word for it reads as the match having been thrown away, which is exactly what the
+    // cancelled panel used to look like.
+    private CounterStrikeSharp.API.Modules.Timers.Timer? _winPanelTimer;
+    private int _winPanelSecondsLeft;
+    private string _winHeadline = "";
+    private string _winScore = "";
+
+    private void StartWinPanel(string winner, int score1, int score2)
+    {
+        _winHeadline = winner.Length > 0 ? $"{winner} WIN" : "DRAWN";
+        _winScore = $"{_team1Name} {score1} - {score2} {_team2Name}";
+        Announce($"{_winScore} - warmup is open, nobody has been moved.");
+        if (!Config.Hud) return;
+
+        _winPanelSecondsLeft = Math.Max(1, Config.Match.WinPanelSeconds);
+        _winPanelTimer?.Kill();
+        _winPanelTimer = AddTimer(1.0f, WinPanelTick, TimerFlags.REPEAT);
+        WinPanelPaint();
+    }
+
+    private void WinPanelTick()
+    {
+        // A pug called in the ten seconds after a match owns the screen from here.
+        if (--_winPanelSecondsLeft <= 0 || _phase != PugPhase.Idle || MatchRunning)
+        {
+            AfterTick(StopWinPanel);
+            return;
+        }
+        WinPanelPaint();
+    }
+
+    private void StopWinPanel()
+    {
+        _winPanelTimer?.Kill();
+        _winPanelTimer = null;
+        Clear();
+    }
+
+    private void WinPanelPaint()
+    {
+        _repaint = WinPanelPaint;
+        if (WorldStyle)
+        {
+            WorldWinPanel();
+            return;
+        }
+
+        foreach (var player in HumanPlayers())
+        {
+            Paint(player, TwoLine(_winHeadline, _winScore),
+                ["warmup is open - !pug start whenever you want the next one"]);
+        }
+    }
+
     // Two channels, both addressed to one player at a time (ClientPrint takes a slot, so every message
     // already goes to exactly one person). Alert is the bigger of the two and carries the one line that
     // says what is happening and what this player types - with the countdown in it, so a clock is on

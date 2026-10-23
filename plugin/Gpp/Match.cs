@@ -78,6 +78,10 @@ public partial class Gpp
                 Logger.LogInformation("Half swap: {Team} is now {Side}.", _team1Name,
                     _team1Side == CsTeam.CounterTerrorist ? "CT" : "T");
             }
+
+            // Next tick, not this one: the side scores are still being written while the round is ending,
+            // and a clinch read off a stale score is a match called a round early.
+            if (_matchPhase == MatchPhase.Live && Config.Match.OwnMatchEnd) AfterTick(CheckForOurOwnClinch);
             return HookResult.Continue;
         }, HookMode.Post);
 
@@ -85,7 +89,7 @@ public partial class Gpp
         // which is why everything below it is safe to run from an idle server.
         RegisterEventHandler<EventCsWinPanelMatch>((_, _) =>
         {
-            AfterTick(FinishMatch);
+            AfterTick(() => FinishMatch(engineEnded: true));
             return HookResult.Continue;
         });
 
@@ -427,6 +431,14 @@ public partial class Gpp
         Server.ExecuteCommand("mp_ignore_round_win_conditions 0;mp_restartgame 1;mp_warmup_end;"
             + "mp_match_end_restart false");
 
+        // The engine must not reach its own end of the match, because nothing dismisses the panel it puts
+        // up there. With the clinch off it keeps playing rounds and CheckForOurOwnClinch calls the match
+        // first. mp_maxrounds is left alone: the engine's halftime swap is measured off it, and that is
+        // the one part of the end of a match that works.
+        Server.ExecuteCommand(Config.Match.OwnMatchEnd
+            ? "mp_match_can_clinch 0"
+            : "mp_match_can_clinch 1");
+
         StartDemoAfterRestart(LiveRestartSeconds);
         CaptureStatsBaseline();
         RecordMatchStart();
@@ -473,7 +485,23 @@ public partial class Gpp
 
     // The engine's match end. Scores are read before anything restarts, the demo is given the GOTV flush
     // time it needs, and the server is handed back to an idle warmup.
-    private void FinishMatch()
+    // The round that just ended may have decided it. Called a tick after every round end while we own the
+    // match end, which is one score read per round and nothing else.
+    private void CheckForOurOwnClinch()
+    {
+        if (_matchPhase != MatchPhase.Live) return;
+
+        var (score1, score2) = Score();
+        int maxRounds = ConVar.Find("mp_maxrounds")?.GetPrimitiveValue<int>() ?? 24;
+        int roundsPlayed = GameRules()?.TotalRoundsPlayed ?? 0;
+        if (!MatchRules.MatchIsWon(score1, score2, maxRounds, roundsPlayed)) return;
+
+        Logger.LogInformation("Calling the match at {Score1}-{Score2} after {Rounds} of {Max} rounds - "
+            + "before the engine's own end of it.", score1, score2, roundsPlayed, maxRounds);
+        FinishMatch(engineEnded: false);
+    }
+
+    private void FinishMatch(bool engineEnded = true)
     {
         if (_matchPhase is MatchPhase.None or MatchPhase.Over) return;
         _matchPhase = MatchPhase.Over;
@@ -511,7 +539,19 @@ public partial class Gpp
         _knifeSide = CsTeam.None;
         ResetPauses();
 
-        ReturnToHeldWarmup();
+        if (engineEnded) ReturnToHeldWarmup();
+        else OpenWarmupWithTheResult(winner, score1, score2);
+    }
+
+    // Our own end of the match: the engine is still playing, so there is no panel to escape and no map to
+    // reload. The warmup opens where everybody is standing and the result goes on a panel of ours for
+    // win_panel_seconds, which is the engine's end-of-match screen replaced rather than fought with.
+    private void OpenWarmupWithTheResult(string winner, int score1, int score2)
+    {
+        ExecWarmupCfg();
+        Server.ExecuteCommand("mp_ignore_round_win_conditions 0;mp_warmup_start;"
+            + "mp_warmuptime 9999;mp_warmup_pausetimer 1");
+        StartWinPanel(winner, score1, score2);
     }
 
     // Back to a held warmup after a match. The map is reloaded to get there, because nothing else does.

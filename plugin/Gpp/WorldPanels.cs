@@ -382,6 +382,24 @@ public partial class Gpp
         }
     }
 
+    // One board, no teams beside it: the match is over, so the two team boards have nothing left to say.
+    private void WorldWinPanel()
+    {
+        foreach (var player in HumanPlayers())
+        {
+            string panel = WorldLayout.MainPanel(_winHeadline.ToLowerInvariant(),
+                [
+                    WorldLayout.Section.Of("FINAL", _winScore),
+                    WorldLayout.Section.Of("NEXT",
+                        "the warmup is open and nobody has been moved.",
+                        "!pug start when you want another one."),
+                ],
+                WorldLayout.Footer($"{_winPanelSecondsLeft}s"),
+                _hudTicks);
+            WorldShow(player, panel);
+        }
+    }
+
     private void WorldRestartPanel()
     {
         foreach (var player in HumanPlayers())
