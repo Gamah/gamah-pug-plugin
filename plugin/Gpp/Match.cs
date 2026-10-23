@@ -105,6 +105,15 @@ public partial class Gpp
                 _openingDone = true;
                 AfterTick(StartOpeningPause);
             }
+
+            // Asserted here rather than at go-live, because `exec` queues the file's contents *behind*
+            // whatever is sent after it: live.cfg's own mp_match_can_clinch 1 landed last and won. The
+            // engine then clinched at 3-0 and went to intermission one tick before we called the match
+            // ourselves, and an intermission is the lock - a step of movement, then snapped back.
+            if (_matchPhase == MatchPhase.Live && Config.Match.OwnMatchEnd)
+            {
+                Server.ExecuteCommand("mp_match_can_clinch 0");
+            }
             return HookResult.Continue;
         });
 
@@ -187,7 +196,7 @@ public partial class Gpp
         "mp_maxrounds 24;mp_halftime 1;mp_overtime_enable 1;mp_overtime_maxrounds 6;mp_freezetime 15;"
         + "mp_maxmoney 16000;mp_startmoney 800;mp_roundtime 1.92;mp_roundtime_defuse 1.92;"
         + "mp_free_armor 0;mp_give_player_c4 1;mp_autoteambalance 0;mp_limitteams 0;"
-        + "mp_match_can_clinch 1;mp_warmup_pausetimer 0";
+        + "mp_warmup_pausetimer 0";
 
     internal void ExecWarmupCfg() => ExecPhaseCfg(Config.Match.WarmupCfg, WarmupFallback, "Warmup");
 
@@ -438,12 +447,11 @@ public partial class Gpp
             + "mp_match_end_restart false");
 
         // The engine must not reach its own end of the match, because nothing dismisses the panel it puts
-        // up there. With the clinch off it keeps playing rounds and CheckForOurOwnClinch calls the match
-        // first. mp_maxrounds is left alone: the engine's halftime swap is measured off it, and that is
-        // the one part of the end of a match that works.
-        Server.ExecuteCommand(Config.Match.OwnMatchEnd
-            ? "mp_match_can_clinch 0"
-            : "mp_match_can_clinch 1");
+        // up there - and the intermission behind that panel is what holds everybody still. With the clinch
+        // off it keeps playing rounds and CheckForOurOwnClinch calls the match first. mp_maxrounds is left
+        // alone: the halftime swap is measured off it, and that part works. The command itself goes out at
+        // every round start, because one sent here loses to live.cfg's own line.
+        if (!Config.Match.OwnMatchEnd) Server.ExecuteCommand("mp_match_can_clinch 1");
 
         StartDemoAfterRestart(LiveRestartSeconds);
         CaptureStatsBaseline();
@@ -554,13 +562,68 @@ public partial class Gpp
     // win_panel_seconds, which is the engine's end-of-match screen replaced rather than fought with.
     private void OpenWarmupWithTheResult(string winner, int score1, int score2)
     {
-        // The restart is what gets anybody moving again. Calling the match at a round end means the
-        // warmup opens inside the engine's round-end freeze, and that freeze is never released - the
-        // first test of this left everybody standing still in an otherwise working warmup.
-        ExecWarmupCfg();
-        Server.ExecuteCommand("mp_ignore_round_win_conditions 0;mp_unpause_match;mp_warmup_start;"
-            + "mp_warmuptime 9999;mp_warmup_pausetimer 1;mp_restartgame 1");
+        // Lost the race: the engine got to its own end of the match in the same breath. Opening a warmup
+        // inside the intermission is the bug this whole path exists to avoid, so hand it to the reload.
+        if (InPostGame())
+        {
+            Logger.LogWarning("The engine reached intermission before we called it - falling back to the "
+                + "map reload. mp_match_can_clinch was not held off.");
+            ReturnToHeldWarmup();
+            return;
+        }
+
+        ReturnServerToWarmup();
         StartWinPanel(winner, score1, score2);
+        LogTheWarmupWeOpened();
+    }
+
+    // Ten seconds of what the server actually looks like after a called match: the game phase, and
+    // whether anybody's pawn is being held still. Both of those have been the answer tonight - the
+    // intermission freeze reads as a pawn nobody can move, and the two movetype fields disagree when
+    // something has frozen a player and not let go.
+    private void LogTheWarmupWeOpened()
+    {
+        int ticks = 0;
+        CounterStrikeSharp.API.Modules.Timers.Timer? timer = null;
+        timer = AddTimer(1.0f, () =>
+        {
+            if (++ticks > 10 || MatchRunning)
+            {
+                timer?.Kill();
+                return;
+            }
+            try
+            {
+                var rules = GameRules();
+                string movement = string.Join(", ", HumanPlayers().Where(player => !player.IsBot)
+                    .Select(player =>
+                    {
+                        var pawn = player.PlayerPawn.Value;
+                        return pawn == null || !pawn.IsValid
+                            ? $"{player.PlayerName}: no pawn"
+                            : $"{player.PlayerName}: {pawn.MoveType}/{pawn.ActualMoveType} hp {pawn.Health}";
+                    }));
+                Logger.LogInformation("Warmup +{Ticks}s: phase {Phase}, warmup {Warmup}, freeze {Freeze}, "
+                    + "clinch {Clinch}, freezetime {FreezeTime}. {Movement}",
+                    ticks, rules?.GamePhase, rules?.WarmupPeriod, rules?.FreezePeriod,
+                    ConVar.Find("mp_match_can_clinch")?.GetPrimitiveValue<bool>(),
+                    ConVar.Find("mp_freezetime")?.GetPrimitiveValue<int>(), movement);
+            }
+            catch (Exception error)
+            {
+                Logger.LogWarning("Could not read the warmup state: {Error}", error.Message);
+            }
+        }, TimerFlags.REPEAT);
+    }
+
+    // The hand-back !pug stop has always used, and the only ordering of it that works: the restart
+    // first, the warmup cfg after. The other way round - warmup opened, restart behind it - opens the
+    // warmup inside the round-end freeze, and a warmup whose clock is paused never counts that freeze
+    // down. The room was left able to take about a step before being snapped back to where it stood.
+    private void ReturnServerToWarmup()
+    {
+        Server.ExecuteCommand("mp_unpause_match;mp_match_end_restart false;mp_restartgame 1");
+        ExecWarmupCfg();
     }
 
     // Back to a held warmup after a match. The map is reloaded to get there, because nothing else does.
@@ -616,8 +679,7 @@ public partial class Gpp
         StopMatchHud();
         ReturnDiscordTeams();
 
-        Server.ExecuteCommand("mp_unpause_match;mp_match_end_restart false;mp_restartgame 1");
-        ExecWarmupCfg();
+        ReturnServerToWarmup();
         if (wasRunning) Announce($"Match ended. {why}");
     }
 
