@@ -167,9 +167,15 @@ public partial class Gpp
 
     // A held warmup: warmup running, its clock stopped, nobody scoring. This is the state an idle pug
     // server sits in, and the one the ready phase and the side choice are played out in.
+    //
+    // mp_freezetime 0 is load-bearing. The warmup clock is paused, and a paused clock does not count a
+    // freeze period down either - so a round started in here with live.cfg's mp_freezetime 20 still in
+    // place freezes everybody where they stand, for good. That is what a called match looked like from
+    // inside: a warmup that worked in every way except that nobody could move.
     private const string WarmupFallback =
         "mp_autoteambalance 0;mp_limitteams 0;mp_maxmoney 16000;mp_startmoney 16000;mp_free_armor 0;"
-        + "mp_ignore_round_win_conditions 0;mp_warmup_start;mp_warmuptime 9999;mp_warmup_pausetimer 1";
+        + "mp_freezetime 0;mp_ignore_round_win_conditions 0;mp_warmup_start;mp_warmuptime 9999;"
+        + "mp_warmup_pausetimer 1";
 
     private const string KnifeFallback =
         "mp_ct_default_secondary \"\";mp_t_default_secondary \"\";mp_free_armor 1;mp_freezetime 10;"
