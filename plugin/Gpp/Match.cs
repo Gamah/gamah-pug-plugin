@@ -487,13 +487,19 @@ public partial class Gpp
         // GOTV is still sending the last round when the match ends, and the map restart cuts it off
         // mid-flush. Get5 and MatchZy both stretch mp_match_restart_delay to cover the broadcast delay;
         // the demo is stopped inside that window. [SOURCE: MatchZy 0.9.1 Utility.cs HandleMatchEnd]
+        //
+        // Only when there is a broadcast to flush. With GOTV off this was stretching the intermission
+        // from 12s to 15s for nothing, and the intermission is time nobody can do anything in.
         int flush = TvDelaySeconds() + 15;
-        int needed = TvDelaySeconds() > 0 ? flush + 10 : flush;
-        var restartDelay = ConVar.Find("mp_match_restart_delay");
-        if (restartDelay != null && restartDelay.GetPrimitiveValue<int>() < needed)
+        if (TvDelaySeconds() > 0)
         {
-            Logger.LogInformation("Extending mp_match_restart_delay to {Needed}s so GOTV can finish.", needed);
-            restartDelay.SetValue(needed);
+            int needed = flush + 10;
+            var restartDelay = ConVar.Find("mp_match_restart_delay");
+            if (restartDelay != null && restartDelay.GetPrimitiveValue<int>() < needed)
+            {
+                Logger.LogInformation("Extending mp_match_restart_delay to {Needed}s so GOTV can finish.", needed);
+                restartDelay.SetValue(needed);
+            }
         }
         StopDemo(Math.Max(0, flush - 1));
         RecordMatchEnd(score1, score2, winner);
@@ -505,13 +511,62 @@ public partial class Gpp
         _knifeSide = CsTeam.None;
         ResetPauses();
 
-        // Straight back into a held warmup, on the same map, with everybody where they are. Nobody is
-        // moved, nothing is reloaded: people carry on buying and shooting while the next pug is called.
-        // The scoreboard keeps the final score until the next match restarts the game, which is the
-        // right thing for the five minutes afterwards when everyone is arguing about it.
-        ExecWarmupCfg();
-        Server.ExecuteCommand("mp_ignore_round_win_conditions 0;mp_warmup_start;"
-            + "mp_warmuptime 9999;mp_warmup_pausetimer 1");
+        ReturnToHeldWarmup();
+    }
+
+    // Back into a held warmup, on the same map, with everybody where they are - but not until the engine
+    // has finished its own end of the match.
+    //
+    // A warmup started during the intermission is what a 13-10 win looked like to the room: "match
+    // cancelled", 0-0, and a scoreboard nobody could get out of until an admin restarted the game
+    // (2026-10-23, nuke, four players). The engine says "Going to intermission..." and holds GamePhase at
+    // 5 for mp_match_restart_delay; mp_warmup_start inside that window aborts the end-of-match state
+    // instead of following it, and the client is left on the cancelled panel.
+    //
+    // So: wait for post-game to clear. The engine's own restart at the end of the delay is what clears
+    // it, and once that has happened the warmup goes on exactly as before. The cap is there because
+    // nothing promises GamePhase ever leaves 5 on a server that is not reloading the map - and a server
+    // stuck in the post-game panel is the same softlock from the other side. Reaching the cap restarts
+    // the game ourselves.
+    private void ReturnToHeldWarmup()
+    {
+        int capSeconds = (ConVar.Find("mp_match_restart_delay")?.GetPrimitiveValue<int>() ?? 12) + 5;
+        int waited = 0;
+        CounterStrikeSharp.API.Modules.Timers.Timer? timer = null;
+
+        void Finish(bool forced)
+        {
+            timer?.Kill();
+            if (forced)
+            {
+                Logger.LogWarning("Still in the post-game panel after {Seconds}s - restarting the game to "
+                    + "clear it.", waited);
+                Server.ExecuteCommand("mp_restartgame 1");
+            }
+            ExecWarmupCfg();
+            Server.ExecuteCommand("mp_ignore_round_win_conditions 0;mp_warmup_start;"
+                + "mp_warmuptime 9999;mp_warmup_pausetimer 1");
+        }
+
+        if (!InPostGame())
+        {
+            Finish(forced: false);
+            return;
+        }
+
+        timer = AddTimer(1.0f, () =>
+        {
+            // A new pug got going in the meantime - it owns the warmup now, and ours would stamp on its
+            // ready phase or its knife round.
+            if (MatchRunning)
+            {
+                timer?.Kill();
+                return;
+            }
+            waited++;
+            if (!InPostGame()) Finish(forced: false);
+            else if (waited >= capSeconds) Finish(forced: true);
+        }, TimerFlags.REPEAT);
     }
 
     // An admin ending a match that is still going: .endmatch, !pug stop. The engine is told to stop
