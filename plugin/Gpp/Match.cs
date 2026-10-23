@@ -428,6 +428,7 @@ public partial class Gpp
             + "mp_match_end_restart false");
 
         StartDemoAfterRestart(LiveRestartSeconds);
+        CaptureStatsBaseline();
         RecordMatchStart();
 
         Announce($"{Colorize("{green}")}LIVE! LIVE! LIVE!{Colorize("{default}")} "
