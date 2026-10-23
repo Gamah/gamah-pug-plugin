@@ -107,24 +107,7 @@ public partial class Gpp
     {
         if (!Config.Hud) return;
         _repaint = OptInPanel;
-        if (WorldStyle) { WorldOptInPanel(); return; }
-
-        var names = _volunteers.Where(steamId => PlayerBySteamId(steamId) != null).Select(Name).ToList();
-        var body = names.Count == 0
-            ? ["no takers - captains drawn at random"]
-            : Columns(names);
-
-        foreach (var player in HumanPlayers())
-        {
-            bool mine = _volunteers.Contains(Id(player));
-            // The command sits on the state line rather than in the headline: by the second pug nobody
-            // is reading the headline, they are looking for the clock and the count.
-            Paint(player, TwoLine(
-                mine ? "YOU'RE UP" : "PICKING CAPTAINS",
-                mine ? null : "!captain",
-                $"{_optInSecondsLeft}s",
-                $"{names.Count} in"), body);
-        }
+        WorldOptInPanel();
     }
 
     [ConsoleCommand("css_captain", "Put your hand up to captain the next pug")]

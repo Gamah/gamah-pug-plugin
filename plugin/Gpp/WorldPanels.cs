@@ -19,9 +19,6 @@ namespace Gpp;
 //     has not need different panels, not the same panel with a different word in it
 public partial class Gpp
 {
-    // The centre panel stays behind a config switch for the first live pug, so a bad night is a setting
-    // away from being rescued rather than a rollback.
-    private bool WorldStyle => Config.Hud && Config.HudStyle.Equals("world", StringComparison.OrdinalIgnoreCase);
 
     // The panel is up from !pug start until the room is told to move in Discord, and it is deliberately
     // absent for both knife fights: the panel is a solid object in front of the face, and a knife round
@@ -105,17 +102,17 @@ public partial class Gpp
                 // Somebody who has voted gets the whole ballot with its tally against it - every map,
                 // every time, so the board is one shape and the stars are the only thing moving - and
                 // who is holding the vote up underneath.
-                ? WorldLayout.MainPanel($"you voted {_ballot[mine].Label}",
+                ? WorldLayout.MainPanel($"{_votes.Count}/{voters.Count} VOTED",
                     [
                         new([.. WorldLayout.Grid(Tally(tally))]),
-                        WorldLayout.Section.Of($"{_votes.Count}/{voters.Count} VOTED - WAITING ON"),
+                        WorldLayout.Section.Of(missing.Count == 0 ? null : "STILL VOTING:"),
                         WorldLayout.Section.List(WorldLayout.Grid(missing.Select(WorldLayout.Clip))),
                     ],
                     WorldLayout.Footer($"{_voteSecondsLeft}s"),
                     _hudTicks)
-                : WorldLayout.MainPanel("pick a map",
+                : WorldLayout.MainPanel("PICK A MAP - TYPE THE NUMBER IN CHAT",
                     [WorldLayout.Section.List(WorldLayout.Grid(ballot))],
-                    WorldLayout.Footer("type the number in chat", $"{_voteSecondsLeft}s"),
+                    WorldLayout.Footer($"{_voteSecondsLeft}s"),
                     _hudTicks);
             WorldShow(player, panel);
         }
@@ -183,7 +180,7 @@ public partial class Gpp
         {
             new([.. WorldLayout.Slots(pool, Math.Max(pool.Count, _pool.Count))]),
         };
-        string footer = WorldLayout.Footer(clock, $"{UndraftedCount()} still to pick");
+        string footer = WorldLayout.Footer(clock);
 
         string left = LeftBoard();
         string right = RightBoard();
@@ -219,8 +216,8 @@ public partial class Gpp
             }
 
             string title = Id(player) == onClock
-                ? "your pick - type the number"
-                : $"{Name(onClock)} is picking";
+                ? "YOUR PICK - TYPE THE NUMBER"
+                : $"{Name(onClock)} IS PICKING";
             WorldShow(player, WorldLayout.MainPanel(title, body, footer, _hudTicks), left, right);
             DraftDrawn(player, Id(player) == onClock ? "boards (on the clock)" : "boards (waiting)");
         }

@@ -33,36 +33,7 @@ public partial class Gpp
         _previewTimer = null;
     }
 
-    internal void HudPreview()
-    {
-        if (WorldStyle) { WorldPreview(); return; }
-
-        var steps = BuildPreview();
-
-        Announce($"Preview: {steps.Count} panels, {PreviewSeconds}s each "
-            + $"({steps.Count * PreviewSeconds}s total). !pug preview stop ends it.");
-
-        int tick = 0;
-        StopPreview();
-        _previewTimer = AddTimer(1.0f, () =>
-        {
-            int index = tick / PreviewSeconds;
-            bool first = tick % PreviewSeconds == 0;
-            tick++;
-
-            if (index >= steps.Count)
-            {
-                StopPreview();
-                StopHud();
-                Announce("Preview done.");
-                return;
-            }
-
-            var (name, alert, panel) = steps[index];
-            if (first) Announce($"[{index + 1}/{steps.Count}] {name}");
-            BroadcastRaw(alert, panel);
-        }, TimerFlags.REPEAT);
-    }
+    internal void HudPreview() => WorldPreview();
 
     private List<(string Name, string Alert, List<string> Panel)> BuildPreview()
     {

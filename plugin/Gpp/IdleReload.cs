@@ -113,21 +113,7 @@ public partial class Gpp
     {
         if (!Config.Hud) return;
         _repaint = IdlePromptPanel;
-        if (WorldStyle) { WorldIdlePanel(); return; }
-
-        // The alert box explains; the lower panel carries what to type. Three lines up there because the
-        // sentence does not fit two and the clock is the part people care about.
-        string alert = Alert("IDLE SERVER FIX", "server has been idle for", Describe(_idleWas));
-        // One per line, deliberately not through Columns: that packs cells onto as few lines as fit,
-        // which turned three choices into two lines of run-on text. Three choices, three lines.
-        var panel = new List<string>
-        {
-            $"!reload - load {Server.MapName} again",
-            "!restart - restart the server",
-            "!skip - leave it as it is",
-        };
-
-        foreach (var player in HumanPlayers()) Paint(player, alert, panel);
+        WorldIdlePanel();
     }
 
     // --- the three answers ------------------------------------------------------------------------

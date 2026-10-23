@@ -112,28 +112,7 @@ public partial class Gpp
     {
         if (!Config.Hud) return;
         _repaint = OpeningPanel;
-        if (WorldStyle) { WorldOpeningPanel(); return; }
-
-        // Their words, in the box people actually read. The lower panel carries the clock and who it is
-        // aimed at, so the alert box can be the three lines and nothing else.
-        var lines = MatchRules.OpeningLines((int)_moveSide);
-        string alert = Alert(lines[0], lines[1], lines[2]);
-
-        var playing = OpeningPlayers();
-        var waiting = playing.Where(player => !_openingReady.Contains(Id(player)))
-            .Select(player => player.PlayerName)
-            .ToList();
-
-        foreach (var player in HumanPlayers())
-        {
-            bool mine = _openingReady.Contains(Id(player));
-            Paint(player, alert,
-            [
-                mine ? $"live in {_openingSecondsLeft}s" : $".ready when you are in - {_openingSecondsLeft}s",
-                waiting.Count == 0 ? "everybody is in" : "still moving:",
-                .. waiting.Count == 0 ? [] : Columns(waiting),
-            ]);
-        }
+        WorldOpeningPanel();
     }
 
     private static string SideWord(CsTeam side) => MatchRules.OpeningLines((int)side)[0];

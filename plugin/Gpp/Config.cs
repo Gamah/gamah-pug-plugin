@@ -152,7 +152,6 @@ public class GppConfig : BasePluginConfig
     // measured glyph table behind it; "world" is a point_worldtext in front of each player, twelve lines
     // and no width budget. The centre panel is kept so a pug night can be rescued by flipping this back
     // rather than rolling the plugin back.
-    [JsonPropertyName("hud_style")] public string HudStyle { get; set; } = "world";
 
     // Where the two team boards sit, in world units either side of the middle one. Left empty the
     // plugin works it out from how wide the boards are, which is what it should be doing - this is here

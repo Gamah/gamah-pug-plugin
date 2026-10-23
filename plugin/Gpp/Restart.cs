@@ -72,15 +72,6 @@ public partial class Gpp
     {
         if (!Config.Hud) return;
         _repaint = RestartPanel;
-        if (WorldStyle) { WorldRestartPanel(); return; }
-
-        foreach (var player in HumanPlayers())
-        {
-            Paint(player, TwoLine("SERVER RESTARTING", $"{_restartSecondsLeft}s"),
-            [
-                _restartWhy,
-                "reconnect in about a minute - the server comes back on its own",
-            ]);
-        }
+        WorldRestartPanel();
     }
 }

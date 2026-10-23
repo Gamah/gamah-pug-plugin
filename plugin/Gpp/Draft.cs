@@ -125,7 +125,7 @@ public partial class Gpp
 
         if (_waitSecondsLeft > 0)
         {
-            if (WorldStyle) WorldWaitPanel();
+            WorldWaitPanel();
             if (_waitSecondsLeft % 15 == 0)
             {
                 Announce($"Still waiting on {MissingCaptains()} - {_waitSecondsLeft}s.");
@@ -154,7 +154,7 @@ public partial class Gpp
 
         void Done()
         {
-            if (WorldStyle) ClearWorldPanels();
+            ClearWorldPanels();
             _waitTimer?.Kill();
             _waitTimer = null;
             _joinWindowSeconds = Math.Max(0, _waitSecondsLeft);

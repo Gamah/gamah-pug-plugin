@@ -131,7 +131,7 @@ public partial class Gpp
                 : "Test run: bots stay in. !pug test sweep if you change your mind.");
         }
         _keepCentred = false;
-        if (WorldStyle) WorldHide();
+        WorldHide();
         StopHud();
     }
 
@@ -142,23 +142,14 @@ public partial class Gpp
         if (caller == null || !caller.IsValid) return;
 
         _repaint = TestAskPanel;
-        if (WorldStyle)
-        {
-            string panel = WorldLayout.MainPanel(
-                $"TEST RUN - SERVER FILLS WITH BOTS TO {TestRunSize} PLAYERS",
-                [
-                    WorldLayout.Section.Of("KILL BOTS EACH ROUND?", "!1  YES     !2  NO"),
-                ],
-                WorldLayout.Footer($"{_testAskSecondsLeft}s"),
-                _hudTicks);
-            WorldShow(caller, panel);
-            return;
-        }
-
-        Paint(caller, TwoLine("KILL BOTS EACH ROUND?", "!1 YES   !2 NO", $"{_testAskSecondsLeft}s"),
-        [
+        string panel = WorldLayout.MainPanel(
             $"TEST RUN - SERVER FILLS WITH BOTS TO {TestRunSize} PLAYERS",
-        ]);
+            [
+                WorldLayout.Section.Of("KILL BOTS EACH ROUND?", "!1  YES     !2  NO"),
+            ],
+            WorldLayout.Footer($"{_testAskSecondsLeft}s"),
+            _hudTicks);
+        WorldShow(caller, panel);
     }
 
     // Even sides, because a test run is the only time nobody is watching the scoreboard: the draft puts

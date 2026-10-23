@@ -60,7 +60,7 @@ public partial class Gpp
         {
             foreach (var player in HumanPlayers())
             {
-                Paint(player, Alert("SCROLL PROBE", $"{left}s"), [ruler, still]);
+                player.PrintToCenterAlert(Alert("SCROLL PROBE", $"{left}s"));
             }
         };
     }

@@ -68,9 +68,10 @@ public partial class Gpp
             // World text does neither: it holds what it was last given until it is told otherwise, and
             // nothing scrolls. Composing thirty boards ten times a second instead of once was costing
             // frames on a full server - measured as 17ms frames during a ten-man draft, 2026-10-19.
-            if (WorldStyle) return;
-            HudLayout.BumpPaintTick();
-            _repaint.Invoke();
+            // Nothing to redraw between ticks: world text holds what it was last given. The ten-a-second
+            // repaint this ran existed to beat PrintToCenter's fade and to move a scrolling line, and it
+            // was costing 17ms frames during a ten-man draft.
+            return;
         }, TimerFlags.REPEAT);
     }
 
@@ -120,35 +121,15 @@ public partial class Gpp
     {
         _repaint = PaintPhase;
 
-        if (WorldStyle)
+        switch (_phase)
         {
-            switch (_phase)
-            {
-                // The captains are knifing for first pick, so the boards come down - a board is a solid
-                // object in front of the face and this is the one part of the pug that is aim. Two lines
-                // of centre-screen alert stay, because nothing on screen at all leaves the nine people
-                // watching with no idea what is being decided.
-                case PugPhase.CaptainKnife: WorldHide(); KnifeAlert(); break;
-                case PugPhase.MapVote: WorldVotePanel(); break;
-                case PugPhase.Draft: WorldDraftPanel(); break;
-            }
-            return;
-        }
-
-        foreach (var player in HumanPlayers())
-        {
-            switch (_phase)
-            {
-                case PugPhase.MapVote:
-                    PaintVote(player);
-                    break;
-                case PugPhase.CaptainKnife:
-                    PaintKnife(player);
-                    break;
-                case PugPhase.Draft:
-                    PaintDraft(player);
-                    break;
-            }
+            // The captains are knifing for first pick, so the boards come down - a board is a solid
+            // object in front of the face and this is the one part of the pug that is aim. Two lines of
+            // centre-screen alert stay, because nothing on screen at all leaves the nine people watching
+            // with no idea what is being decided.
+            case PugPhase.CaptainKnife: WorldHide(); KnifeAlert(); break;
+            case PugPhase.MapVote: WorldVotePanel(); break;
+            case PugPhase.Draft: WorldDraftPanel(); break;
         }
     }
 
@@ -312,27 +293,7 @@ public partial class Gpp
     {
         _repaint = ReadyHudPaint;
 
-        if (WorldStyle) { WorldReadyPanel(); return; }
-
-        // Bots cannot ready up, so they are neither counted nor named.
-        var roster = _roster.Keys.Where(steamId => !IsBotId(steamId)).ToList();
-        var unready = roster.Where(steamId => !_readied.Contains(steamId)).Select(Name).ToList();
-        int ready = roster.Count - unready.Count;
-
-        foreach (var player in HumanPlayers())
-        {
-            bool drafted = _roster.ContainsKey(Id(player));
-            bool mine = _readied.Contains(Id(player));
-
-            Paint(player, Alert(
-                !drafted ? "MATCH STARTING" : mine ? "YOU ARE READY" : "TYPE .ready IN CHAT",
-                roster.Count > 0 ? $"{ready}/{roster.Count} ready" : null),
-            [
-                $"teams are set on {_readyHudMap}",
-                unready.Count == 0 ? "everybody is ready - starting" : "still to ready:",
-                .. Columns(unready, 4),
-            ]);
-        }
+        WorldReadyPanel();
     }
 
     // The match's own panel, which only goes up when the room is being asked for something: the knife
@@ -372,57 +333,25 @@ public partial class Gpp
     {
         _repaint = MatchHudPaint;
 
-        if (WorldStyle)
-        {
-            // Side choice gets the panel; the knife round does not, and a pause keeps the centre panel
-            // on purpose - the match is live, and a board in front of ten people's faces when the round
-            // is about to resume is the one place this overlay must not be.
-            if (_matchPhase == MatchPhase.SideChoice) { WorldSidePanel(); return; }
-            WorldHide();
-            if (_matchPhase == MatchPhase.Knife)
-            {
-                foreach (var player in HumanPlayers())
-                {
-                    player.PrintToCenterAlert(Alert("KNIFE ROUND", "winner picks the side"));
-                }
-                return;
-            }
-        }
+        // Side choice gets the panel; the knife round does not, and a live pause draws no board on
+        // purpose - a board in front of ten people's faces when the round is about to resume is the one
+        // place this overlay must not be. Both of those get the alert line instead.
+        if (_matchPhase == MatchPhase.SideChoice) { WorldSidePanel(); return; }
 
-        var (score1, score2) = _matchPhase == MatchPhase.Live ? Score() : (0, 0);
+        WorldHide();
+        if (_matchPhase == MatchPhase.Knife)
+        {
+            foreach (var player in HumanPlayers())
+            {
+                player.PrintToCenterAlert(Alert("KNIFE ROUND", "WINNER PICKS THE SIDE"));
+            }
+            return;
+        }
 
         foreach (var player in HumanPlayers())
         {
-            switch (_matchPhase)
-            {
-                case MatchPhase.Knife:
-                    Paint(player, Alert("KNIFE ROUND", "winner picks the side"),
-                        ["knives only - whoever is left standing picks the side to start on"]);
-                    break;
-
-                case MatchPhase.SideChoice:
-                {
-                    bool mine = Id(player) == WinningCaptain()
-                        || (!Config.Match.SideChoiceCaptainOnly && player.Team == _knifeSide);
-                    Paint(player, TwoLine(
-                        mine ? "TYPE .stay OR .switch" : $"{Name(WinningCaptain())} IS PICKING",
-                        $"{SideName(_knifeSide)} won the knife"),
-                    [
-                        mine
-                            ? ".stay keeps this side, .switch takes the other"
-                            : "waiting on their call",
-                    ]);
-                    break;
-                }
-
-                default:
-                    Paint(player, TwoLine(PauseHasLanded ? "PAUSED" : "PAUSE AT END OF ROUND", PauseLine()),
-                    [
-                        "both sides have to type .unpause to resume",
-                        $"{_team1Name} {score1} - {score2} {_team2Name}",
-                    ]);
-                    break;
-            }
+            player.PrintToCenterAlert(Alert(PauseHasLanded ? "PAUSED" : "PAUSE AT END OF ROUND",
+                PauseLine()));
         }
     }
 
