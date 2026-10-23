@@ -440,7 +440,6 @@ public partial class Gpp
     {
         _winHeadline = winner.Length > 0 ? $"{winner} WIN" : "DRAWN";
         _winScore = $"{_team1Name} {score1} - {score2} {_team2Name}";
-        Announce($"{_winScore} - warmup is open, nobody has been moved.");
         if (!Config.Hud) return;
 
         _winPanelSecondsLeft = Math.Max(1, Config.Match.WinPanelSeconds);

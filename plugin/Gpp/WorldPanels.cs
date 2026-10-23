@@ -390,9 +390,7 @@ public partial class Gpp
             string panel = WorldLayout.MainPanel(_winHeadline.ToLowerInvariant(),
                 [
                     WorldLayout.Section.Of("FINAL", _winScore),
-                    WorldLayout.Section.Of("NEXT",
-                        "the warmup is open and nobody has been moved.",
-                        "!pug start when you want another one."),
+                    WorldLayout.Section.Of("NEXT", "the warmup is open - !pug start for another one."),
                 ],
                 WorldLayout.Footer($"{_winPanelSecondsLeft}s"),
                 _hudTicks);

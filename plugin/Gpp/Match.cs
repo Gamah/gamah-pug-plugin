@@ -548,9 +548,12 @@ public partial class Gpp
     // win_panel_seconds, which is the engine's end-of-match screen replaced rather than fought with.
     private void OpenWarmupWithTheResult(string winner, int score1, int score2)
     {
+        // The restart is what gets anybody moving again. Calling the match at a round end means the
+        // warmup opens inside the engine's round-end freeze, and that freeze is never released - the
+        // first test of this left everybody standing still in an otherwise working warmup.
         ExecWarmupCfg();
-        Server.ExecuteCommand("mp_ignore_round_win_conditions 0;mp_warmup_start;"
-            + "mp_warmuptime 9999;mp_warmup_pausetimer 1");
+        Server.ExecuteCommand("mp_ignore_round_win_conditions 0;mp_unpause_match;mp_warmup_start;"
+            + "mp_warmuptime 9999;mp_warmup_pausetimer 1;mp_restartgame 1");
         StartWinPanel(winner, score1, score2);
     }
 
