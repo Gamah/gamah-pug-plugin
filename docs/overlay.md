@@ -6,9 +6,15 @@ teams. Each player gets their own entities, filtered out of everybody else's `Ch
 people do not read ten overlapping boards hanging in the same room.
 
 `!pug preview` plays every panel in order - ten of them, fifteen seconds each, numbers called out in
-chat - which is how to look at a change without running a pug. `hud_style: center` in `Gpp.json` goes
-back to the old `PrintToCenter` panels, which is there to rescue a night by flipping a setting rather
-than rolling the plugin back.
+chat - which is how to look at a change without running a pug.
+
+There is no second style to fall back to any more. Every panel used to draw itself twice, once as boards
+and once as a four-line `PrintToCenter` block behind `hud_style: center`, and the centre version was the
+rescue option for a style that had been in use for days. Both it and `hud_line_budget` are gone
+(2026-10-23). What is left of that channel is the **alert line** - `PrintToCenterAlert`, thirty
+characters, up to four of them - because it is the only thing that reaches a viewer with no pawn of their
+own to hang a board on: somebody held in spectator during a draft. The captain knife and a live pause are
+drawn with nothing else.
 
 ## What the boards are
 

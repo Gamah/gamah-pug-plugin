@@ -120,9 +120,9 @@ went with MatchZy; `!pug draft` still drafts on whatever map the server is alrea
   as `min_players` are back, and anyone who connects inside the window joins the pool instead of being
   locked out; teams do not lock until everyone expected is in or the window closes
 - `hud` (true) — draw the overlay at all. With it off, lists go to chat on every pick as before
-- `hud_style` (`world`) — `world` draws three `point_worldtext` boards in front of each player (the
-  question in the middle, the two teams either side); `center` draws the older `PrintToCenter` panels,
-  which is there to rescue a night by flipping a setting rather than rolling the plugin back. See
+- the overlay is three `point_worldtext` boards in front of each player — the question in the middle,
+  the two teams either side. There is no second style: `hud_style` and the `PrintToCenter` panels behind
+  it were removed on 2026-10-23, leaving the alert line as the only thing still drawn that way. See
   [`../docs/overlay.md`](../docs/overlay.md)
 - `hud_side_gap` (0 = work it out) — world units either side of the middle board. The plugin derives it
   from how wide the boards are, which is what it should be doing; this is for the night somebody wants
@@ -260,11 +260,11 @@ someone who knows what CS2 wants from `tv_record`. [SOURCE: measured 2026-10-19]
 
 ## HUD widths
 
-These are the `hud_style: center` panel's measurements. The world boards are laid out by
-[`docs/overlay.md`](../docs/overlay.md) and measured in the same units, but they have no width budget to
-fight - a board is as wide as its rule.
+These are the measurements the boards pad themselves with: they are laid out by
+[`docs/overlay.md`](../docs/overlay.md) in these units, and they have no width budget to fight, because a
+board is as wide as its rule. The four-line centre panel these were first measured for is gone.
 
-The centre panel font is proportional and CS2 ships it as `stratum2.uifont`, an obfuscated container
+The font is proportional and CS2 ships it as `stratum2.uifont`, an obfuscated container
 rather than a readable TTF, so the glyph advances cannot be read off disk. `!pug ruler` measures them
 through the renderer instead: it prints twenty copies of one glyph with a forty-pipe run as the scale,
 you screenshot it, and `ink = N*advance - sidebearing` gives the advance. Measured 2026-10-17, every
@@ -279,17 +279,15 @@ one of them a whole number of pixels:
 Digits are tabular, so every one is 9. The widest glyph is 3.5x the narrowest, which is why counting
 characters never worked: a line holds 125 `i` or 35 `m`.
 
-A line too wide for the panel **scrolls** rather than being cut off with an ellipsis: it slides across
-at about a glyph per redraw and holds still for three seconds at each end, and every panel scrolls in
-step off one shared paint counter. The alert box scrolls by character count, since that larger face has
-never been measured.
+The alert line still scrolls when it is too long, by character count rather than measured width - that
+larger face has never been measured - at a character every three paints. The paint counter is bumped
+once a second now rather than ten times, so it crawls; there is one alert long enough to need it.
 
-`hud_line_budget` (default 340) is the usable width of a line in those units, and it is a setting
-rather than a constant because **it depends on the viewer's resolution and HUD scale, not on the
-font**. A ruler run clipped at ~500 units; a screenshot of the same client at a different resolution
-wrapped a line measuring 348, with three separate strings from it coming out at a consistent 1.27x the
-ruler scale. Same font, same ratios, different size relative to the box. 340 sits below the widest
-line observed to fit. Raise it if the panel looks empty and your players all run one resolution.
+`hud_line_budget` went with the centre panel. It was the usable width of one of its lines, and it had to
+be a setting rather than a constant because **it depended on the viewer's resolution and HUD scale, not
+on the font**: a ruler run clipped at ~500 units, while a screenshot of the same client at a different
+resolution wrapped a line measuring 348. Same font, same ratios, different size relative to the box.
+Nothing is measured against a fixed budget any more.
 
 ## Warmup money
 

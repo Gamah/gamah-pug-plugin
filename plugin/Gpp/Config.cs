@@ -220,7 +220,6 @@ public class GppConfig : BasePluginConfig
 
     [JsonPropertyName("hud_float_gap")] public float HudFloatGap { get; set; }
 
-    [JsonPropertyName("hud_line_budget")] public int HudLineBudget { get; set; } = 340;
 
     [JsonPropertyName("admin_flag")] public string AdminFlag { get; set; } = "@css/config";
 

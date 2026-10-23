@@ -45,7 +45,6 @@ internal static class HudMetrics
     // 340 because 348 is the widest line observed to FIT at the worse of the two scales, and 406 is the
     // narrowest observed to wrap. Anything in between is a guess, so the budget sits below the known-good
     // figure. Too high brings back the wrap this was all meant to stop; too low only wastes a little space.
-    internal static int LineBudget { get; set; } = 340;
 
     // A single cell longer than this is truncated rather than allowed to eat a whole line.
     internal const int CellBudget = 200;

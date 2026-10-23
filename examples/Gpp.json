@@ -17,7 +17,6 @@
   },
   "warmup_money": 16000,
   "hud_float_left": true,
-  "hud_line_budget": 340,
   "admin_flag": "@css/config",
   "chat_prefix": " [{green}GPP{default}]",
   "map_pool": [
