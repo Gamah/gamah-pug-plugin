@@ -40,6 +40,7 @@ public partial class Gpp
         internal CPointOrient? Orient;
         internal float AimedAt = float.NaN;    // the eye yaw the boards were last squared up to
         internal int ParentedTo;               // pawn index they were parented to, 0 for none
+        internal bool Floated;                 // whether they were hung in the floated position
 
         internal IEnumerable<Slot> Live => Boards.Where(board => board.Text != null && board.Text.IsValid);
 
@@ -181,6 +182,14 @@ public partial class Gpp
             panel = new ViewerPanel();
             _panels[player.Slot] = panel;
             SyncPanelListeners();
+        }
+
+        // Moving between the middle and the floated position is a different place, not a different
+        // angle, so the boards are hung again rather than re-aimed. Twice a pug.
+        if (panel.Floated != PanelsFloat)
+        {
+            panel.Floated = PanelsFloat;
+            Rehang(player, panel);
         }
 
         Draw(player, panel, Board.Main, main);
@@ -363,18 +372,23 @@ public partial class Gpp
         float toeIn = which switch { Board.Left => _sideToeIn, Board.Right => -_sideToeIn, _ => 0f };
         float away = PanelDistance + (which == Board.Main ? 0f : _sideBack);
 
-        if (PanelsFloat)
-        {
-            sideways -= SideGap;
-            toeIn += _sideToeIn;
-            if (which == Board.Main) away += _sideBack;
-        }
+        // Flat to the view and shifted left, which is the idiom of the engine's own timeout and kick
+        // votes rather than the tilted triple-panel mount: a single board is read at a glance, and a
+        // toe-in on it reads as a board somebody has knocked askew.
+        if (PanelsFloat) sideways -= FloatGap;
 
         return (sideways, toeIn, away);
     }
 
-    // Held still by the draft means the middle is harmless; anything else and the boards move aside.
-    private bool PanelsFloat => Config.HudFloatLeft && _lockTimer == null;
+    // Held still by the draft means the middle is harmless, so the draft keeps it. So does the opening
+    // pause: being told to get into a voice channel is the one panel that should be in the way.
+    private bool PanelsFloat => Config.HudFloatLeft && _lockTimer == null && !OpeningPauseRunning;
+
+    // How far left a floated board sits. Aimed at the space the engine puts a vote in, which is a
+    // judgement in front of a client rather than anything derivable: !pug sides float <units>.
+    private float FloatGap => _floatGapOverride ?? (Config.HudFloatGap > 0f ? Config.HudFloatGap : SideGap);
+
+    private float? _floatGapOverride;
 
     // Attached while there are boards to keep up, and not otherwise. CheckTransmit is the reason this
     // is worth doing: the engine calls it for every client every tick, and a live match has no panels
@@ -646,8 +660,21 @@ public partial class Gpp
 
     // !pug sides [gap] [toe-in] [back] - where the two team boards sit, tuned by standing in front of
     // them. Nothing here is knowable from a schema: it is whether a glance to the left lands on a team.
+    //
+    // !pug sides float <units|auto> instead moves a floated board, which is the single-board case and
+    // carries no toe-in at all.
     internal string SetSides(string gap, string toeIn, string back)
     {
+        if (gap == "float")
+        {
+            if (float.TryParse(toeIn, out float parsedFloat)) _floatGapOverride = Math.Clamp(parsedFloat, 0f, 400f);
+            else if (toeIn == "auto") _floatGapOverride = null;
+
+            int refloated = Rehang();
+            return $"Floated boards: {FloatGap:F0} to the left{(_floatGapOverride == null ? " (derived)" : "")},"
+                + $" flat to the view - {refloated} viewer(s) rehung.";
+        }
+
         if (float.TryParse(gap, out float parsedGap)) _sideGapOverride = Math.Clamp(parsedGap, 0f, 400f);
         else if (gap == "auto") _sideGapOverride = null;
         if (float.TryParse(toeIn, out float parsedToe)) _sideToeIn = Math.Clamp(parsedToe, -90f, 90f);

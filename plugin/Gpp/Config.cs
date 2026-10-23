@@ -211,6 +211,8 @@ public class GppConfig : BasePluginConfig
     // the panel looks empty; lower it if lines still wrap. !pug ruler re-measures.
     [JsonPropertyName("hud_float_left")] public bool HudFloatLeft { get; set; } = true;
 
+    [JsonPropertyName("hud_float_gap")] public float HudFloatGap { get; set; }
+
     [JsonPropertyName("hud_line_budget")] public int HudLineBudget { get; set; } = 340;
 
     [JsonPropertyName("admin_flag")] public string AdminFlag { get; set; } = "@css/config";

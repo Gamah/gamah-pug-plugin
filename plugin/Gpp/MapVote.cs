@@ -97,8 +97,8 @@ public partial class Gpp
     {
         _voteSecondsLeft--;
 
-        // Everyone present has voted: no reason to keep waiting.
-        bool everyoneVoted = _votes.Count > 0 && _votes.Count >= HumanPlayers().Count;
+        // Everyone who can vote has: no reason to keep waiting.
+        bool everyoneVoted = _votes.Count > 0 && _votes.Count >= AnsweringPlayers().Count;
         if (_voteSecondsLeft > 0 && !everyoneVoted) return;
 
         _voteTimer?.Kill();

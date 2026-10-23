@@ -416,6 +416,16 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
             .ToList();
     }
 
+    // Only the people who can actually answer a prompt. count_bots pulls bots into HumanPlayers so one
+    // person can walk a whole pug, which also means a vote or a countdown waiting on "everybody" would
+    // wait on nine bots that cannot type: anything that closes early counts these instead.
+    private List<CCSPlayerController> AnsweringPlayers()
+    {
+        return Utilities.GetPlayers()
+            .Where(p => p.IsValid && !p.IsHLTV && !p.IsBot)
+            .ToList();
+    }
+
     // Everything here keys players by SteamID, and a bot's is 0 - so every bot would be the same player.
     // Bots get an id from their slot instead, which is stable for as long as they are connected and is all
     // a test run needs. Nothing outside this file needs to know which kind it is holding.

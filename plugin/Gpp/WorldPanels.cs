@@ -201,11 +201,25 @@ public partial class Gpp
                 continue;
             }
 
+            // A centre board is for somebody who has to do something, which is both captains: the one on
+            // the clock types a number, and the one waiting is reading the same pool to decide what to
+            // type next. Everybody else gets the two team boards - which is where being picked shows up
+            // - and an alert naming who the room is waiting on, rather than a list of eighteen names
+            // they cannot use.
+            if (Id(player) != _captain1 && Id(player) != _captain2)
+            {
+                WorldShow(player, "", left, right);
+                player.PrintToCenterAlert(Alert($"{Name(onClock)} IS PICKING",
+                    _pickSecondsLeft > 0 ? $"{_pickSecondsLeft}s" : "YOU SPAWN WHEN PICKED"));
+                DraftDrawn(player, "alert and team boards");
+                continue;
+            }
+
             string title = Id(player) == onClock
                 ? "your pick - type the number"
                 : $"{Name(onClock)} is picking";
             WorldShow(player, WorldLayout.MainPanel(title, body, footer, _hudTicks), left, right);
-            DraftDrawn(player, "boards");
+            DraftDrawn(player, Id(player) == onClock ? "boards (on the clock)" : "boards (waiting)");
         }
     }
 

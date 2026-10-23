@@ -91,7 +91,10 @@ public partial class Gpp
 
     private void OptInTick()
     {
-        if (--_optInSecondsLeft <= 0)
+        // Both armbands are spoken for, or everybody who could put a hand up has: the rest of the clock
+        // is thirty seconds of nothing for a question already answered.
+        int standing = VolunteerCount();
+        if (--_optInSecondsLeft <= 0 || standing >= 2 || standing >= AnsweringPlayers().Count)
         {
             AfterTick(() => CloseCaptainOptIn(draw: true));
             return;
