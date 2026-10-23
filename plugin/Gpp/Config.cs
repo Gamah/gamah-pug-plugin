@@ -209,6 +209,8 @@ public class GppConfig : BasePluginConfig
     // viewer's resolution and HUD scale, not on the font, so it is a setting rather than a constant.
     // 340 is below the widest line measured to fit. Raise it if your players all run one resolution and
     // the panel looks empty; lower it if lines still wrap. !pug ruler re-measures.
+    [JsonPropertyName("hud_float_left")] public bool HudFloatLeft { get; set; } = true;
+
     [JsonPropertyName("hud_line_budget")] public int HudLineBudget { get; set; } = 340;
 
     [JsonPropertyName("admin_flag")] public string AdminFlag { get; set; } = "@css/config";

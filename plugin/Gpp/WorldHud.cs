@@ -350,6 +350,29 @@ public partial class Gpp
         Square(slot, which, orient.AbsOrigin, orient.AbsRotation, 0f);
     }
 
+    // Where a board sits and which way it faces, in the frame it hangs in.
+    //
+    // Floated: one slot to the left, with the toe-in that goes with that slot, for the phases where
+    // the room can move and shoot. A board straight ahead is a solid object in front of the face, and
+    // a vote or a ready prompt is not worth being shot over. The draft is held still, so it keeps the
+    // middle.
+    private (float Sideways, float ToeIn, float Away) Placement(Board which)
+    {
+        var (sideways, toeIn, away) = Placement(which);
+
+        if (PanelsFloat)
+        {
+            sideways -= SideGap;
+            toeIn += _sideToeIn;
+            if (which == Board.Main) away += _sideBack;
+        }
+
+        return (sideways, toeIn, away);
+    }
+
+    // Held still by the draft means the middle is harmless; anything else and the boards move aside.
+    private bool PanelsFloat => Config.HudFloatLeft && _lockTimer == null;
+
     // The one place a board's position and facing are worked out, from whatever frame it is hanging in.
     //
     // The roll is 90 minus the pitch rather than a flat 90: 90 is what stands the text plane up when the
@@ -411,8 +434,7 @@ public partial class Gpp
                 var slot = panel.Boards[which];
                 if (slot.Text == null || !slot.Text.IsValid || slot.Text.AbsRotation == null) continue;
 
-                float toeIn = (Board)which switch { Board.Left => _sideToeIn, Board.Right => -_sideToeIn, _ => 0f };
-                float want = panel.Orient.AbsRotation.Y + 270f + toeIn;
+                float want = panel.Orient.AbsRotation.Y + 270f + Placement((Board)which).ToeIn;
                 if (Math.Abs(Delta(want, slot.Text.AbsRotation.Y)) > AimTolerance)
                 {
                     SquareToOrient(slot, (Board)which, panel.Orient);
