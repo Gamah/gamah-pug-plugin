@@ -553,6 +553,9 @@ public partial class Gpp
         _knifeSide = CsTeam.None;
         ResetPauses();
 
+        _overWinner = winner;
+        _overScore1 = score1;
+        _overScore2 = score2;
         if (engineEnded) ReturnToHeldWarmup();
         else OpenWarmupWithTheResult(winner, score1, score2);
     }
@@ -626,40 +629,66 @@ public partial class Gpp
         ExecWarmupCfg();
     }
 
-    // Back to a held warmup after a match. The map is reloaded to get there, because nothing else does.
+    // The engine ended the match itself: its end-of-match screen is up and GamePhase is 5 for
+    // mp_match_restart_delay. Nothing may be sent in that window - that single rule is what all of
+    // 2026-10-23 was about. A warmup exec'd one tick in aborted the end-of-match state and left the room
+    // on a "match cancelled" 0-0 panel; mp_restartgame did not clear it; writing m_gamePhase back did
+    // not either, and made our own check lie about it.
     //
-    // A 13-10 win read as "match cancelled" and 0-0 to everyone, on a panel nothing cleared
-    // (2026-10-23, nuke then dust2, five players). The warmup used to go out one tick after the engine
-    // said "Going to intermission...", which aborts the end-of-match state rather than following it -
-    // that is where the cancelled panel and the 0-0 came from. Three ways out were tried on real
-    // clients that night and only the last one works:
-    //
-    //   mp_restartgame                 twice over rcon on the stuck server, no effect
-    //   m_gamePhase 5 -> 2 + restart   server-side phase changed, client stayed on the panel - and it
-    //                                  fooled our own InPostGame() check, so the fallback never fired
-    //   a map load                     clears it every time
-    //
-    // So the panel is client-side and latched by the end-of-match state, not readable from the phase.
-    // Nothing is sent during the intermission, the final score stays up for post_match_seconds, and
-    // then the map is reloaded. OnMapStart holds the warmup from there, so this execs nothing itself.
-    // The cost is a loading screen between pugs; in-place is not on offer.
+    // Left alone, the engine clears it by itself: the intermission times out, the engine restarts and
+    // everybody is in the warmup that was already set up. That was proved by accident, by a plugin
+    // reload that took GPP out of the match entirely - the end screen came and went and nobody was
+    // stuck. So this waits for the phase to leave 5 and only then hands the server back, with the
+    // result panel after it. The map reload is the last resort it always should have been.
     private void ReturnToHeldWarmup()
     {
-        AddTimer(Math.Max(1, Config.Match.PostMatchSeconds), () =>
+        int capSeconds = (ConVar.Find("mp_match_restart_delay")?.GetPrimitiveValue<int>() ?? 12)
+            + Math.Max(1, Config.Match.PostMatchSeconds) + 10;
+        int waited = 0;
+        CounterStrikeSharp.API.Modules.Timers.Timer? timer = null;
+
+        void HandBack(bool forced)
         {
-            // A new pug got going in the meantime - a map vote of its own, or a draft somebody
-            // reconnected into. Reloading the map under that is worse than the panel.
-            if (MatchRunning || _phase != PugPhase.Idle)
+            timer?.Kill();
+            if (forced)
             {
-                Logger.LogInformation("Post-match map reload skipped - the server is busy again.");
+                Logger.LogWarning("The end-of-match panel has not let go after {Seconds}s - reloading the "
+                    + "map, which is the only other thing that clears it.", waited);
+                ReloadThisMap();
                 return;
             }
-            Logger.LogInformation("Reloading the map to clear the end-of-match panel.");
-            ReloadThisMap();
-        });
+            Logger.LogInformation("Intermission over after {Seconds}s - warmup back, no map reload.", waited);
+            ReturnServerToWarmup();
+            StartWinPanel(_overWinner, _overScore1, _overScore2);
+        }
+
+        if (!InPostGame())
+        {
+            HandBack(forced: false);
+            return;
+        }
+
+        timer = AddTimer(1.0f, () =>
+        {
+            // A new pug got going in the meantime: it owns the server now.
+            if (MatchRunning || _phase != PugPhase.Idle)
+            {
+                timer?.Kill();
+                return;
+            }
+            waited++;
+            if (!InPostGame()) HandBack(forced: false);
+            else if (waited >= capSeconds) HandBack(forced: true);
+        }, TimerFlags.REPEAT);
     }
 
-    // An admin ending a match that is still going: .endmatch, !pug stop. The engine is told to stop
+    // The result of the match that just ended, kept for the panel that goes up once the engine has let
+    // go of the screen - by which time the side scores have been restarted away.
+    private string _overWinner = "";
+    private int _overScore1;
+    private int _overScore2;
+
+    // An admin ending a match that is still going    // An admin ending a match that is still going: .endmatch, !pug stop. The engine is told to stop
     // scoring and the server is put back in a held warmup, because nothing else will.
     internal void AbandonMatch(string why)
     {
