@@ -514,59 +514,38 @@ public partial class Gpp
         ReturnToHeldWarmup();
     }
 
-    // Back into a held warmup, on the same map, with everybody where they are - but not until the engine
-    // has finished its own end of the match.
+    // The engine owns the end of a match, and the only way out of it is a map load.
     //
-    // A warmup started during the intermission is what a 13-10 win looked like to the room: "match
-    // cancelled", 0-0, and a scoreboard nobody could get out of until an admin restarted the game
-    // (2026-10-23, nuke, four players). The engine says "Going to intermission..." and holds GamePhase at
-    // 5 for mp_match_restart_delay; mp_warmup_start inside that window aborts the end-of-match state
-    // instead of following it, and the client is left on the cancelled panel.
+    // A 13-10 win read as "match cancelled" and 0-0 to everyone on the server, on a panel nothing
+    // cleared (2026-10-23, nuke then dust2, five players). Two separate things were wrong. The engine
+    // says "Going to intermission..." and holds GamePhase at 5; the warmup this used to exec one tick
+    // later landed inside that window and aborted the end-of-match state instead of following it, which
+    // is where the cancelled panel and the 0-0 came from. And mp_restartgame does not get a client off
+    // that panel - tried over rcon on the stuck server, twice, with nothing to show for it. Loading the
+    // map again did.
     //
-    // So: wait for post-game to clear. The engine's own restart at the end of the delay is what clears
-    // it, and once that has happened the warmup goes on exactly as before. The cap is there because
-    // nothing promises GamePhase ever leaves 5 on a server that is not reloading the map - and a server
-    // stuck in the post-game panel is the same softlock from the other side. Reaching the cap restarts
-    // the game ourselves.
+    // So nothing is sent during the intermission at all: the final score stays on screen for the whole
+    // of it, which is the five minutes everybody wants anyway, and then the map is reloaded. OnMapStart
+    // holds the warmup from there, so this does not exec one itself.
+    //
+    // The cost is a loading screen between pugs, which this deliberately avoided before. In-place is
+    // not on offer: it was the panel or the loading screen.
     private void ReturnToHeldWarmup()
     {
-        int capSeconds = (ConVar.Find("mp_match_restart_delay")?.GetPrimitiveValue<int>() ?? 12) + 5;
-        int waited = 0;
-        CounterStrikeSharp.API.Modules.Timers.Timer? timer = null;
+        int delay = ConVar.Find("mp_match_restart_delay")?.GetPrimitiveValue<int>() ?? 12;
 
-        void Finish(bool forced)
+        AddTimer(delay + 1.0f, () =>
         {
-            timer?.Kill();
-            if (forced)
+            // A new pug got going in the meantime - a map vote of its own, or somebody who reconnected
+            // into a draft. Reloading the map under that is worse than the panel.
+            if (MatchRunning || _phase != PugPhase.Idle)
             {
-                Logger.LogWarning("Still in the post-game panel after {Seconds}s - restarting the game to "
-                    + "clear it.", waited);
-                Server.ExecuteCommand("mp_restartgame 1");
-            }
-            ExecWarmupCfg();
-            Server.ExecuteCommand("mp_ignore_round_win_conditions 0;mp_warmup_start;"
-                + "mp_warmuptime 9999;mp_warmup_pausetimer 1");
-        }
-
-        if (!InPostGame())
-        {
-            Finish(forced: false);
-            return;
-        }
-
-        timer = AddTimer(1.0f, () =>
-        {
-            // A new pug got going in the meantime - it owns the warmup now, and ours would stamp on its
-            // ready phase or its knife round.
-            if (MatchRunning)
-            {
-                timer?.Kill();
+                Logger.LogInformation("Post-match map reload skipped - the server is busy again.");
                 return;
             }
-            waited++;
-            if (!InPostGame()) Finish(forced: false);
-            else if (waited >= capSeconds) Finish(forced: true);
-        }, TimerFlags.REPEAT);
+            Logger.LogInformation("Intermission is over - reloading the map to clear the end-of-match panel.");
+            ReloadThisMap();
+        });
     }
 
     // An admin ending a match that is still going: .endmatch, !pug stop. The engine is told to stop
