@@ -94,12 +94,26 @@ public partial class Gpp
     private const float PanelDistance = WorldGeometry.Distance;
     private const float PanelUpOffset = 9f;
 
-    private static float PanelScale() => WorldGeometry.Scale();
+    // How far out the boards hang right now. The constant is what a pug uses; the override is for
+    // !pug distance, which walks a lone board in and out to see what it clips into and how it reads.
+    //
+    // Everything measured off the eye moves with it, because the size a board looks is the ratio of its
+    // size to its distance: the type scale, the lift above the crosshair and the side gap are all
+    // degree one in the distance (WorldGeometry.At), so a board at half the distance at half the scale
+    // is the same board on screen. Nothing here changes a pug unless the override is set, and with it
+    // unset every one of these answers exactly what the constants did before.
+    private float? _distanceOverride;
+
+    private float PanelDistanceNow => _distanceOverride ?? PanelDistance;
+
+    private float PanelScale() => WorldGeometry.ScaleAt(PanelDistanceNow);
+
+    private float PanelUpNow => WorldGeometry.At(PanelUpOffset, PanelDistanceNow);
 
     // Centre to centre between the middle board and a side board. !pug sides overrides it, for when the
     // derived number still looks wrong in front of a real client; !pug sides auto hands it back.
     private float SideGap => _sideGapOverride
-        ?? (Config.HudSideGap > 0f ? Config.HudSideGap : WorldGeometry.SideGap());
+        ?? (Config.HudSideGap > 0f ? Config.HudSideGap : WorldGeometry.SideGapAt(PanelDistanceNow));
 
     private float? _sideGapOverride;
     private float _sideToeIn = 22f;      // degrees each side board turns inward to face the viewer
@@ -373,7 +387,7 @@ public partial class Gpp
     {
         float sideways = which switch { Board.Left => -SideGap, Board.Right => SideGap, _ => 0f };
         float toeIn = which switch { Board.Left => _sideToeIn, Board.Right => -_sideToeIn, _ => 0f };
-        float away = PanelDistance + (which == Board.Main ? 0f : _sideBack);
+        float away = PanelDistanceNow + (which == Board.Main ? 0f : _sideBack);
 
         // Flat to the view and shifted left, which is the idiom of the engine's own timeout and kick
         // votes rather than the tilted triple-panel mount: a single board is read at a glance, and a
@@ -385,7 +399,10 @@ public partial class Gpp
 
     // Held still by the draft means the middle is harmless, so the draft keeps it. So does the opening
     // pause: being told to get into a voice channel is the one panel that should be in the way.
-    private bool PanelsFloat => Config.HudFloatLeft && _lockTimer == null && !OpeningPauseRunning;
+    // The distance probe is always floating, whatever the config says: a lone board shifted left is
+    // the thing it is there to look at.
+    private bool PanelsFloat => _distanceProbeRunning
+        || (Config.HudFloatLeft && _lockTimer == null && !OpeningPauseRunning);
 
     // Which panel is being drawn right now: three boards are a layout and stay put, a lone board is a
     // notice and moves aside. Set by whoever is about to place boards, read by Placement.
@@ -450,10 +467,14 @@ public partial class Gpp
         // Flat on the ground and square to the view: what the side boards are offset along.
         var right = new Vector((float)sy, (float)-cy, 0);
 
+        // The lift above the crosshair scales with the distance like everything else: nine units at
+        // seventy is seven degrees up, and the same nine units at twenty-four would be twenty.
+        float lift = PanelUpNow;
+
         var at = new Vector(
-            origin.X + (forward.X * away) + (up.X * PanelUpOffset) + (right.X * sideways),
-            origin.Y + (forward.Y * away) + (up.Y * PanelUpOffset) + (right.Y * sideways),
-            origin.Z + eyeHeight + (forward.Z * away) + (up.Z * PanelUpOffset) + (right.Z * sideways));
+            origin.X + (forward.X * away) + (up.X * lift) + (right.X * sideways),
+            origin.Y + (forward.Y * away) + (up.Y * lift) + (right.Y * sideways),
+            origin.Z + eyeHeight + (forward.Z * away) + (up.Z * lift) + (right.Z * sideways));
 
         slot.Text.Teleport(at, new QAngle(0, angles.Y + 270f + toeIn, 90f - angles.X), new Vector(0, 0, 0));
     }

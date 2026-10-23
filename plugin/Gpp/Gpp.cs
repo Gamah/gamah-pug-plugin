@@ -327,6 +327,11 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
             case "ruler":
                 HudRulerProbe(arg, size);
                 break;
+            case "distance":
+                // How far out a floated board hangs, which decides what it clips into. Walked in front
+                // of a client, like the ruler, because nothing here is knowable from a schema.
+                DistanceProbe(arg, size);
+                break;
             case "hudsize":
                 HudSizeProbe();
                 break;

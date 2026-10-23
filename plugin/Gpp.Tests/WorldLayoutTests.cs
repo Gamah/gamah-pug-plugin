@@ -280,4 +280,60 @@ public class WorldLayoutTests
             Assert.Equal(WorldLayout.Rule(WorldLayout.BoardWidth), panel.Split('\n')[^1]);
         }
     }
+
+    // Moving a board nearer must not change the size it looks, which is only true if everything
+    // measured off the eye scales with the distance. This is the arithmetic behind !pug distance, and
+    // the reason a closer board is not also a smaller one.
+    [Fact]
+    public void ApparentSizeSurvivesMovingTheBoardIn()
+    {
+        float far = WorldGeometry.BoardWidth(WorldLayout.BoardWidth);
+        float farAngle = 2f * (float)(Math.Atan(far / (2f * WorldGeometry.Distance)) * 180.0 / Math.PI);
+
+        foreach (float distance in new[] { 16f, 24f, 32f, 70f })
+        {
+            float width = WorldGeometry.At(far, distance);
+            float angle = 2f * (float)(Math.Atan(width / (2f * distance)) * 180.0 / Math.PI);
+            _out.WriteLine($"{distance:F0} units: width {width:F2}, scale {WorldGeometry.ScaleAt(distance):F4}, {angle:F2} degrees");
+
+            Assert.Equal(farAngle, angle, 3);
+            // The scale is what the entity is actually given, so it has to be the linear one too.
+            Assert.Equal(WorldGeometry.Scale() * distance / WorldGeometry.Distance, WorldGeometry.ScaleAt(distance), 6);
+        }
+    }
+
+    // Where a flat board lands across the view, which is linear in the tangent of the FOV and not in
+    // the angle - so at the assumed 90 degrees the half width is the distance itself.
+    [Fact]
+    public void LateralOffsetLandsOnTheFractionItWasAskedFor()
+    {
+        foreach (float fraction in new[] { 0.25f, 0.33f, 0.45f, 0.65f })
+        {
+            float at24 = WorldGeometry.LateralFor(fraction, 24f);
+            _out.WriteLine($"{fraction:F2} of half the view is {at24:F2} units at 24, "
+                + $"{WorldGeometry.LateralFor(fraction, 24f, 106f):F2} units if the FOV is really 106");
+
+            Assert.Equal(fraction * 24f, at24, 3);
+            Assert.Equal(fraction, WorldGeometry.FractionFor(at24, 24f), 4);
+            // A gap tuned at 90 and looked at on 106 sits nearer the middle than it was put, by the
+            // ratio of the two tangents.
+            Assert.Equal(fraction / 1.327f, WorldGeometry.FractionFor(at24, 24f, 106f), 3);
+        }
+    }
+
+    // The derived side gap scales with the distance like everything else, so the three boards still fit
+    // across the view if the layout is ever moved in.
+    [Fact]
+    public void ThreeBoardsStillFitWhenTheyMoveIn()
+    {
+        foreach (float distance in new[] { 16f, 24f, 70f })
+        {
+            float span = WorldGeometry.At(WorldGeometry.ThreeBoardSpan(), distance);
+            float screen = 2f * distance * (float)Math.Tan(WorldGeometry.AssumedHorizontalFov * Math.PI / 360.0);
+            _out.WriteLine($"{distance:F0} units: span {span:F1} across a {screen:F1} view ({100 * span / screen:F1}%)");
+
+            Assert.Equal(WorldGeometry.SideGap() * distance / WorldGeometry.Distance, WorldGeometry.SideGapAt(distance), 4);
+            Assert.True(span < screen, $"three boards span {span:F1} across a {screen:F1} view at {distance:F0} units");
+        }
+    }
 }

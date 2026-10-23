@@ -53,4 +53,33 @@ internal static class WorldGeometry
 
     // What the three boards occupy altogether, edge to edge.
     internal static float ThreeBoardSpan() => (2f * SideGap()) + BoardWidth(WorldLayout.BoardWidth);
+
+    // --- moving a board nearer without changing the size it looks ----------------------------------
+
+    // How big something looks is the ratio of its size to its distance, so a board brought closer keeps
+    // the size it looks only if everything measured off the eye comes with it: the type scale, the lift
+    // above the crosshair, the gap to the next board and the margin between them. All of those are
+    // degree one in the distance - a board of height H at D subtends the same angle as kH at kD - and
+    // this is the one place that says so, so nothing has to remember to scale by hand.
+    internal static float At(float value, float distance) => value * distance / Distance;
+
+    // What WorldUnitsPerPx becomes at another distance. Scale() is itself linear in Distance, so this
+    // is the same number Scale() would answer if Distance were the argument.
+    internal static float ScaleAt(float distance) => At(Scale(), distance);
+
+    internal static float SideGapAt(float distance) => At(SideGap(), distance);
+
+    // How far to one side a flat board's centre has to go to land at `fraction` of half the screen
+    // width. Screen position is linear in the tangent of the angle rather than in the angle, so this is
+    // a multiplication and not an arc - and the whole of the FOV assumption lives in the tangent, which
+    // is why it is an argument: at 90 degrees the half width is the distance itself, and at 106 (which
+    // is what 90 on 16:9 becomes on a 21:9 screen, the aspect being Hor+) it is 1.327 times that.
+    internal static float LateralFor(float fraction, float distance, float horizontalFov = AssumedHorizontalFov) =>
+        (float)(fraction * distance * Math.Tan(horizontalFov * Math.PI / 360.0));
+
+    // The same thing read backwards: where a board that is this far to one side actually lands, as a
+    // fraction of half the view. A board tuned at 90 and looked at on 106 sits at 1/1.327 of where it
+    // was put, which is the failure this is here to make arithmetic rather than a surprise.
+    internal static float FractionFor(float lateral, float distance, float horizontalFov = AssumedHorizontalFov) =>
+        (float)(lateral / (distance * Math.Tan(horizontalFov * Math.PI / 360.0)));
 }
