@@ -38,6 +38,17 @@ public partial class Gpp
     private string TeamBoard(string label, ulong captain, List<ulong> team) =>
         WorldLayout.TeamBoard(label, Name(captain), team.Where(steamId => steamId != captain).Select(Name));
 
+    // The hold's version: every name with its own state against it, captain included.
+    private string ReadyBoard(string label, ulong captain, List<ulong> team)
+    {
+        var names = new List<ulong>();
+        if (captain != 0) names.Add(captain);
+        names.AddRange(team.Where(steamId => steamId != captain));
+
+        return WorldLayout.ReadyBoard(label,
+            names.Select(steamId => (Name(steamId), _openingReady.Contains(steamId))));
+    }
+
     private string LeftBoard() => TeamBoard(TeamALabel(), _captain1, _team1);
 
     private string RightBoard() => TeamBoard(TeamBLabel(), _captain2, _team2);
@@ -340,8 +351,8 @@ public partial class Gpp
         // Whether the team boards earn their place here is the open question: by now everybody knows who
         // they are playing with, and what matters is which voice channel to be in. _openingBoards is what
         // !pug discord switches, so both can be looked at on a screen rather than argued about.
-        string? left = _openingBoards ? LeftBoard() : null;
-        string? right = _openingBoards ? RightBoard() : null;
+        string? left = _openingBoards ? ReadyBoard(TeamALabel(), _captain1, _team1) : null;
+        string? right = _openingBoards ? ReadyBoard(TeamBLabel(), _captain2, _team2) : null;
 
         foreach (var player in HumanPlayers())
         {
@@ -349,10 +360,9 @@ public partial class Gpp
             string panel = WorldLayout.MainPanel(lines[0],
                 [
                     WorldLayout.Section.Of("STFU AND MOVE IN DISCORD"),
-                    WorldLayout.Section.Of("MATCH STARTS WHEN EVERYONE IS READY",
-                        $"{playing.Count - waiting.Count}/{playing.Count} READY"),
-                    WorldLayout.Section.Of(waiting.Count == 0 ? null : "NOT READY:"),
-                    WorldLayout.Section.List(WorldLayout.Grid(waiting.Select(WorldLayout.Clip))),
+                    // Who is not ready is on their own team's board now, a line each, so this is the
+                    // count and nothing else.
+                    WorldLayout.Section.Of($"{playing.Count - waiting.Count}/{playing.Count} READY"),
                 ],
                 WorldLayout.Footer(mine ? null : "TYPE .ready WHEN YOU ARE IN",
                     $"AUTO STARTING IN {_openingSecondsLeft}s"),

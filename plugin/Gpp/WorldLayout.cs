@@ -335,4 +335,18 @@ internal static class WorldLayout
         string text = $"TEAM {label.ToUpperInvariant()}\n{Clip(captain)}\n\n" + string.Join('\n', slots);
         return Fixed(text, TeamBoardLines, TeamBoardWidth);
     }
+
+    // The same board during the Discord hold, where every name carries its own state and the captain is
+    // not set apart from the rest: nothing is being drafted any more, so the armband has stopped being
+    // the thing the board is about. One line per player, "NAME - READY" or "NAME - NOT READY".
+    internal static string ReadyBoard(string label, IEnumerable<(string Name, bool Ready)> team)
+    {
+        var lines = team
+            .Select(player => $"{Clip(player.Name)} - {(player.Ready ? "READY" : "NOT READY")}")
+            .ToList();
+        for (int slot = lines.Count; slot < TeamSlots; slot++) lines.Add("-");
+
+        string text = $"TEAM {label.ToUpperInvariant()}\n\n" + string.Join('\n', lines);
+        return Fixed(text, TeamBoardLines, TeamBoardWidth);
+    }
 }
