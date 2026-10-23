@@ -514,65 +514,37 @@ public partial class Gpp
         ReturnToHeldWarmup();
     }
 
-    // Back to a held warmup after a match, in place if the engine will allow it.
+    // Back to a held warmup after a match. The map is reloaded to get there, because nothing else does.
     //
     // A 13-10 win read as "match cancelled" and 0-0 to everyone, on a panel nothing cleared
     // (2026-10-23, nuke then dust2, five players). The warmup used to go out one tick after the engine
     // said "Going to intermission...", which aborts the end-of-match state rather than following it -
-    // that is where the cancelled panel and the 0-0 came from. mp_restartgame did not get anybody off
-    // the panel afterwards either, tried twice over rcon on the stuck server; reloading the map did.
+    // that is where the cancelled panel and the 0-0 came from. Three ways out were tried on real
+    // clients that night and only the last one works:
     //
-    // So this is a ladder, not a guess. Wait out post_match_seconds with the real score on screen, put
-    // the phase back where the engine keeps it between matches, restart and open the warmup. Then check
-    // the panel actually let go, and only reload the map if it did not. Nobody is moved either way.
+    //   mp_restartgame                 twice over rcon on the stuck server, no effect
+    //   m_gamePhase 5 -> 2 + restart   server-side phase changed, client stayed on the panel - and it
+    //                                  fooled our own InPostGame() check, so the fallback never fired
+    //   a map load                     clears it every time
+    //
+    // So the panel is client-side and latched by the end-of-match state, not readable from the phase.
+    // Nothing is sent during the intermission, the final score stays up for post_match_seconds, and
+    // then the map is reloaded. OnMapStart holds the warmup from there, so this execs nothing itself.
+    // The cost is a loading screen between pugs; in-place is not on offer.
     private void ReturnToHeldWarmup()
     {
         AddTimer(Math.Max(1, Config.Match.PostMatchSeconds), () =>
         {
             // A new pug got going in the meantime - a map vote of its own, or a draft somebody
-            // reconnected into. It owns the warmup now, and a reload under it is worse than the panel.
-            if (MatchRunning || _phase != PugPhase.Idle) return;
-
-            LeavePostGamePhase();
-            Server.ExecuteCommand("mp_ignore_round_win_conditions 0;mp_restartgame 1");
-            ExecWarmupCfg();
-            Server.ExecuteCommand("mp_warmup_start;mp_warmuptime 9999;mp_warmup_pausetimer 1");
-
-            // The restart takes a moment, so the check is not on the same tick as the command that is
-            // meant to have cleared it.
-            AddTimer(3.0f, () =>
+            // reconnected into. Reloading the map under that is worse than the panel.
+            if (MatchRunning || _phase != PugPhase.Idle)
             {
-                if (MatchRunning || _phase != PugPhase.Idle) return;
-                if (!InPostGame()) return;
-
-                Logger.LogWarning("Still in the post-game panel after the restart - reloading the map, "
-                    + "which is the only thing known to clear it.");
-                ReloadThisMap();
-            });
+                Logger.LogInformation("Post-match map reload skipped - the server is busy again.");
+                return;
+            }
+            Logger.LogInformation("Reloading the map to clear the end-of-match panel.");
+            ReloadThisMap();
         });
-    }
-
-    // GamePhase 5 is the post-game panel and 2 is a match in progress, which is where the engine sits
-    // between our matches - the warmup is held inside it rather than being a phase of its own. Writing it
-    // back is what might let a match end without a map load; it is guarded because an engine that stops
-    // exposing the field should fall through to the reload, not throw.
-    private void LeavePostGamePhase()
-    {
-        try
-        {
-            var proxy = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault();
-            var rules = proxy?.GameRules;
-            if (proxy == null || rules == null || rules.GamePhase != 5) return;
-
-            rules.GamePhase = 2;
-            Utilities.SetStateChanged(proxy, "CCSGameRules", "m_gamePhase");
-            Logger.LogInformation("Post-game phase cleared in place.");
-        }
-        catch (Exception error)
-        {
-            Logger.LogWarning("Could not write the game phase ({Error}) - the map reload will have to "
-                + "clear the panel.", error.Message);
-        }
     }
 
     // An admin ending a match that is still going: .endmatch, !pug stop. The engine is told to stop
