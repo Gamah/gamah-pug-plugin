@@ -383,11 +383,10 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         Announce($"{what} cancelled. {why}");
     }
 
-    // The flag check goes through the controller's own steam id, not AuthorizedSteamID. CS2 1.41.9.2
-    // left CounterStrikeSharp 1.0.376 reading 730 instead of a CSteamID pointer, so the overload that
-    // takes a player dereferences that and segfaults the server - every admin command took the box
-    // down with it (CounterStrikeSharp#1466). m_steamID is a schema field and still correct; a player
-    // whose id has not arrived yet reads 0, which matches nobody's admin entry.
+    // The flag check goes through the controller's own steam id, not AuthorizedSteamID: `m_steamID` is a
+    // schema field, while AuthorizedSteamID is a pointer CounterStrikeSharp takes from the engine and
+    // dereferences, which is a crash on any build where the two have drifted apart. A player whose id
+    // has not arrived yet reads 0, which matches nobody's admin entry.
     private bool IsAdmin(CCSPlayerController? player)
     {
         if (player == null || !player.IsValid) return true; // server console / rcon
