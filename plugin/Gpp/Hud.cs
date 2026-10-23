@@ -434,12 +434,26 @@ public partial class Gpp
     private CounterStrikeSharp.API.Modules.Timers.Timer? _winPanelTimer;
     private int _winPanelSecondsLeft;
     private string _winHeadline = "";
-    private string _winScore = "";
+    private string _winBanner = "";
+    private List<string> _winRoster = [];
 
     private void StartWinPanel(string winner, int score1, int score2)
     {
-        _winHeadline = winner.Length > 0 ? $"{winner} WIN" : "DRAWN";
-        _winScore = $"{_team1Name} {score1} - {score2} {_team2Name}";
+        // Captain against captain, the winner's name first, because that is how the result gets said out
+        // loud. A draw has no winning captain, so it reads as the two of them either side of the score.
+        bool team1Won = score1 > score2;
+        ulong winCaptain = team1Won ? _captain1 : _captain2;
+        ulong loseCaptain = team1Won ? _captain2 : _captain1;
+        var winners = team1Won ? _team1 : _team2;
+
+        _winHeadline = winner.Length > 0
+            ? $"{Name(winCaptain)}  |  {Math.Max(score1, score2)} - {Math.Min(score1, score2)}  |  {Name(loseCaptain)}"
+            : $"{Name(_captain1)}  |  {score1} - {score2}  |  {Name(_captain2)}";
+        _winBanner = winner.Length > 0 ? $"{Name(winCaptain)}'s team wins!" : "Drawn.";
+        _winRoster = winner.Length > 0
+            ? [.. winners.Where(steamId => steamId != winCaptain).Select(Name)]
+            : [];
+
         if (!Config.Hud) return;
 
         _winPanelSecondsLeft = Math.Max(1, Config.Match.WinPanelSeconds);
@@ -463,6 +477,7 @@ public partial class Gpp
     {
         _winPanelTimer?.Kill();
         _winPanelTimer = null;
+        _keepCentred = false;
         Clear();
     }
 
@@ -477,8 +492,7 @@ public partial class Gpp
 
         foreach (var player in HumanPlayers())
         {
-            Paint(player, TwoLine(_winHeadline, _winScore),
-                ["warmup is open - !pug start whenever you want the next one"]);
+            Paint(player, TwoLine(_winBanner, _winHeadline), [.. _winRoster]);
         }
     }
 
