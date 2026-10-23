@@ -65,9 +65,10 @@ public partial class Gpp
             string panel = WorldLayout.MainPanel(
                 mine ? "YOU ARE IN THE CAPTAIN POOL" : "TYPE !captain TO JOIN THE CAPTAIN POOL",
                 [
-                    WorldLayout.Section.Of(volunteers.Count == 0
-                        ? "NOBODY YET - CAPTAINS DRAWN AT RANDOM"
-                        : "IN"),
+                    // Two lines, because one of them is thirty-seven characters of board for the state
+                    // nobody needs to read twice.
+                    WorldLayout.Section.Of(volunteers.Count == 0 ? "NOBODY YET" : "IN",
+                        volunteers.Count == 0 ? "CAPTAINS WILL BE DRAWN AT RANDOM" : null),
                     WorldLayout.Section.List(WorldLayout.Grid(volunteers.Select(WorldLayout.Clip))),
                 ],
                 WorldLayout.Footer($"{_optInSecondsLeft}s"),
