@@ -146,6 +146,21 @@ public class WorldLayoutTests
         Assert.Equal(Widest(empty), Widest(full));
     }
 
+    // The hold's board carries a state against every name, which is the longest line either team board
+    // has ever had to hold - and a board whose content outgrows its width stops being furniture.
+    [Fact]
+    public void TheReadyBoardIsTheSameFurnitureAsTheTeamBoard()
+    {
+        string team = WorldLayout.TeamBoard("A", "Ada", Names.Take(4));
+        string hold = WorldLayout.ReadyBoard("A",
+            Names.Take(5).Select((name, index) => (name, index % 2 == 0)));
+
+        Show("ready board, mid-hold", hold);
+        Assert.Equal(WorldLayout.LineCount(team), WorldLayout.LineCount(hold));
+        Assert.Equal(Widest(team), Widest(hold));
+        Assert.Contains("NOT READY", hold);
+    }
+
     [Fact]
     public void MainPanelIsAlwaysTwelveLines()
     {
