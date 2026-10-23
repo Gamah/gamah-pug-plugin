@@ -14,7 +14,7 @@ namespace Gpp;
 // Two things about how they are wired. First, the dot: CounterStrikeSharp's chat triggers are "!" and "/"
 // (configs/core.json), so nothing turns ".kill" into css_kill - registering css_kill answers !kill and
 // never .kill. A "say" listener of our own is what makes the dot work without editing core.json, which
-// needs a server restart to take. MatchZy served its own "." commands the same way, from a chat hook.
+// needs a server restart to take.
 //
 // Second, nothing here does its work inline. A chat command runs inside the engine's netchan message
 // processing, which has a CPU budget per call and drops the client whose message overran it - that is how
@@ -83,7 +83,7 @@ public partial class Gpp
         switch (verb)
         {
             // The match commands. These are console commands as well, so !ready works too, but the dot is
-            // what everyone types - it is what MatchZy answered for years - and "." is still not one of
+            // what everyone types, and "." is not one of
             // CounterStrikeSharp's chat triggers (configs/core.json: "!" and "/"), so nothing turns
             // ".ready" into css_ready. This listener is the only route for it.
             // The three answers to the idle-server panel. They do nothing while it is not up.

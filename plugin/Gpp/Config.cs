@@ -53,14 +53,13 @@ public class DiscordConfig
     [JsonIgnore] public bool Enabled => !string.IsNullOrWhiteSpace(BaseUrl);
 }
 
-// The match itself: which cfgs hold the phases, and the three things MatchZy used to do that were worth
-// keeping. Round backups are not among them - a match that breaks mid-way cannot be restored, which was
-// decided when MatchZy was dropped rather than overlooked.
+// The match itself: which cfgs hold the phases, and the per-match settings. There are no round backups,
+// so a match that breaks mid-way cannot be restored.
 public class MatchSettings
 {
     // Phase configs, relative to csgo/cfg. The plugin execs them; examples/cfg/gpp holds the ones this
-    // server uses, copied from MatchZy's. warmup.cfg is the one that holds the warmup open, so an idle
-    // server stays idle - without it the plugin falls back to a handful of built-in cvars.
+    // server uses. warmup.cfg is the one that holds the warmup open, so an idle server stays idle -
+    // without it the plugin falls back to a handful of built-in cvars.
     [JsonPropertyName("warmup_cfg")] public string WarmupCfg { get; set; } = "gpp/warmup.cfg";
 
     [JsonPropertyName("knife_cfg")] public string KnifeCfg { get; set; } = "gpp/knife.cfg";
@@ -108,20 +107,13 @@ public class MatchSettings
 
     // SQLite file for match and player rows. A bare name sits next to the plugin dll.
     [JsonPropertyName("stats_database")] public string StatsDatabase { get; set; } = "gpp.db";
-
-    // MatchZy is still installed alongside GPP. While this is true the plugin keeps MatchZy asleep and
-    // keeps its two kick cvars off, so a leftover whitelist cannot kick anyone mid-pug. Set it false once
-    // the MatchZy plugin folder is gone, or the server console fills with unknown-command lines.
-    [JsonPropertyName("matchzy_installed")] public bool MatchZyInstalled { get; set; } = true;
 }
 
 public class GppConfig : BasePluginConfig
 {
     [JsonPropertyName("ConfigVersion")] public override int Version { get; set; } = 1;
 
-    // There is deliberately no "flow" setting any more. It chose between a map vote and MatchZy's own
-    // map veto, and the veto went with MatchZy: !pug start votes for a map and then drafts, !pug draft
-    // drafts on the map the server is already on.
+    // !pug start votes for a map and then drafts; !pug draft drafts on the map the server is already on.
 
     // 0 = size the teams from whoever is present when the draft starts, and nobody is left out: an odd
     // headcount drafts uneven teams (5 players -> 3v2). Any other value pins the team size and anyone
@@ -148,11 +140,6 @@ public class GppConfig : BasePluginConfig
     // Show each captain the pick list on a redrawing centre-screen panel instead of in chat.
     [JsonPropertyName("hud")] public bool Hud { get; set; } = true;
 
-    // Which overlay draws the panels: "center" is PrintToCenter, four lines of eighty characters with a
-    // measured glyph table behind it; "world" is a point_worldtext in front of each player, twelve lines
-    // and no width budget. The centre panel is kept so a pug night can be rescued by flipping this back
-    // rather than rolling the plugin back.
-
     // Where the two team boards sit, in world units either side of the middle one. Left empty the
     // plugin works it out from how wide the boards are, which is what it should be doing - this is here
     // for the night somebody wants them further apart without a redeploy.
@@ -167,7 +154,7 @@ public class GppConfig : BasePluginConfig
     // 0 turns it off.
     [JsonPropertyName("idle_reload_minutes")] public int IdleReloadMinutes { get; set; } = 30;
 
-    // Seconds of warning before a restart (!pug restart, or idle_restart_hours).
+    // Seconds of warning before a restart (!pug restart, or the idle panel's !restart).
     [JsonPropertyName("restart_warning_seconds")] public int RestartWarningSeconds { get; set; } = 10;
 
     // Seconds after !pug start that anyone can !captain to volunteer, before the captains are drawn
@@ -196,9 +183,8 @@ public class GppConfig : BasePluginConfig
 
     [JsonPropertyName("match")] public MatchSettings Match { get; set; } = new();
 
-    // There is deliberately no whitelist option, and nothing in this plugin kicks anyone. A whitelist is
-    // enforced by kicking everyone who is not on the roster - which is how MatchZy, hours after a pug,
-    // kicked whoever connected next, because the cvar outlived the match that set it.
+    // There is deliberately no whitelist option, and nothing in this plugin kicks anyone: the server is
+    // open, and a whitelist can only be enforced by kicking whoever is not on the roster.
 
     // Count bots as players, so one person plus `bot_add` can walk the whole flow on an empty server.
     // Bots have no SteamID, so they are tracked by slot and left out of the stats.
@@ -212,14 +198,13 @@ public class GppConfig : BasePluginConfig
     // mp_maxmoney and mp_startmoney only set what you are given, not what you keep. 0 turns it off.
     [JsonPropertyName("warmup_money")] public int WarmupMoney { get; set; } = 16000;
 
-    // Usable width of one centre-panel line, in the glyph units HudMetrics measures in. Depends on the
-    // viewer's resolution and HUD scale, not on the font, so it is a setting rather than a constant.
-    // 340 is below the widest line measured to fit. Raise it if your players all run one resolution and
-    // the panel looks empty; lower it if lines still wrap. !pug ruler re-measures.
+    // Move a lone board off to the left, out of the middle of the screen. A single board is a notice
+    // rather than a layout, and the middle is where the player is aiming.
     [JsonPropertyName("hud_float_left")] public bool HudFloatLeft { get; set; } = true;
 
+    // How far left a floated board sits, in world units. 0 uses the same gap as the team boards.
+    // !pug sides float <units> moves it live.
     [JsonPropertyName("hud_float_gap")] public float HudFloatGap { get; set; }
-
 
     [JsonPropertyName("admin_flag")] public string AdminFlag { get; set; } = "@css/config";
 

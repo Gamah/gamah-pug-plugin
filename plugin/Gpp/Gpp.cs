@@ -46,8 +46,6 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
 
     public override void Load(bool hotReload)
     {
-        QuietenMatchZy();
-
         HookMatch();
         HookGuardedCommands();
         HookJoins();
@@ -97,31 +95,14 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
 
     internal bool Retired => _unloaded;
 
-    // MatchZy is still installed next to GPP until a pug has been run without it. Asleep it does nothing,
-    // but two of its cvars outlive the match that set them and kick people on connect - the whitelist for
-    // anyone outside a loaded roster, the other for everyone at all when no match is loaded - which is how
-    // a finished pug silently kicked the next person to connect hours later. Nobody is ever kicked off
-    // this server, so both are turned off here, on every map change, and at every match start.
-    //
-    // Sleep mode matters for a different reason: left on autostart, MatchZy arms a repeating "N players
-    // are not ready" chat timer on the first connect and turns its own .ready on, over the top of GPP's.
-    // [SOURCE: MatchZy 0.9.1 Utility.cs AutoStart/SendUnreadyPlayersMessage, SleepMode.cs, read 2026-10-19]
-    private void QuietenMatchZy()
-    {
-        if (!Config.Match.MatchZyInstalled) return;
-        Server.ExecuteCommand("matchzy_whitelist_enabled_default false;matchzy_kick_when_no_match_loaded false;"
-            + "matchzy_autostart_mode 0");
-    }
-
     // How many bots a test run wants on the server, and the timer that keeps putting them back.
     private int _botTarget;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _botTopUpTimer;
 
-    // Topping up once does not hold. The quota is cleared again under a test run by anything that execs a
-    // phase cfg or restarts the warmup - MatchZy's warmup.cfg opened with `bot_quota 0`, which is why
-    // GPP's copy deliberately does not, and bot_join_after_player still empties an unattended server. The
-    // first version of this stopped as soon as it saw the bots and the draft still got an empty server, so
-    // the top-up keeps running for as long as a test wants bots and only !pug bots 0 turns it off.
+    // Topping up once does not hold. Anything that execs a phase cfg or restarts the warmup can clear the
+    // quota - which is why GPP's warmup.cfg deliberately does not set bot_quota - and bot_join_after_player
+    // still empties an unattended server. So the top-up keeps running for as long as a test wants bots, and
+    // only !pug bots 0 turns it off.
     internal void KeepTestBotsTopped(int target)
     {
         _botTarget = Math.Max(0, target);
@@ -159,7 +140,6 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
 
     private void OnMapStart(string mapName)
     {
-        QuietenMatchZy();
         // Entities do not survive a map change, but the dictionary pointing at them does, and a stale
         // wrapper is how a panel ends up being updated into a dead handle. Sweeping the world as well
         // catches anything a crash or a hot reload left behind.
@@ -170,8 +150,8 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         _emptySince = HumanPlayers().Any(player => !player.IsBot) ? null : DateTime.UtcNow;
 
         // A map change ends any match that was running - including the restart at the end of one - and the
-        // new map starts in whatever state its own cfgs leave it. The held warmup is this plugin's job now
-        // that MatchZy's sleep mode is not doing it.
+        // new map starts in whatever state its own cfgs leave it. Holding the warmup open afterwards is
+        // this plugin's job.
         _matchPhase = MatchPhase.None;
         ResetPauses();
         AddTimer(1.0f, ExecWarmupCfg);
@@ -403,11 +383,10 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         Announce($"{what} cancelled. {why}");
     }
 
-    // The flag check goes through the controller's own steam id, not AuthorizedSteamID. CS2 1.41.9.2
-    // left CounterStrikeSharp 1.0.376 reading 730 instead of a CSteamID pointer, so the overload that
-    // takes a player dereferences that and segfaults the server - every admin command took the box
-    // down with it (CounterStrikeSharp#1466). m_steamID is a schema field and still correct; a player
-    // whose id has not arrived yet reads 0, which matches nobody's admin entry.
+    // The flag check goes through the controller's own steam id, not AuthorizedSteamID: `m_steamID` is a
+    // schema field, while AuthorizedSteamID is a pointer CounterStrikeSharp takes from the engine and
+    // dereferences, which is a crash on any build where the two have drifted apart. A player whose id
+    // has not arrived yet reads 0, which matches nobody's admin entry.
     private bool IsAdmin(CCSPlayerController? player)
     {
         if (player == null || !player.IsValid) return true; // server console / rcon

@@ -1,9 +1,8 @@
 # Gamah's Pug Plugin (GPP)
 
-Ten-man pug flow for a CS2 server: map vote, random captains, a captain knife for first pick, a draft,
-then the match itself - ready up, knife for sides, go live, pauses, a demo and a stats row. MatchZy used
-to run everything from `.ready` onwards and is no longer needed; [`docs/match.md`](docs/match.md) is what
-replaced it and what was given up with it.
+Ten-man pug flow for a CS2 server: map vote, captain sign-up, a captain knife for first pick, a draft,
+then the match itself - ready up, knife for sides, go live, pauses, a demo and a stats row.
+[`docs/match.md`](docs/match.md) is the match engine, and what it deliberately does not do.
 
 Two parts, and **the second one is optional**:
 
@@ -45,7 +44,7 @@ See [`plugin/README.md`](plugin/README.md) for commands and configuration, and
 Everything the pug asks for is drawn in the world - three `point_worldtext` boards in front of each
 player, one of them the question and two of them the teams. [`docs/overlay.md`](docs/overlay.md) is how
 that works and what was measured to get there; `!pug preview` plays every panel in order without
-needing a pug.
+needing a pug, and `!pug test` walks the whole flow with bots.
 
 With the Discord bot as well: [`docs/discord.md`](docs/discord.md).
 
@@ -54,3 +53,5 @@ With the Discord bot as well: [`docs/discord.md`](docs/discord.md).
 Written for one server and generalised afterwards, so expect the rough edges of that: the config has
 options nobody but the original server has exercised, and the Discord half has been tested against its
 own test suite rather than against a live guild.
+
+`CLAUDE.md` is the house rule for what goes in these files.

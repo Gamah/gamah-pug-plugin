@@ -3,10 +3,9 @@ namespace Gpp;
 // The match rules that are arithmetic rather than engine state: the ready threshold, the pause limits, the
 // rounds sides swap on, how a knife round is decided from who is left standing, and what a demo is called.
 //
-// They live in a class of their own, with nothing from CounterStrikeSharp in it, for the same reason
-// MatchZy pulled its pause rules out into PauseLogic: none of this can be tried on a server without ten
-// people and an hour, and all of it is the kind of off-by-one that only shows up in overtime. Gpp.Tests
-// runs every one of them. Anything here that needs a cvar or a player takes it as an argument.
+// They live in a class of their own, with nothing from CounterStrikeSharp in it, because none of this can
+// be tried on a server without ten people and an hour, and all of it is the kind of off-by-one that only
+// shows up in overtime. Gpp.Tests runs every one of them. Anything here that needs a cvar or a player takes it as an argument.
 internal static class MatchRules
 {
     // How many .ready are needed. 0 (or more than there are) means everybody on the roster; an empty
@@ -35,7 +34,8 @@ internal static class MatchRules
 
     // True when the round that just ended is one the engine swaps sides on: the half, and every overtime
     // half after it. roundsPlayed is the count *after* the round.
-    // [SOURCE: MatchZy 0.9.1 Utility.cs IsTeamSwapRequired, from Get5, read 2026-10-19]
+    // [SOURCE: a third-party pug plugin, MatchZy 0.9.1 Utility.cs IsTeamSwapRequired, from Get5,
+    //  read 2026-10-19]
     public static bool IsSideSwapRound(int roundsPlayed, int maxRounds, int overtimeMaxRounds, bool halftimeEnabled)
     {
         if (!halftimeEnabled) return false;

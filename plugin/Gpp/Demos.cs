@@ -15,7 +15,7 @@ namespace Gpp;
 //    truncates it, so the stop waits out the broadcast delay (see FinishMatch, which stretches
 //    mp_match_restart_delay to cover the same window).
 //
-// [SOURCE: MatchZy 0.9.1 DemoManagement.cs, read 2026-10-19]
+// [SOURCE: a third-party pug plugin, MatchZy 0.9.1 DemoManagement.cs, read 2026-10-19]
 public partial class Gpp
 {
     private bool _recording;

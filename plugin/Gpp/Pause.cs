@@ -8,15 +8,16 @@ using CounterStrikeSharp.API.Modules.Utils;
 
 namespace Gpp;
 
-// .pause / .tech / .unpause, kept to the shape MatchZy and Get5 have: a pause takes effect at the next
-// freeze time rather than mid-round, both sides have to .unpause before play resumes, and a technical
+// .pause / .tech / .unpause, in the shape players expect from a pug server: a pause takes effect at the
+// next freeze time rather than mid-round, both sides have to .unpause before play resumes, and a technical
 // pause can be capped per side and can be unpaused by either side once it has run long enough.
 //
 // Two engine facts the rules are built on. mp_pause_match does not pause anything until the round ends,
 // so the seconds a pause has lasted are only counted during freeze time - which is also when a pause the
 // caller has changed their mind about can still be taken back for free. And unpausing out of halftime or
 // the post-game panel does not come back, so both refuse the command outright.
-// [SOURCE: MatchZy 0.9.1 Pausing.cs, PauseLogic.cs, Utility.cs PauseMatch/UnpauseMatch, read 2026-10-19]
+// [SOURCE: a third-party pug plugin, MatchZy 0.9.1 Pausing.cs, PauseLogic.cs, Utility.cs
+//  PauseMatch/UnpauseMatch, read 2026-10-19]
 public partial class Gpp
 {
     private bool _paused;

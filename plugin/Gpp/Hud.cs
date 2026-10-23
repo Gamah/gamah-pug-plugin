@@ -176,7 +176,7 @@ public partial class Gpp
         {
             // Five minutes of a panel nobody has acted on is a panel nobody is reading. The phase stays
             // open - .ready still starts the match - but the overlay comes down rather than turning into
-            // the repeating nag that was the whole complaint about MatchZy's ready phase.
+            // a repeating nag.
             AfterTick(() =>
             {
                 StopReadyHud();

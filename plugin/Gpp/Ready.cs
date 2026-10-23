@@ -8,11 +8,10 @@ using CounterStrikeSharp.API.Modules.Utils;
 
 namespace Gpp;
 
-// The ready phase. This used to be MatchZy's, with GPP inferring who had readied by watching the commands
-// go past - MatchZy kept the real list in playerReadyStatus and exposed no way to read it. The list below
-// *is* the real list now, so the panel and the threshold agree by construction.
+// The ready phase. The list below is the only record of who has readied, so the panel and the threshold
+// agree by construction.
 //
-// The gate in front of it stays: a knife round is decided from who is alive when the round ends, and a
+// The gate in front of it: a knife round is decided from who is alive when the round ends, and a
 // round can end the instant it restarts, so a knife round that starts with somebody still in spectator or
 // dead is decided on the spot with no knives thrown. Until every drafted player is connected, on their
 // drafted side and spawned, a ready does not count - and the sweep moves them there while it waits.
