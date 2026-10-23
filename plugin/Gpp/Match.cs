@@ -640,7 +640,7 @@ public partial class Gpp
         }, TimerFlags.REPEAT);
     }
 
-    // An admin ending a match that is still going    // An admin ending a match that is still going: .endmatch, !pug stop. The engine is told to stop
+    // An admin ending a match that is still going: .endmatch, !pug stop. The engine is told to stop
     // scoring and the server is put back in a held warmup, because nothing else will.
     internal void AbandonMatch(string why)
     {

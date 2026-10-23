@@ -154,7 +154,7 @@ public class GppConfig : BasePluginConfig
     // 0 turns it off.
     [JsonPropertyName("idle_reload_minutes")] public int IdleReloadMinutes { get; set; } = 30;
 
-    // Seconds of warning before a restart (!pug restart, or idle_restart_hours).
+    // Seconds of warning before a restart (!pug restart, or the idle panel's !restart).
     [JsonPropertyName("restart_warning_seconds")] public int RestartWarningSeconds { get; set; } = 10;
 
     // Seconds after !pug start that anyone can !captain to volunteer, before the captains are drawn
@@ -198,14 +198,13 @@ public class GppConfig : BasePluginConfig
     // mp_maxmoney and mp_startmoney only set what you are given, not what you keep. 0 turns it off.
     [JsonPropertyName("warmup_money")] public int WarmupMoney { get; set; } = 16000;
 
-    // Usable width of one centre-panel line, in the glyph units HudMetrics measures in. Depends on the
-    // viewer's resolution and HUD scale, not on the font, so it is a setting rather than a constant.
-    // 340 is below the widest line measured to fit. Raise it if your players all run one resolution and
-    // the panel looks empty; lower it if lines still wrap. !pug ruler re-measures.
+    // Move a lone board off to the left, out of the middle of the screen. A single board is a notice
+    // rather than a layout, and the middle is where the player is aiming.
     [JsonPropertyName("hud_float_left")] public bool HudFloatLeft { get; set; } = true;
 
+    // How far left a floated board sits, in world units. 0 uses the same gap as the team boards.
+    // !pug sides float <units> moves it live.
     [JsonPropertyName("hud_float_gap")] public float HudFloatGap { get; set; }
-
 
     [JsonPropertyName("admin_flag")] public string AdminFlag { get; set; } = "@css/config";
 

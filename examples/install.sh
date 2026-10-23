@@ -1,16 +1,51 @@
 #!/bin/bash
-# Installs GPP on this VM. Run as root:  sudo bash ~/gpp/install.sh
+# Installs GPP on one server of this VM. Run as root:
+#   sudo bash ~/gpp/install.sh [a|b] [--force]
+# Default target is a.  --force installs during a live match.
 set -euo pipefail
 
+TARGET=a
+FORCE=0
+for arg in "$@"; do
+  case $arg in
+    a|A) TARGET=a ;;
+    b|B) TARGET=b ;;
+    --force) FORCE=1 ;;
+    *) echo "usage: install.sh [a|b] [--force]"; exit 1 ;;
+  esac
+done
+
 SRC=${SRC:-/home/cs2/gpp}
-CS2=/home/steam/cs2/game/csgo
+case $TARGET in
+  a) ROOT=/home/steam/cs2;  PORT=27015 ;;
+  b) ROOT=/home/steam/cs2b; PORT=27016 ;;
+esac
+CS2=$ROOT/game/csgo
 CSS=$CS2/addons/counterstrikesharp
 PLUGIN=$CSS/plugins/Gpp
 
+echo "== target: server $TARGET  ($ROOT, rcon :$PORT)"
 [ -f "$SRC/Gpp.dll" ] || { echo "no Gpp.dll in $SRC"; exit 1; }
+[ -d "$CSS" ] || { echo "no CounterStrikeSharp at $CSS"; exit 1; }
 
-# The plugin is no longer one file: the stats database pulls in Microsoft.Data.Sqlite, which needs its
-# managed assemblies, Gpp.deps.json (that is what tells the loader where the native library is) and
+# Writing Gpp.dll is the reload, and a reload mid-match loses the match: the phase, the rosters and the
+# ready list are all in the plugin instance being replaced. So ask the running plugin what it is doing.
+echo "== match guard"
+if [ "$FORCE" = 1 ]; then
+  echo "  --force: not asking"
+elif [ ! -f /home/cs2/.rcon_pw ]; then
+  echo "  no /home/cs2/.rcon_pw - cannot ask whether a match is running; use --force"; exit 1
+else
+  status=$(python3 "$SRC/rcon.py" 127.0.1.1 "$PORT" "$(cat /home/cs2/.rcon_pw)" 'css_pug status' 2>&1 | tail -n +2)
+  echo "  $status"
+  case $status in
+    *Idle.*|*"No match running."*) ;;
+    *) echo "  refusing: the server is busy. !pug stop it, or install with --force"; exit 1 ;;
+  esac
+fi
+
+# The plugin is not one file: the stats database pulls in Microsoft.Data.Sqlite, which needs its managed
+# assemblies, Gpp.deps.json (that is what tells the loader where the native library is) and
 # runtimes/linux-x64. Copy the whole build output, not just the dll.
 echo "== plugin"
 install -d -o steam -g steam -m 755 "$PLUGIN"
@@ -61,56 +96,30 @@ else
   echo "  wrote $CFG"
 fi
 
+# Admin commands check the controller's SteamID against CounterStrikeSharp's own admin list, so a server
+# with nobody holding @css/config has no working !pug start.
 echo "== CounterStrikeSharp admins"
-python3 - "$CSS/configs/admins.json" "$CS2/cfg/MatchZy/admins.json" <<'PY'
-import json, os, shutil, sys
+python3 - "$CSS/configs/admins.json" <<'PY'
+import json, sys
 
-css_path, mz_path = sys.argv[1], sys.argv[2]
+path = sys.argv[1]
+try:
+    with open(path) as handle:
+        admins = json.load(handle)
+except FileNotFoundError:
+    sys.exit(f"  {path} does not exist - nobody can run !pug start")
+except json.JSONDecodeError as error:
+    sys.exit(f"  {path} is not valid JSON ({error})")
 
-def load(path):
-    try:
-        with open(path) as handle:
-            return json.load(handle)
-    except FileNotFoundError:
-        return {}
-    except json.JSONDecodeError as error:
-        print(f"  {path} is not valid JSON ({error}) - not touching it")
-        sys.exit(1)
-
-css, matchzy = load(css_path), load(mz_path)
-steam_ids = [key for key in matchzy if key.isdigit()]
-if not steam_ids:
-    print(f"  no SteamIDs in {mz_path} - add yourself to {css_path} by hand")
-    sys.exit(0)
-
-changed = False
-for steam_id in steam_ids:
-    entry = next((value for value in css.values()
-                  if str(value.get("identity", "")) == steam_id), None)
-    if entry is None:
-        css[f"pug-{steam_id}"] = {
-            "identity": steam_id,
-            "flags": ["@css/config", "@css/generic"],
-        }
-        print(f"  added {steam_id}")
-        changed = True
-    elif "@css/config" not in entry.get("flags", []):
-        entry.setdefault("flags", []).append("@css/config")
-        print(f"  gave {steam_id} @css/config")
-        changed = True
-    else:
-        print(f"  {steam_id} already has @css/config")
-
-if changed:
-    if os.path.exists(css_path):
-        shutil.copy2(css_path, css_path + ".gpp.bak")
-    with open(css_path, "w") as handle:
-        json.dump(css, handle, indent=2)
-    shutil.chown(css_path, "steam", "steam")
-    print(f"  wrote {css_path}")
+holders = [value.get("identity") for value in admins.values()
+           if "@css/config" in value.get("flags", [])]
+if holders:
+    print(f"  {len(holders)} admin(s) with @css/config")
+else:
+    print(f"  no @css/config in {path} - nobody can run !pug start")
 PY
 
 echo
 echo "Done. Copying the dll is the reload - CounterStrikeSharp picks it up on write."
-echo "Then check:  rcon 127.0.1.1 27015 <pw> 'css_plugins list'"
+echo "Then check:  rcon 127.0.1.1 $PORT <pw> 'css_plugins list'"
 echo "A config change needs a reload by index:  css_plugins reload <n>  (the name is refused)."
