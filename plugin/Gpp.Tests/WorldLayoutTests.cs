@@ -182,6 +182,34 @@ public class WorldLayoutTests
 
     private static int Widest(string panel) => panel.Split('\n').Max(HudMetrics.Width);
 
+    // The captain pool as WorldPanels lays it out: the names in a grid with the first row labelled.
+    private static List<string> PoolRows(IEnumerable<string> pool)
+    {
+        var rows = WorldLayout.Grid(pool.Select(WorldLayout.Clip));
+        rows[0] = "IN: " + rows[0];
+        return rows;
+    }
+
+    // The ask is the one line on that panel with no second chance - the vote closes the moment the last
+    // person votes - so it may not be what pages away when the ballot is the whole pool.
+    [Fact]
+    public void TheCaptainAskSurvivesTheWholePoolOnTheBallot()
+    {
+        string panel = WorldLayout.MainPanel("pick a map - type the number in chat",
+        [
+            WorldLayout.Section.Of(["TYPE !captain TO JOIN THE CAPTAIN POOL", .. PoolRows(Names.Take(9))]),
+            WorldLayout.Section.List(WorldLayout.Grid(Maps.Select((m, i) => WorldLayout.Cell(i + 1, m)))),
+        ], WorldLayout.Footer("45s", "7/10 VOTED"), 0);
+
+        Show("vote + sign-up, 17 maps and 9 hands up", panel);
+        Assert.Equal(WorldLayout.PanelLines, WorldLayout.LineCount(panel));
+        Assert.Contains("!captain", panel);
+        Assert.Contains("IN: ", panel);
+        // Paged, not cut: the last resort that drops lines from the bottom prints "..." when it fires.
+        Assert.DoesNotContain("...", panel);
+        Assert.Contains("page 1/", panel);
+    }
+
     // Every panel in a pug, at its worst, measured: same height, same width, and the text centred in the
     // same place. A board that is one space wider than the last one walks across the screen as it
     // updates, which is exactly what "the centre panel is wandering to the left" was.
@@ -198,6 +226,15 @@ public class WorldLayoutTests
                 WorldLayout.Section.Of("STILL TO ANSWER"),
                 WorldLayout.Section.List(WorldLayout.Grid(Names.Skip(2))),
             ], WorldLayout.Footer("type !captain", "20s"), 0),
+
+            // The vote carries the captain sign-up, so the worst case is the ask, nine hands up and the
+            // whole pool on the ballot - the panel that has the most on it of any in a pug.
+            ["ballot + sign-up"] = WorldLayout.MainPanel("pick a map - type the number in chat",
+            [
+                WorldLayout.Section.Of(["TYPE !captain TO JOIN THE CAPTAIN POOL",
+                    .. PoolRows(Names.Take(9))]),
+                WorldLayout.Section.List(WorldLayout.Grid(Maps.Select((m, i) => WorldLayout.Cell(i + 1, m)))),
+            ], WorldLayout.Footer("45s", "7/10 VOTED"), 0),
 
             ["ballot"] = WorldLayout.MainPanel("pick a map",
                 [WorldLayout.Section.List(WorldLayout.Grid(Maps.Select((m, i) => WorldLayout.Cell(i + 1, m))))],

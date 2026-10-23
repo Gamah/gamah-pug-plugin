@@ -14,6 +14,9 @@ public partial class Gpp
     private int _voteSecondsLeft;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _voteTimer;
 
+    // Whether this vote is also the captain sign-up. One window for both, so the pug starts a clock once.
+    private bool _votePoolOpen;
+
     private void StartMapVote(bool force, bool skipMatchCheck = false)
     {
         if (_phase != PugPhase.Idle)
@@ -51,6 +54,15 @@ public partial class Gpp
         _ballot = Ballot();
         _voteSecondsLeft = Math.Max(5, Config.VoteSeconds);
 
+        // The captain sign-up rides along with the vote rather than queueing in front of it: one clock,
+        // one panel, and the armbands are drawn from whoever had a hand up when the vote closed. Anybody
+        // worried about being the last vote in types !captain first and votes after.
+        //
+        // Not when the captains are already pinned - there is nothing to volunteer for - and not on a
+        // forced start, which is the admin saying get on with it.
+        _votePoolOpen = !force && Config.CaptainOptInSeconds > 0 && !(_captain1 != 0 && _captain2 != 0);
+        if (_votePoolOpen) _volunteers.Clear();
+
         // The vote does not take the server away from anyone: people carry on warming up while they vote,
         // and the round is left alone. The old reason for freezing it - the HTML overlay losing to the
         // warmup HUD - went away when the overlay moved to the Center and Alert channels, which draw over
@@ -59,6 +71,7 @@ public partial class Gpp
         StartHud();
 
         Prompt($"Map vote - {_voteSecondsLeft}s.", "vote now - !1, !2, ...", Everybody);
+        if (_votePoolOpen) Announce("Want to captain? Type !captain - the armbands are drawn when the vote closes.");
         // The ballot goes to chat even with the HUD on. The centre panel is drawn from the player's own
         // pawn, and force_spectate has just moved everybody to spectator, so the overlay reaches nobody
         // during a vote - which is how a vote ran with no map list on anyone's screen.
@@ -178,6 +191,7 @@ public partial class Gpp
         _expectedBots = here.Count(player => player.IsBot);
         _expectedRoster.Clear();
         foreach (var player in here.Where(player => !player.IsBot)) _expectedRoster[Id(player)] = player.PlayerName;
+        bool pool = _votePoolOpen;
         ResetVote();
         StopHud();
         _phase = PugPhase.Idle;
@@ -185,11 +199,24 @@ public partial class Gpp
         // Captains are drawn now, from the people who actually voted the map in - after a map change the
         // room fills in reconnect order, and that would hand the armbands to whoever loads fastest.
         //
-        // Anyone who put their hand up in the sign-up window keeps theirs: this draw is only for the
-        // armbands nobody volunteered for. Taking both every time is how "Gamah volunteered - the other
-        // captain is drawn at random" was followed, ninety seconds later, by two other people being made
-        // captains. A volunteer who has left in the meantime is drawn over, which is what the liveness
-        // check is for.
+        // The pool goes first: anyone who put their hand up during the vote keeps the armband, and only
+        // what the pool did not fill is drawn at random. Taking both every time is how "Gamah
+        // volunteered - the other captain is drawn at random" was followed, ninety seconds later, by two
+        // other people being made captains. A volunteer who has left in the meantime is drawn over,
+        // which is what the liveness check is for.
+        int volunteers = 0;
+        if (pool)
+        {
+            var standing = Standing();
+            _volunteers.Clear();
+            volunteers = standing.Count;
+            foreach (var steamId in standing)
+            {
+                if (_captain1 == 0 && _captain2 != steamId) _captain1 = steamId;
+                else if (_captain2 == 0 && _captain1 != steamId) _captain2 = steamId;
+            }
+        }
+
         if (here.Count >= 2)
         {
             var ids = here.Select(Id).ToList();
@@ -200,8 +227,14 @@ public partial class Gpp
             if (_captain1 == 0) _captain1 = DrawCaptain(ids, _captain2);
             if (_captain2 == 0) _captain2 = DrawCaptain(ids, _captain1);
             foreach (var player in here) _names[Id(player)] = player.PlayerName;
+            string how = !pool ? ""
+                : volunteers == 0 ? " (nobody volunteered - drawn at random)"
+                : volunteers == 1 ? " (one volunteer, the other drawn at random)"
+                : volunteers > 2 ? $" (drawn from {volunteers} volunteers)"
+                : "";
             Announce($"Captains: {Colorize("{green}")}{Name(_captain1)}{Colorize("{default}")} and "
-                + $"{Colorize("{green}")}{Name(_captain2)}{Colorize("{default}")} - they knife for first pick on the new map.");
+                + $"{Colorize("{green}")}{Name(_captain2)}{Colorize("{default}")}{how} - "
+                + "they knife for first pick on the new map.");
         }
 
         bool alreadyOnIt = !winner.IsWorkshop &&
@@ -231,5 +264,8 @@ public partial class Gpp
         _votes.Clear();
         _ballot = [];
         _voteSecondsLeft = 0;
+        // The hands stay up: FinishMapVote draws from them after this runs, and a cancelled vote clears
+        // them where it clears everything else.
+        _votePoolOpen = false;
     }
 }

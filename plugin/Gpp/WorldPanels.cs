@@ -74,7 +74,7 @@ public partial class Gpp
         {
             bool mine = _volunteers.Contains(Id(player));
             string panel = WorldLayout.MainPanel(
-                mine ? "YOU ARE IN THE CAPTAIN POOL" : "TYPE !captain TO JOIN THE CAPTAIN POOL",
+                mine ? "YOU ARE IN THE POOL FOR CAPTAIN" : "TYPE !captain TO JOIN THE CAPTAIN POOL",
                 [
                     // Two lines, because one of them is thirty-seven characters of board for the state
                     // nobody needs to read twice.
@@ -104,17 +104,31 @@ public partial class Gpp
         var voters = HumanPlayers().Where(player => !player.IsBot).ToList();
         var missing = voters.Where(player => !_votes.ContainsKey(Id(player))).Select(player => player.PlayerName).ToList();
 
+        // The captain sign-up shares this panel, because it shares the clock. It sits above the ballot:
+        // it is the thing with no second chance - the vote closes the moment the last person votes - and
+        // a block under a six-map ballot is a block nobody read.
+        var pool = _volunteers.Where(steamId => PlayerBySteamId(steamId) != null).Select(Name).ToList();
+
         // Somebody who has not voted gets the ballot and nothing else - they cannot act on who else has
         // voted, and a list of names next to the maps is what makes people type the wrong number. Once
         // they have voted the ballot has done its job and the panel turns into the thing they can act
         // on: who to go and shout at.
         foreach (var player in voters)
         {
-            string panel = _votes.TryGetValue(Id(player), out int mine)
+            bool inPool = _volunteers.Contains(Id(player));
+            // The one line of the captain block that is about this player, and the only one they can act
+            // on. Somebody already in keeps being told so, because the whole point of volunteering early
+            // is not having to wonder whether it took.
+            string? poolAsk = !_votePoolOpen ? null
+                : inPool ? "YOU ARE IN THE POOL FOR CAPTAIN"
+                : "TYPE !captain TO JOIN THE CAPTAIN POOL";
+
+            string panel = _votes.ContainsKey(Id(player))
                 // Somebody who has voted gets the whole ballot with its tally against it - every map,
                 // every time, so the board is one shape and the stars are the only thing moving - and
-                // who is holding the vote up underneath.
-                ? WorldLayout.MainPanel($"{_votes.Count}/{voters.Count} VOTED",
+                // who is holding the vote up underneath. The count is gone from the title: with the
+                // names of everyone still voting on the board, "7/10" is the same fact twice.
+                ? WorldLayout.MainPanel(poolAsk ?? $"{_votes.Count}/{voters.Count} VOTED",
                     [
                         new([.. WorldLayout.Grid(Tally(tally))]),
                         WorldLayout.Section.Of(missing.Count == 0 ? null : "STILL VOTING:"),
@@ -122,12 +136,35 @@ public partial class Gpp
                     ],
                     WorldLayout.Footer($"{_voteSecondsLeft}s"),
                     _hudTicks)
+                // Somebody who has not voted gets the captain block and the ballot, and not a word about
+                // who else has voted - they cannot act on it, and a list of names next to the maps is
+                // what makes people type the wrong number. The count rides in the footer instead.
                 : WorldLayout.MainPanel("PICK A MAP - TYPE THE NUMBER IN CHAT",
-                    [WorldLayout.Section.List(WorldLayout.Grid(ballot))],
-                    WorldLayout.Footer($"{_voteSecondsLeft}s"),
+                    [
+                        WorldLayout.Section.Of([poolAsk, .. PoolLines(pool)]),
+                        WorldLayout.Section.List(WorldLayout.Grid(ballot)),
+                    ],
+                    WorldLayout.Footer($"{_voteSecondsLeft}s", $"{_votes.Count}/{voters.Count} VOTED"),
                     _hudTicks);
             WorldShow(player, panel);
         }
+    }
+
+    // Who has their hand up, under the ask. Three lines at most: past nine names the board is being spent
+    // on a fact the pool's own members already know, and the ballot underneath is what needs the room.
+    private const int PoolNamesShown = 9;
+
+    private List<string> PoolLines(List<string> pool)
+    {
+        if (!_votePoolOpen) return [];
+        if (pool.Count == 0) return ["NOBODY YET - CAPTAINS DRAWN AT RANDOM"];
+
+        var shown = pool.Take(PoolNamesShown).Select(WorldLayout.Clip).ToList();
+        if (pool.Count > PoolNamesShown) shown[^1] = $"+{pool.Count - PoolNamesShown + 1} MORE";
+
+        var rows = WorldLayout.Grid(shown);
+        rows[0] = "IN: " + rows[0];
+        return rows;
     }
 
     // Every map with its votes against it, in ballot order so a map does not move as the votes land -

@@ -203,7 +203,7 @@ public partial class Gpp
 
             timer?.Kill();
             Logger.LogInformation("Test run: starting the pug with {Here} players.", HumanPlayers().Count());
-            if (!OpenCaptainOptIn(() => StartMapVote(force: false), force: false)) StartMapVote(force: false);
+            StartMapVote(force: false);
         }, TimerFlags.REPEAT);
     }
 

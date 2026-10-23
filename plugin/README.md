@@ -17,7 +17,7 @@ by [`../Gpp.Tests`](../Gpp.Tests) (`dotnet test`).
 | `!pug draft` | admin | Draft only, on the map the server is already on |
 | `!pug captains` | admin | Reroll captains at random, before any pick is made |
 | `!pug captains <a> <b>` | admin | Pin exactly those two. `!pug captains humans` picks the two people on an otherwise botted server |
-| `!captain` / `.captain` | everyone | Put your hand up during the sign-up window `!pug start` opens. Again to take it down |
+| `!captain` / `.captain` | everyone | Put your hand up while the map vote is up, or during the window `!pug draft` opens. Again to take it down |
 | `!pug match` | admin | Start the match on the drafted teams (only needed with `auto_start_match` off) |
 | `!pug endmatch` / `.endmatch` | admin | End the match that is running and go back to a held warmup |
 | `!pug stop` | admin | **Nuke everything.** Ends the match, clears bots, drops every phase, frees spectators and lands in a held warmup. Works from any state |
@@ -78,7 +78,7 @@ The pick command is `!draft`, not `!pick`.
 
 ## The night, end to end
 
-    !pug start -> everyone !vote -> map changes -> draft starts ~10s after the map loads
+    !pug start -> everyone !vote, anyone !captain -> map changes -> draft starts ~10s after the map loads
       -> all to spectator -> two captains knife 1v1 for first pick -> captains !draft
       -> teams set, warmup held -> .ready
       -> knife round for sides -> .stay / .switch
@@ -95,7 +95,8 @@ load**. [`../examples/Gpp.json`](../examples/Gpp.json) is a filled-in one.
   `display` renames one on the ballot
 - `players_per_team` (0 = size the teams from whoever is there, and leave nobody out)
 - `min_players` (2) — needed before `!pug start` runs. Two captains and nothing to draft is still a pug
-- `vote_seconds` (30), `ballot_size` (0 = the whole pool on the ballot), `pick_seconds` (30, 0 = no
+- `vote_seconds` (45) — the map vote, which is also the captain sign-up. Closes early the moment
+  everybody has voted, captains volunteered or not. `ballot_size` (0 = the whole pool on the ballot), `pick_seconds` (30, 0 = no
   timeout)
 - `reconnect_wait_seconds` (90) — after a map change, how long latecomers have. Picking starts as soon
   as `min_players` are back, and anyone who connects inside the window joins the pool instead of being
@@ -107,9 +108,10 @@ load**. [`../examples/Gpp.json`](../examples/Gpp.json) is a filled-in one.
   aiming. `hud_float_gap` (0 = same as `hud_side_gap`) is how far
 - `force_spectate` (true) — everyone not yet drafted is held in spectator for the whole draft:
   `jointeam` is blocked and a sweep puts anyone sitting in the team-select menu back
-- `captain_opt_in_seconds` (30) — the sign-up window `!pug start` opens before the map vote: anyone can
-  `!captain`, and the two captains are drawn from whoever did. Fewer than two volunteers and the rest of
-  the draw is at random. 0 turns it off; `!pug start force` skips it
+- `captain_opt_in_seconds` (30) — whether `!captain` is asked for, and the window `!pug draft` opens for
+  it. `!pug start` carries the sign-up on the map vote instead, for `vote_seconds`. Either way the two
+  captains are drawn from whoever put their hand up; fewer than two volunteers and the rest of the draw
+  is at random. 0 turns it off; `!pug start force` skips it
 - `captain_knife` (true), `captain_knife_seconds` (60) — the captains' 1v1 for first pick. Off is a coin
   flip
 - `auto_start_match` (true) — start the match as soon as the draft ends. Off waits for `!pug match`

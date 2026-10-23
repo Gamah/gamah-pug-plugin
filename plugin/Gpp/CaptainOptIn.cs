@@ -6,10 +6,14 @@ using CounterStrikeSharp.API.Modules.Timers;
 
 namespace Gpp;
 
-// Who wants the armband. !pug start opens a grace period - thirty seconds by default - where anyone can
-// type !captain to put their hand up, and the two captains are drawn from the volunteers rather than from
-// the room. Fewer than two volunteers and the rest of the draw is at random, as it always was, so an
-// empty opt-in costs nothing but the wait.
+// Who wants the armband. Anyone types !captain to put their hand up, and the two captains are drawn from
+// the volunteers rather than from the room. Fewer than two volunteers and the rest of the draw is at
+// random, as it always was, so an empty pool costs nothing.
+//
+// The pool is open for the length of the map vote - !pug start runs one 45-second window that is both,
+// and the vote panel carries both asks - so the sign-up costs no clock of its own. Somebody who does not
+// want to risk being the last vote in types !captain first and votes after. !pug draft, which has no
+// vote to ride along with, still opens the standalone window below.
 //
 // It is a window rather than a standing list because wanting to captain is a per-pug mood: the person who
 // volunteered at midnight is not necessarily up for it at three.
@@ -23,7 +27,19 @@ public partial class Gpp
 
     internal bool CaptainOptInOpen => _optInTimer != null;
 
+    // Either window: the standalone one, or a map vote carrying the pool.
+    internal bool CaptainPoolOpen => CaptainOptInOpen || _votePoolOpen;
+
     internal int VolunteerCount() => _volunteers.Count(steamId => PlayerBySteamId(steamId) != null);
+
+    // Whether this player has their hand up, which is the one thing the panels ask.
+    internal bool InCaptainPool(ulong steamId) => _volunteers.Contains(steamId);
+
+    // The volunteers who are still here, shuffled, so three hands up is not an argument about which two.
+    private List<ulong> Standing() => _volunteers
+        .Where(steamId => PlayerBySteamId(steamId) != null)
+        .OrderBy(_ => _rng.Next())
+        .ToList();
 
     // Opens the window and runs `then` when it closes. Returns false when there is no window to open -
     // captains already pinned, the grace period turned off, or an admin in a hurry - and the caller gets
@@ -59,11 +75,7 @@ public partial class Gpp
             return;
         }
 
-        // Only volunteers who are still here. Two of them, drawn, so three people putting their hands up
-        // is not an argument about which two.
-        var standing = _volunteers.Where(steamId => PlayerBySteamId(steamId) != null)
-            .OrderBy(_ => _rng.Next())
-            .ToList();
+        var standing = Standing();
         _volunteers.Clear();
 
         if (standing.Count == 0)
@@ -117,7 +129,7 @@ public partial class Gpp
     internal void Volunteer(CCSPlayerController? player)
     {
         if (player == null || !player.IsValid) return;
-        if (!CaptainOptInOpen)
+        if (!CaptainPoolOpen)
         {
             player.PrintToChat(Prefix() + "Nothing starting right now - !captain is asked for when a pug begins.");
             return;

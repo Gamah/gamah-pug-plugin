@@ -2,7 +2,7 @@
   "ConfigVersion": 1,
   "players_per_team": 0,
   "min_players": 2,
-  "vote_seconds": 30,
+  "vote_seconds": 45,
   "ballot_size": 0,
   "reconnect_wait_seconds": 90,
   "pick_seconds": 30,

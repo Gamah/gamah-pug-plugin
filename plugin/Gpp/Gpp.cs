@@ -208,12 +208,10 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
             case "start":
             case "vote":
                 _teamSizeOverride = size;
-                // The captain grace period goes in front of the vote, not the draft: by the time the map
-                // has changed and everyone has reconnected, nobody is reading chat for a prompt.
-                AfterTick(() =>
-                {
-                    if (!OpenCaptainOptIn(() => StartMapVote(force), force)) StartMapVote(force);
-                });
+                // No window in front of the vote: the vote carries the captain sign-up itself, so this
+                // is one clock and one panel. The armbands are drawn when the vote closes, which is also
+                // why they are not drawn after the map change - the room fills in reconnect order.
+                AfterTick(() => StartMapVote(force));
                 break;
             case "draft":
                 _teamSizeOverride = size;
@@ -341,7 +339,8 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
 
         return _phase switch
         {
-            PugPhase.MapVote => $"Map vote running, {_votes.Count} vote(s) in, {_voteSecondsLeft}s left.",
+            PugPhase.MapVote => $"Map vote running, {_votes.Count} vote(s) in, {_voteSecondsLeft}s left"
+                + (_votePoolOpen ? $", {VolunteerCount()} up for captain." : "."),
             PugPhase.CaptainKnife => $"Captains knifing for first pick, {_knifeSecondsLeft}s left.",
             PugPhase.Draft => DraftStatus(),
             _ => MatchRunning
@@ -370,6 +369,7 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
             _ => "Draft",
         };
         ResetVote();
+        _volunteers.Clear();   // a cancelled vote takes its captain sign-up with it
         ResetKnife();
         ResetDraft();
         StopReadyHud();

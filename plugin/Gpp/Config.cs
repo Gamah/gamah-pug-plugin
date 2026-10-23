@@ -126,7 +126,9 @@ public class GppConfig : BasePluginConfig
     // sign-up skipped - so the floor was buying nothing and costing the opt-in.
     [JsonPropertyName("min_players")] public int MinPlayers { get; set; } = 2;
 
-    [JsonPropertyName("vote_seconds")] public int VoteSeconds { get; set; } = 30;
+    // The map vote's clock, and the captain sign-up's: one window does both, so this is the whole
+    // opening of a pug. It closes early the moment everybody has voted, captains volunteered or not.
+    [JsonPropertyName("vote_seconds")] public int VoteSeconds { get; set; } = 45;
 
     // How many maps, drawn at random from the pool, go on the ballot. 0 puts the whole pool on it.
     [JsonPropertyName("ballot_size")] public int BallotSize { get; set; } = 5;
@@ -157,9 +159,10 @@ public class GppConfig : BasePluginConfig
     // Seconds of warning before a restart (!pug restart, or the idle panel's !restart).
     [JsonPropertyName("restart_warning_seconds")] public int RestartWarningSeconds { get; set; } = 10;
 
-    // Seconds after !pug start that anyone can !captain to volunteer, before the captains are drawn
-    // from whoever put their hand up. 0 turns the grace period off and captains are drawn at random, as
-    // they always were. !pug start force skips it either way.
+    // Whether !captain is asked for at all, and for how long on the one path that needs a window of its
+    // own: !pug draft, which has no map vote to carry the sign-up. On !pug start the pool is open for the
+    // map vote's vote_seconds instead, and this only has to be non-zero. 0 turns volunteering off and
+    // captains are drawn at random; !pug start force skips it either way.
     [JsonPropertyName("captain_opt_in_seconds")] public int CaptainOptInSeconds { get; set; } = 30;
 
     // Captains knife 1v1 for first pick before the draft. Off: first pick goes to a coin flip.
