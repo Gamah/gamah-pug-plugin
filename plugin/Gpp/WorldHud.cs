@@ -187,7 +187,8 @@ public partial class Gpp
         // A lone board floats; the moment it has team boards beside it, the three of them are a layout
         // and the layout stays where it was built. Moving between the two is a different place rather
         // than a different angle, so the boards are hung again rather than re-aimed.
-        bool floated = PanelsFloat && string.IsNullOrEmpty(left) && string.IsNullOrEmpty(right);
+        bool floated = PanelsFloat && !_keepCentred
+            && string.IsNullOrEmpty(left) && string.IsNullOrEmpty(right);
         _floatingNow = floated;
         if (panel.Floated != floated)
         {
@@ -390,6 +391,10 @@ public partial class Gpp
     // Which panel is being drawn right now: three boards are a layout and stay put, a lone board is a
     // notice and moves aside. Set by whoever is about to place boards, read by Placement.
     private bool _floatingNow;
+
+    // A lone board that stays in the middle anyway, because it is being read rather than glanced at:
+    // the restart warning and the wait for the captains. Set by the panel, cleared when it comes down.
+    private bool _keepCentred;
 
     // How far left a floated board sits. Aimed at the space the engine puts a vote in, which is a
     // judgement in front of a client rather than anything derivable: !pug sides float <units>.

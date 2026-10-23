@@ -53,6 +53,7 @@ public partial class Gpp
 
     private void WorldOptInPanel()
     {
+        _keepCentred = false;
         var volunteers = _volunteers.Where(steamId => PlayerBySteamId(steamId) != null).Select(Name).ToList();
         var quiet = HumanPlayers()
             .Where(player => !player.IsBot && !_volunteers.Contains(Id(player)))
@@ -82,6 +83,7 @@ public partial class Gpp
 
     private void WorldVotePanel()
     {
+        _keepCentred = false;
         var tally = new int[_ballot.Count];
         foreach (var index in _votes.Values) tally[index]++;
 
@@ -147,14 +149,14 @@ public partial class Gpp
                 continue;
             }
 
-            string panel = WorldLayout.MainPanel("waiting for the captains",
+            _keepCentred = true;
+            string panel = WorldLayout.MainPanel("WAITING FOR THE CAPTAINS",
                 [
                     WorldLayout.Section.Of(waiting.Count == 0
-                        ? "both captains are in - knifing now"
+                        ? "BOTH CAPTAINS ARE IN - KNIFING NOW"
                         : "STILL LOADING"),
                     new([.. WorldLayout.Slots(waiting, 2, 1)]),
-                    WorldLayout.Section.Of("the knife starts the moment they are both in.",
-                        "an armband is handed on if they do not make it."),
+                    WorldLayout.Section.Of("CAPTAINS KNIFE FOR FIRST PICK ONCE THEY JOIN"),
                 ],
                 WorldLayout.Footer($"{_waitSecondsLeft}s"),
                 _hudTicks);
@@ -166,6 +168,7 @@ public partial class Gpp
 
     private void WorldDraftPanel()
     {
+        _keepCentred = false;
         ulong onClock = CurrentCaptain();
         var pool = PickList().Select(entry => WorldLayout.Cell(entry.Number, Name(entry.Id))).ToList();
         string clock = _pickSecondsLeft > 0 ? $"{_pickSecondsLeft}s" : "";
@@ -196,7 +199,7 @@ public partial class Gpp
                 HideWorldPanel(player.Slot);
                 // Thirty characters is the alert box's cap, and it clips rather than wraps: the first version of
                 // this line lost its last letter and read "WHEN PICKE".
-                player.PrintToCenterAlert(Alert($"{Name(onClock)} IS PICKING", "YOU SPAWN WHEN PICKED"));
+                player.PrintToCenterAlert(Alert($"{Name(onClock)} IS PICKING", "YOU WILL SPAWN WHEN PICKED"));
                 DraftDrawn(player, "alert (no pawn of their own)");
                 continue;
             }
@@ -210,7 +213,7 @@ public partial class Gpp
             {
                 WorldShow(player, "", left, right);
                 player.PrintToCenterAlert(Alert($"{Name(onClock)} IS PICKING",
-                    _pickSecondsLeft > 0 ? $"{_pickSecondsLeft}s" : "YOU SPAWN WHEN PICKED"));
+                    _pickSecondsLeft > 0 ? $"{_pickSecondsLeft}s" : "YOU WILL SPAWN WHEN PICKED"));
                 DraftDrawn(player, "alert and team boards");
                 continue;
             }
@@ -248,6 +251,7 @@ public partial class Gpp
 
     private void WorldReadyPanel()
     {
+        _keepCentred = false;
         var roster = ReadyRoster();
         int ready = roster.Count(_readied.Contains);
 
@@ -285,6 +289,7 @@ public partial class Gpp
 
     private void WorldSidePanel()
     {
+        _keepCentred = false;
         string left = LeftBoard();
         string right = RightBoard();
         string winner = Name(WinningCaptain());
@@ -319,6 +324,7 @@ public partial class Gpp
 
     private void WorldOpeningPanel()
     {
+        _keepCentred = false;
         // The loudest panel of the night, and the last one: after this the match is live and the overlay
         // is gone until the next pug. The three shouted lines are the owner's words, kept exactly.
         var lines = MatchRules.OpeningLines((int)_moveSide);
@@ -365,18 +371,18 @@ public partial class Gpp
 
     private void WorldIdlePanel()
     {
+        _keepCentred = false;
         foreach (var player in HumanPlayers())
         {
-            string panel = WorldLayout.MainPanel("idle server - fix it",
+            string panel = WorldLayout.MainPanel(
+                $"SERVER HAS BEEN IDLE FOR {Describe(_idleWas).ToUpperInvariant()}. PICK ONE:",
                 [
-                    WorldLayout.Section.Of($"the server has been idle for {Describe(_idleWas)},",
-                        "which makes the first round behave oddly"),
                     WorldLayout.Section.Of(
-                        $"!reload   - load {Server.MapName} again",
-                        "!restart  - restart the server",
-                        "!skip     - leave it as it is"),
+                        $"!RELOAD   LOAD {Server.MapName} AGAIN",
+                        "!RESTART  RESTART THE SERVER",
+                        "!SKIP     LEAVE IT"),
                 ],
-                "type one of them in chat",
+                "TYPE ONE OF THEM IN CHAT",
                 _hudTicks);
             WorldShow(player, panel);
         }
@@ -386,15 +392,12 @@ public partial class Gpp
     {
         foreach (var player in HumanPlayers())
         {
-            string panel = WorldLayout.MainPanel("server restarting",
+            _keepCentred = true;
+            string panel = WorldLayout.MainPanel("SERVER RESTARTING",
                 [
-                    WorldLayout.Section.Of("WHY", _restartWhy),
-                    WorldLayout.Section.Of("WHAT HAPPENS",
-                        "the server goes down and comes back on its own.",
-                        "nothing else needs doing and nobody needs to tell an admin."),
-                    WorldLayout.Section.Of("WHEN IT IS BACK",
-                        $"reconnect to the same address - {Server.MapName} will be",
-                        "loaded and the warmup held open the way it is now."),
+                    WorldLayout.Section.Of("WHY", _restartWhy.ToUpperInvariant()),
+                    WorldLayout.Section.Of("IT COMES BACK ON ITS OWN - RECONNECT TO THE",
+                        "SAME ADDRESS."),
                 ],
                 WorldLayout.Footer($"{_restartSecondsLeft}s"),
                 _hudTicks);

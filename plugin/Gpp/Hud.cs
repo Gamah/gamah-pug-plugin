@@ -95,6 +95,7 @@ public partial class Gpp
     private void Clear()
     {
         _repaint = null;
+        _keepCentred = false;
         ClearWorldPanels();
         foreach (var player in HumanPlayers())
         {

@@ -169,7 +169,7 @@ public class GppConfig : BasePluginConfig
     [JsonPropertyName("idle_reload_minutes")] public int IdleReloadMinutes { get; set; } = 30;
 
     // Seconds of warning before a restart (!pug restart, or idle_restart_hours).
-    [JsonPropertyName("restart_warning_seconds")] public int RestartWarningSeconds { get; set; } = 30;
+    [JsonPropertyName("restart_warning_seconds")] public int RestartWarningSeconds { get; set; } = 10;
 
     // Seconds after !pug start that anyone can !captain to volunteer, before the captains are drawn
     // from whoever put their hand up. 0 turns the grace period off and captains are drawn at random, as

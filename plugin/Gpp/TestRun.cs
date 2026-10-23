@@ -130,6 +130,7 @@ public partial class Gpp
                 ? $"Test run: {TestRunSize} with bots, nobody being swept."
                 : "Test run: bots stay in. !pug test sweep if you change your mind.");
         }
+        _keepCentred = false;
         if (WorldStyle) WorldHide();
         StopHud();
     }
@@ -143,13 +144,10 @@ public partial class Gpp
         _repaint = TestAskPanel;
         if (WorldStyle)
         {
-            string panel = WorldLayout.MainPanel("test run",
+            string panel = WorldLayout.MainPanel(
+                $"TEST RUN - SERVER FILLS WITH BOTS TO {TestRunSize} PLAYERS",
                 [
-                    WorldLayout.Section.Of($"the room is filled to {TestRunSize} with bots."),
-                    WorldLayout.Section.Of("SWEEP THE BOTS EVERY ROUND?",
-                        "!1   yes - the other side dies first, so your",
-                        "     team runs away with it",
-                        "!2   no  - play the bots"),
+                    WorldLayout.Section.Of("KILL BOTS EACH ROUND?", "!1  YES     !2  NO"),
                 ],
                 WorldLayout.Footer($"{_testAskSecondsLeft}s"),
                 _hudTicks);
@@ -157,11 +155,9 @@ public partial class Gpp
             return;
         }
 
-        Paint(caller, TwoLine("SWEEP THE BOTS EVERY ROUND?", "!1 yes   !2 no", $"{_testAskSecondsLeft}s"),
+        Paint(caller, TwoLine("KILL BOTS EACH ROUND?", "!1 YES   !2 NO", $"{_testAskSecondsLeft}s"),
         [
-            $"the room is filled to {TestRunSize} with bots",
-            "!1 sweeps them every round, the other side first",
-            "!2 leaves them in to play against",
+            $"TEST RUN - SERVER FILLS WITH BOTS TO {TestRunSize} PLAYERS",
         ]);
     }
 
