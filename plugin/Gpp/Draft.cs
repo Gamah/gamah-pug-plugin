@@ -297,7 +297,11 @@ public partial class Gpp
         MoveToTeam(_captain1, CsTeam.CounterTerrorist);
         MoveToTeam(_captain2, CsTeam.Terrorist);
 
-        PromptPick();
+        // Armed before the first prompt, never after it. PromptPick can finish the draft in this same
+        // frame - two players are two captains and nothing to pick - and FinishDraft tears these three
+        // down. Arming them afterwards left the sweep running on an Idle server, putting MOVETYPE_NONE
+        // back on every human once a second: the sides knife and the match that followed were fought
+        // standing still.
         StartHud();
         StartSpectateGuard();
 
@@ -307,6 +311,8 @@ public partial class Gpp
         // a player to their team, and being moved spawns them again with movement back on.
         _lockTimer?.Kill();
         _lockTimer = AddTimer(1.0f, KeepDraftersStill, TimerFlags.REPEAT);
+
+        PromptPick();
     }
 
     private CounterStrikeSharp.API.Modules.Timers.Timer? _lockTimer;
@@ -320,6 +326,14 @@ public partial class Gpp
     // it finds, every second, until the draft ends.
     private void KeepDraftersStill()
     {
+        // Nothing outside the draft is held still by this, whoever forgot to kill the timer: the
+        // spectate guard stops itself the same way, for the same reason.
+        if (_phase != PugPhase.Draft)
+        {
+            StopDraftLock();
+            return;
+        }
+
         int side = 0;
         foreach (var player in HumanPlayers())
         {

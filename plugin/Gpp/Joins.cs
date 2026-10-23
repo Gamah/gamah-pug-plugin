@@ -184,8 +184,10 @@ public partial class Gpp
 
         _pickOrder = BuildPickOrder(total, Config.PickOrder, _firstPick);
         Logger.LogInformation("Pick order extended to {Total} picks ({Index} made).", total, _pickIndex);
-        PromptPick();
+        // Same order as StartDraft, for the same reason: PromptPick can end the draft here too, and a
+        // StartHud after that is a HUD timer nothing will stop.
         StartHud();
+        PromptPick();
     }
 
     // Blocking jointeam is not quite enough: a player sitting in the team-select menu is on no team at
