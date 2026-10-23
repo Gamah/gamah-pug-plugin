@@ -330,6 +330,16 @@ public partial class Gpp
         }
     }
 
+    // Killing the sweep is half of letting go, and the half that was missed: it sets MOVETYPE_NONE on
+    // every human once a second, so a draft whose timer outlives it is a match where the client is
+    // corrected a second after every step - which reads as the boards lagging the camera.
+    private void StopDraftLock()
+    {
+        _lockTimer?.Kill();
+        _lockTimer = null;
+        LockDrafters(false);
+    }
+
     // Everybody in the draft held still, or let go. Movement only - they can still look around, which is
     // what the boards follow.
     private void LockDrafters(bool locked)
@@ -691,7 +701,7 @@ public partial class Gpp
         _waitTimer = null;
         StopHud();
         StopSpectateGuard();
-        LockDrafters(false);
+        StopDraftLock();
 
         // Anyone left over (a short pick order, or someone who turned up late) fills the smaller team. Only
         // a pinned team size leaves people in spectator; an auto-sized draft puts everyone in the match.
@@ -830,9 +840,7 @@ public partial class Gpp
     {
         // Whatever ended the draft - a finished pick order, !pug cancel, !pug stop - nobody is left
         // standing still because of it.
-        _lockTimer?.Kill();
-        _lockTimer = null;
-        LockDrafters(false);
+        StopDraftLock();
         StopHud();
         StopReadyPhase();
         StopSpectateGuard();
