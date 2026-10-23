@@ -68,6 +68,16 @@ Two other mounts were built, compared on a client and thrown away: parenting the
 orient because these models do not carry it, and parenting the boards straight to the pawn, which swings
 them about on every turn because the pawn's rotation is the body yaw rather than the aim.
 
+## Where the boards sit
+
+The boards move one slot to the left for any phase the room is not held still in - the map vote, the
+ready prompt, the side choice, the opening pause - and keep the middle only during the draft, which
+freezes everybody. A board straight ahead is a solid object in front of the face, and a vote is not
+worth being shot over. `hud_float_left` turns it off; the shift is one `SideGap` with the toe-in of
+the slot it lands in, so `!pug sides` still tunes both together. One function, `Placement`, answers
+where a board goes and which way it faces - the re-aim check reads the same answer, or it would
+re-teleport a floated board once a second forever.
+
 ## Sizes, and what is assumed
 
 One width for every board, every phase. A middle board that is one size on its own and another with the
