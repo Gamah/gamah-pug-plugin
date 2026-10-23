@@ -7,9 +7,8 @@ using CounterStrikeSharp.API.Modules.Timers;
 namespace Gpp;
 
 // Match and player stats in a SQLite file of our own, written twice per pug: a row when the match goes
-// live, the scores and the player rows when it ends. MatchZy's tables carried forty columns of Get5
-// bookkeeping (entry duels, utility successes, 1vN counts) off events GPP does not follow; this keeps the
-// handful a pug actually gets asked about, read off the engine's own counters at the end of a round.
+// live, the scores and the player rows when it ends. The columns are the handful a pug actually gets
+// asked about, read off the engine's own counters at the end of a round.
 //
 // Nothing here runs while a round is live. The writes take a snapshot of plain numbers
 // and hand it to a task, because a disk hitch inside a round is a visible stutter - and because a

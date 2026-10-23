@@ -8,11 +8,10 @@ using CounterStrikeSharp.API.Modules.Utils;
 
 namespace Gpp;
 
-// Ready -> knife -> sides -> live -> over. This is the part MatchZy used to run, and it is here because
-// nothing else about MatchZy could be kept: every per-match thing it does hangs off a loaded match config,
-// and loading one is what kicked anyone outside the drafted roster. The replacement keeps the open server -
-// anyone may walk in and pick a side once the pug is live - and gives up MatchZy's round backups, which
-// means a match that breaks mid-way cannot be restored. That was decided, not overlooked.
+// Ready -> knife -> sides -> live -> over.
+//
+// The server stays open - anyone may walk in and pick a side once the pug is live - and there are no round
+// backups, so a match that breaks mid-way cannot be restored. That is a choice, not an omission.
 //
 // Three cvars are the whole phase machine as far as the engine is concerned: a held warmup
 // (mp_warmup_start + mp_warmuptime 9999 + mp_warmup_pausetimer 1, from warmup.cfg) is "not playing",
@@ -44,8 +43,8 @@ public partial class Gpp
     private string _team1Name = "team1";
     private string _team2Name = "team2";
 
-    // Seconds the engine's own restart after exec'ing live.cfg takes. MatchZy calls this liveRestartDelay
-    // and uses it for the same thing: a demo started before the restart is lost.
+    // Seconds the engine's own restart after exec'ing live.cfg takes. A demo started before that restart
+    // is lost, so the demo waits it out.
     private const float LiveRestartSeconds = 1.0f;
 
     internal bool MatchRunning => _matchPhase != MatchPhase.None;
@@ -54,9 +53,10 @@ public partial class Gpp
     {
         // The knife round is decided here, before the round end is sent on, so the end-of-round panel and
         // its sound name the side that actually won the knives rather than the side the engine scored.
-        // The win panel event would be the obvious place and is not available: EventCsWinPanelRound
-        // stopped firing in CS2 some updates ago, which is why MatchZy moved this to round end too.
-        // [SOURCE: MatchZy 0.9.1 MatchZy.cs EventRoundEnd pre-hook, EventHandlers.cs:130, read 2026-10-19]
+        // The win panel event would be the obvious place and is not available: EventCsWinPanelRound does
+        // not fire in CS2, so round end is the only hook for it.
+        // [SOURCE: a third-party pug plugin, MatchZy 0.9.1 MatchZy.cs EventRoundEnd pre-hook,
+        //  EventHandlers.cs:130, read 2026-10-19]
         RegisterEventHandler<EventRoundEnd>((@event, _) =>
         {
             if (_matchPhase != MatchPhase.Knife) return HookResult.Continue;
@@ -259,7 +259,7 @@ public partial class Gpp
 
     // Alive players decide it, then total health, then a coin flip - the engine's own round winner is no
     // use because a knife round that runs out of time has no winner at all.
-    // [SOURCE: MatchZy 0.9.1 Utility.cs DetermineKnifeWinner, read 2026-10-19]
+    // [SOURCE: a third-party pug plugin, MatchZy 0.9.1 Utility.cs DetermineKnifeWinner, read 2026-10-19]
     private CsTeam DetermineKnifeSide(out string why)
     {
         var (ctAlive, ctHealth) = SideStanding(CsTeam.CounterTerrorist);
@@ -478,7 +478,8 @@ public partial class Gpp
     }
 
     // True when the round that just ended is the one the engine swaps sides on - the half, and every
-    // overtime half. [SOURCE: MatchZy 0.9.1 Utility.cs IsTeamSwapRequired, itself from Get5, read 2026-10-19]
+    // overtime half. [SOURCE: a third-party pug plugin, MatchZy 0.9.1 Utility.cs IsTeamSwapRequired,
+    //  itself from Get5, read 2026-10-19]
     private static bool IsSideSwapRound()
     {
         var rules = GameRules();
@@ -507,8 +508,9 @@ public partial class Gpp
             : $"Drawn {score1}-{score2}.");
 
         // GOTV is still sending the last round when the match ends, and the map restart cuts it off
-        // mid-flush. Get5 and MatchZy both stretch mp_match_restart_delay to cover the broadcast delay;
-        // the demo is stopped inside that window. [SOURCE: MatchZy 0.9.1 Utility.cs HandleMatchEnd]
+        // mid-flush, so mp_match_restart_delay is stretched to cover the broadcast delay and the demo is
+        // stopped inside that window.
+        // [SOURCE: a third-party pug plugin, MatchZy 0.9.1 Utility.cs HandleMatchEnd, read 2026-10-19]
         //
         // Only when there is a broadcast to flush. With GOTV off this was stretching the intermission
         // from 12s to 15s for nothing, and the intermission is time nobody can do anything in.
@@ -695,7 +697,8 @@ public partial class Gpp
 
     // 4 is halftime, 5 is the post-game panel. A pause is refused in both: the engine is already holding
     // the game and unpausing afterwards does not come back.
-    // [SOURCE: MatchZy 0.9.1 Utility.cs IsHalfTimePhase/IsPostGamePhase, read 2026-10-19]
+    // [SOURCE: a third-party pug plugin, MatchZy 0.9.1 Utility.cs IsHalfTimePhase/IsPostGamePhase,
+    //  read 2026-10-19]
     private static bool InHalftime() => GameRules()?.GamePhase == 4;
 
     private static bool InPostGame() => GameRules()?.GamePhase == 5;
