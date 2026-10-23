@@ -324,9 +324,7 @@ public partial class Gpp
                 continue;
             }
 
-            if (pawn.MoveType == MoveType_t.MOVETYPE_NONE) continue;
-            pawn.MoveType = MoveType_t.MOVETYPE_NONE;
-            Utilities.SetStateChanged(pawn, "CBaseEntity", "m_MoveType");
+            SetMovement(pawn, MoveType_t.MOVETYPE_NONE);
         }
     }
 
@@ -350,12 +348,22 @@ public partial class Gpp
             var pawn = player.PlayerPawn.Value;
             if (pawn == null || !pawn.IsValid || pawn.Health <= 0) continue;
 
-            var wanted = locked ? MoveType_t.MOVETYPE_NONE : MoveType_t.MOVETYPE_WALK;
-            if (pawn.MoveType == wanted) continue;
-
-            pawn.MoveType = wanted;
-            Utilities.SetStateChanged(pawn, "CBaseEntity", "m_MoveType");
+            SetMovement(pawn, locked ? MoveType_t.MOVETYPE_NONE : MoveType_t.MOVETYPE_WALK);
         }
+    }
+
+    // Both fields, or neither works. m_MoveType is not what the movement code reads: set to
+    // MOVETYPE_NONE on its own it leaves m_nActualMoveType at MOVETYPE_WALK and the player keeps
+    // walking, so the freeze becomes an argument between the client and the server for as long as the
+    // draft lasts. Measured on a bot: m_MoveType alone left it moving at 125 u/s, both stopped it dead.
+    private static void SetMovement(CBasePlayerPawn pawn, MoveType_t wanted)
+    {
+        if (pawn.MoveType == wanted && pawn.ActualMoveType == wanted) return;
+
+        pawn.MoveType = wanted;
+        Utilities.SetStateChanged(pawn, "CBaseEntity", "m_MoveType");
+        pawn.ActualMoveType = wanted;
+        Utilities.SetStateChanged(pawn, "CBaseEntity", "m_nActualMoveType");
     }
 
     // A captain from the room, never the one already wearing the other armband.
