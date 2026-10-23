@@ -60,10 +60,9 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
 
         // The world panel. CheckTransmit is what keeps each panel to the one person it is addressed to -
         // without it a ten-man pug is ten boards hanging in the same room - and OnTick only does any work
-        // on the fallback tier that has to move the panel itself.
+        // on the fallback tier that has to move the panel itself. Both are attached by the panels
+        // themselves, for as long as there are boards up: see SyncPanelListeners.
         ProbeFollow();
-        RegisterListener<Listeners.CheckTransmit>(WorldPanelTransmit);
-        RegisterListener<Listeners.OnTick>(WorldPanelTick);
 
         // Who holds the warmup open on a server that has only just started: nothing else does now. The
         // OnMapStart listener above is no use for it - a plugin loads after the map it loads into - and

@@ -180,6 +180,7 @@ public partial class Gpp
         {
             panel = new ViewerPanel();
             _panels[player.Slot] = panel;
+            SyncPanelListeners();
         }
 
         Draw(player, panel, Board.Main, main);
@@ -348,6 +349,38 @@ public partial class Gpp
     {
         if (orient.AbsOrigin == null || orient.AbsRotation == null) return;
         Square(slot, which, orient.AbsOrigin, orient.AbsRotation, 0f);
+    }
+
+    // Attached while there are boards to keep up, and not otherwise. CheckTransmit is the reason this
+    // is worth doing: the engine calls it for every client every tick, and a live match has no panels
+    // at all - so between go-live and the win panel the plugin asks for nothing per tick.
+    private Listeners.CheckTransmit? _transmitListener;
+    private Listeners.OnTick? _tickListener;
+
+    private void SyncPanelListeners()
+    {
+        bool wanted = !Retired && _panels.Count > 0;
+        if (wanted == (_transmitListener != null)) return;
+
+        if (wanted)
+        {
+            _transmitListener = WorldPanelTransmit;
+            RegisterListener(_transmitListener);
+
+            // Only the fallback tier moves the boards itself; a parented board needs no tick.
+            if (_follow == Follow.Teleport)
+            {
+                _tickListener = WorldPanelTick;
+                RegisterListener(_tickListener);
+            }
+            return;
+        }
+
+        RemoveListener(_transmitListener!);
+        _transmitListener = null;
+        if (_tickListener == null) return;
+        RemoveListener(_tickListener);
+        _tickListener = null;
     }
 
     // The one place a board's position and facing are worked out, from whatever frame it is hanging in.
@@ -547,12 +580,14 @@ public partial class Gpp
         }
         ClearOrient(panel);
         _panels.Remove(slot);
+        SyncPanelListeners();
     }
 
     internal void ClearWorldPanels()
     {
         foreach (int slot in _panels.Keys.ToList()) HideWorldPanel(slot);
         _panels.Clear();
+        SyncPanelListeners();
     }
 
     // Belt and braces for the one failure that cannot be cleaned up later: a panel left behind by a
@@ -561,6 +596,7 @@ public partial class Gpp
     internal void SweepStrayPanels()
     {
         _panels.Clear();
+        SyncPanelListeners();
         foreach (var stray in Utilities.FindAllEntitiesByDesignerName<CPointWorldText>("point_worldtext").ToList())
         {
             if (stray.IsValid) stray.Remove();
