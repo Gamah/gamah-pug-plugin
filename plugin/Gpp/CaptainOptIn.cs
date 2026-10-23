@@ -91,11 +91,11 @@ public partial class Gpp
 
     private void OptInTick()
     {
-        // The clock runs to the end even once two hands are up. Closing on the second volunteer read as
-        // the window being yanked away: the people who had not answered yet never saw it, and with two
-        // players connected it shut the moment the second one typed !captain. Thirty seconds is the time
-        // the room was given, so it gets thirty seconds.
-        if (--_optInSecondsLeft <= 0)
+        // Two hands up is not an answer from the room - it was closing the window the moment a second
+        // person typed !captain, before anybody else had read it. Everybody having answered is, so that
+        // still ends it early; with two players connected those are the same thing.
+        int standing = VolunteerCount();
+        if (--_optInSecondsLeft <= 0 || standing >= AnsweringPlayers().Count)
         {
             AfterTick(() => CloseCaptainOptIn(draw: true));
             return;

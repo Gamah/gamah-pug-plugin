@@ -163,6 +163,9 @@ public partial class Gpp
     {
         if (player == null || !player.IsValid) return;
 
+        // The test run's own question, which is asked of one person and is not a phase.
+        if (AnswerTestRun(player, number)) return;
+
         switch (_phase)
         {
             case PugPhase.MapVote:

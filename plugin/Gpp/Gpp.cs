@@ -142,7 +142,7 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
 
     private void TopUpTestBots()
     {
-        if (!Config.CountBots || _botTarget <= 0)
+        if (!BotsCountAsPlayers || _botTarget <= 0)
         {
             _botTopUpTimer?.Kill();
             _botTopUpTimer = null;
@@ -202,7 +202,7 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         });
     }
 
-    [ConsoleCommand("css_pug", "GPP admin command: start | vote | draft | captains | match | endmatch | stop | cancel | status | bots <n> | hudsize | hudboth | hudlist [abcd]")]
+    [ConsoleCommand("css_pug", "GPP admin command: start | vote | draft | captains | match | endmatch | stop | cancel | status | test [sweep|off] | bots <n> | hudsize | hudboth | hudlist [abcd]")]
     [CommandHelper(minArgs: 0, usage: "<start|vote|draft|captains|match|endmatch|stop|cancel|status|hudsize|hudlist>")]
     public void OnPugCommand(CCSPlayerController? player, CommandInfo command)
     {
@@ -294,10 +294,26 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
             case "reset":
                 AfterTick(() => StopEverything("An admin stopped it."));
                 break;
-            case "bots":
-                if (!Config.CountBots)
+            case "test":
+                if (arg is "off" or "stop")
                 {
-                    Reply(command, "count_bots is off in Gpp.json - bots would not be counted as players.");
+                    StopTestRun();
+                    Reply(command, "Test run off - bots gone.");
+                    break;
+                }
+                if (arg == "sweep")
+                {
+                    StartTestRun(player);
+                    AnswerTestRun(player!, "1");
+                    break;
+                }
+                StartTestRun(player);
+                Reply(command, $"Test run on - filling to 10 with bots.");
+                break;
+            case "bots":
+                if (!BotsCountAsPlayers)
+                {
+                    Reply(command, "count_bots is off in Gpp.json - run !pug test instead, or set it.");
                     break;
                 }
                 KeepTestBotsTopped(size);
@@ -421,7 +437,7 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
     private List<CCSPlayerController> HumanPlayers()
     {
         return Utilities.GetPlayers()
-            .Where(p => p.IsValid && !p.IsHLTV && (!p.IsBot || Config.CountBots))
+            .Where(p => p.IsValid && !p.IsHLTV && (!p.IsBot || BotsCountAsPlayers))
             .ToList();
     }
 
@@ -493,7 +509,7 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
     // count_bots only - real players are swept to spectator as before.
     private void StandDownTestBots(ulong keep1, ulong keep2)
     {
-        if (!Config.CountBots) return;
+        if (!BotsCountAsPlayers) return;
         foreach (var player in HumanPlayers())
         {
             if (!player.IsBot || Id(player) == keep1 || Id(player) == keep2) continue;

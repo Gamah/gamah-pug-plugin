@@ -39,8 +39,8 @@ public partial class Gpp
         // Anyone the pug parked in spectator gets the team menu back.
         ReleaseHeldSpectators();
 
-        // Test bots, if a harness run left any.
-        KeepTestBotsTopped(0);
+        // The harness, if a test run left one going.
+        StopTestRun();
 
         // Any match, ours or one nobody here started: !pug stop is the command people reach for when the
         // server is in a state nothing else will clear, so it ends the match and execs the warmup cfg

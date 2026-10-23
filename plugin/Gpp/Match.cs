@@ -102,6 +102,13 @@ public partial class Gpp
                 AfterTick(StartOpeningPause);
             }
 
+            // The harness: even sides, then the sweep once the room is not being asked for anything.
+            if (_matchPhase == MatchPhase.Live && TestRunning)
+            {
+                AfterTick(BalanceTestBots);
+                SweepTestBotsWhenReady();
+            }
+
             // Asserted here rather than at go-live, because `exec` queues a cfg's contents *behind*
             // whatever is sent after it: a line sent at go-live loses to live.cfg's own. The clinch is
             // the engine's again, and the end-of-match screen it puts up is held for post_match_seconds.
