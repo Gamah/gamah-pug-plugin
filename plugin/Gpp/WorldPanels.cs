@@ -142,8 +142,9 @@ public partial class Gpp
             if (!HasCamera(player))
             {
                 HideWorldPanel(player.Slot);
-                player.PrintToCenterAlert(Alert("WAITING FOR CAPTAINS",
-                    waiting.Count == 1 ? $"{waiting[0]} IS LOADING" : "THEY ARE STILL LOADING"));
+                player.PrintToCenterAlert(Alert("WAITING FOR THE CAPTAINS",
+                    waiting.Count == 1 ? $"{waiting[0]} IS STILL LOADING" : "STILL LOADING",
+                    "CAPTAINS KNIFE FOR FIRST PICK"));
                 continue;
             }
 
@@ -152,8 +153,8 @@ public partial class Gpp
                 [
                     WorldLayout.Section.Of(waiting.Count == 0
                         ? "BOTH CAPTAINS ARE IN - KNIFING NOW"
-                        : "STILL LOADING"),
-                    new([.. WorldLayout.Slots(waiting, 2, 1)]),
+                        : waiting.Count == 1 ? $"{waiting[0]} IS STILL LOADING" : "STILL LOADING"),
+                    new([.. waiting.Count > 1 ? WorldLayout.Slots(waiting, 2, 1) : []]),
                     WorldLayout.Section.Of("CAPTAINS KNIFE FOR FIRST PICK ONCE THEY JOIN"),
                 ],
                 WorldLayout.Footer($"{_waitSecondsLeft}s"),
@@ -195,9 +196,13 @@ public partial class Gpp
             if (!HasCamera(player))
             {
                 HideWorldPanel(player.Slot);
-                // Thirty characters is the alert box's cap, and it clips rather than wraps: the first version of
-                // this line lost its last letter and read "WHEN PICKE".
-                player.PrintToCenterAlert(Alert($"{Name(onClock)} IS PICKING", "YOU WILL SPAWN WHEN PICKED"));
+                // Thirty characters is the alert box's cap, and it clips rather than wraps: the first
+                // version of this line lost its last letter and read "WHEN PICKE". The clock goes in the
+                // box underneath rather than taking turns with this line - it was replacing the one thing
+                // somebody in spectator needs to read.
+                player.PrintToCenterAlert(Alert($"{Name(onClock)} IS PICKING",
+                    "YOU WILL BE SPAWNED WHEN PICKED"));
+                if (_pickSecondsLeft > 0) player.PrintToCenter($"{_pickSecondsLeft}s");
                 DraftDrawn(player, "alert (no pawn of their own)");
                 continue;
             }
@@ -211,7 +216,8 @@ public partial class Gpp
             {
                 WorldShow(player, "", left, right);
                 player.PrintToCenterAlert(Alert($"{Name(onClock)} IS PICKING",
-                    _pickSecondsLeft > 0 ? $"{_pickSecondsLeft}s" : "YOU WILL SPAWN WHEN PICKED"));
+                    "YOU WILL BE SPAWNED WHEN PICKED"));
+                if (_pickSecondsLeft > 0) player.PrintToCenter($"{_pickSecondsLeft}s");
                 DraftDrawn(player, "alert and team boards");
                 continue;
             }

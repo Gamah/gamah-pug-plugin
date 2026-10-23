@@ -236,6 +236,10 @@ public partial class Gpp
             {
                 _captain2 = DrawCaptain(ids, _captain1);
             }
+            // A test run with two bot captains is a draft nobody can take part in; this hands one of the
+            // armbands to a human and kicks the bot that had it.
+            DropOneBotCaptain();
+            if (_captain2 == 0) _captain2 = DrawCaptain(ids, _captain1);
             if (StartCaptainKnife()) return;
         }
 
