@@ -84,7 +84,7 @@ public class MatchSettings
     // Seconds the engine's end-of-match screen is left up before the server is handed back to a held
     // warmup - mp_match_restart_delay, which is the engine's own clock for it. Nothing may be sent while
     // that screen is up: a warmup, a restart or a phase write inside it all leave the room stuck on it.
-    [JsonPropertyName("post_match_seconds")] public int PostMatchSeconds { get; set; } = 5;
+    [JsonPropertyName("post_match_seconds")] public int PostMatchSeconds { get; set; } = 15;
 
     [JsonPropertyName("pauses_enabled")] public bool PausesEnabled { get; set; } = true;
 
@@ -129,7 +129,10 @@ public class GppConfig : BasePluginConfig
     [JsonPropertyName("players_per_team")] public int PlayersPerTeam { get; set; } = 0;
 
     // Players needed before !pug start will run. !pug start force ignores it.
-    [JsonPropertyName("min_players")] public int MinPlayers { get; set; } = 4;
+    // Two, because two is a pug: two captains, nothing to draft, and the match runs. A higher floor only
+    // ever meant typing "!pug start force" to get past it, which is the same start with the captain
+    // sign-up skipped - so the floor was buying nothing and costing the opt-in.
+    [JsonPropertyName("min_players")] public int MinPlayers { get; set; } = 2;
 
     [JsonPropertyName("vote_seconds")] public int VoteSeconds { get; set; } = 30;
 

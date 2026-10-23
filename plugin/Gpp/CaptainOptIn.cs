@@ -91,10 +91,11 @@ public partial class Gpp
 
     private void OptInTick()
     {
-        // Both armbands are spoken for, or everybody who could put a hand up has: the rest of the clock
-        // is thirty seconds of nothing for a question already answered.
-        int standing = VolunteerCount();
-        if (--_optInSecondsLeft <= 0 || standing >= 2 || standing >= AnsweringPlayers().Count)
+        // The clock runs to the end even once two hands are up. Closing on the second volunteer read as
+        // the window being yanked away: the people who had not answered yet never saw it, and with two
+        // players connected it shut the moment the second one typed !captain. Thirty seconds is the time
+        // the room was given, so it gets thirty seconds.
+        if (--_optInSecondsLeft <= 0)
         {
             AfterTick(() => CloseCaptainOptIn(draw: true));
             return;
