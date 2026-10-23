@@ -103,6 +103,20 @@ public partial class Gpp
             }
         }
 
+        // A bot captain does not come back from a map change: the engine kicks the lot and the top-up
+        // adds new ones under new names, so holding the room for "Bank" to load is holding it for
+        // somebody who no longer exists. Hand the armband on now rather than at the end of the clock.
+        if (first == null && IsBotId(_captain1))
+        {
+            _captain1 = ReplaceCaptain(HumanPlayers().Select(Id).ToList(), _captain2);
+            first = PlayerBySteamId(_captain1);
+        }
+        if (second == null && IsBotId(_captain2))
+        {
+            _captain2 = ReplaceCaptain(HumanPlayers().Select(Id).ToList(), _captain1);
+            second = PlayerBySteamId(_captain2);
+        }
+
         if (first != null && second != null)
         {
             Done();
