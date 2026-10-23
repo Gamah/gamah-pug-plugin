@@ -180,6 +180,52 @@ public partial class Gpp
         }
     }
 
+    // The bots connect at bot_add's pace rather than ours, and a pug started before they are in is a
+    // 2v2 with eight bots walking into it. So: wait for the room to be full, give up after ten seconds
+    // and start with whoever is there, and go through the same door !pug start goes through.
+    private void StartThePugWhenTheBotsAreIn()
+    {
+        int waited = 0;
+        CounterStrikeSharp.API.Modules.Timers.Timer? timer = null;
+        timer = AddTimer(1.0f, () =>
+        {
+            if (!_testRun || _phase != PugPhase.Idle || MatchRunning)
+            {
+                timer?.Kill();
+                return;
+            }
+
+            bool full = HumanPlayers().Count() >= TestRunSize;
+            if (!full && ++waited < 10) return;
+
+            timer?.Kill();
+            Logger.LogInformation("Test run: starting the pug with {Here} players.", HumanPlayers().Count());
+            if (!OpenCaptainOptIn(() => StartMapVote(force: false), force: false)) StartMapVote(force: false);
+        }, TimerFlags.REPEAT);
+    }
+
+    // Two bot captains is a draft nobody can take part in: a bot neither knifes nor picks, so the clock
+    // runs out twice and the teams are drawn for you. One of them is kicked instead, which hands that
+    // armband on - GPP reassigns a captain who is no longer here - and the top-up puts a bot back in as
+    // somebody who can be picked rather than somebody who has to pick.
+    internal void DropOneBotCaptain()
+    {
+        if (!_testRun) return;
+
+        var first = PlayerBySteamId(_captain1);
+        var second = PlayerBySteamId(_captain2);
+        if (first == null || second == null || !first.IsBot || !second.IsBot) return;
+
+        Logger.LogInformation("Test run: both captains are bots - kicking {Name} and giving the armband "
+            + "to {Who}.", second.PlayerName, _testCaller == 0 ? "whoever is drawn" : Name(_testCaller));
+        Server.ExecuteCommand($"bot_kick {second.PlayerName}");
+
+        // Handed over rather than redrawn: with one human in a room of bots, a redraw is nine chances in
+        // ten of the same problem. The kick is what keeps the headcount honest - the top-up puts a bot
+        // back in as somebody who can be picked.
+        _captain2 = _testCaller != 0 && _testCaller != _captain1 ? _testCaller : 0;
+    }
+
     // --- the sweep ---------------------------------------------------------------------------------
 
     // The round has started, but the room may still be reading "STFU AND MOVE" - the opening pause holds
