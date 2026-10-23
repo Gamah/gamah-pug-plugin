@@ -382,25 +382,6 @@ public partial class Gpp
         }
     }
 
-    // One board, no teams beside it: the match is over, so the team boards have nothing left to say.
-    // Centred rather than floated left, unlike every other lone board - the result is the thing being
-    // looked at, not a notice to glance past.
-    private void WorldWinPanel()
-    {
-        _keepCentred = true;
-        foreach (var player in HumanPlayers())
-        {
-            string panel = WorldLayout.MainPanel(_winHeadline,
-                [
-                    WorldLayout.Section.Of(_winBanner),
-                    WorldLayout.Section.List(_winRoster),
-                ],
-                WorldLayout.Footer($"{_winPanelSecondsLeft}s"),
-                _hudTicks);
-            WorldShow(player, panel);
-        }
-    }
-
     private void WorldRestartPanel()
     {
         foreach (var player in HumanPlayers())

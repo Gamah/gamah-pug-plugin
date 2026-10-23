@@ -51,22 +51,6 @@ internal static class MatchRules
         return (otRound + perOtHalf) % (2 * perOtHalf) == 0;
     }
 
-    // The score that wins a match: half the rounds plus one, which is 13 of 24 and 3 of 4.
-    public static int ClinchScore(int maxRounds) => Math.Max(1, maxRounds / 2 + 1);
-
-    // Whether the match is already decided, so the plugin can call it before the engine does - the whole
-    // point being that the engine's own match end cannot be escaped without a map load.
-    //
-    // Regulation only. Once every round has been played the engine owns what comes next, a draw or
-    // overtime, and calling that ourselves would be guessing at rules it is already applying.
-    public static bool MatchIsWon(int score1, int score2, int maxRounds, int roundsPlayed)
-    {
-        if (maxRounds <= 0 || roundsPlayed >= maxRounds) return false;
-
-        int target = ClinchScore(maxRounds);
-        return score1 >= target || score2 >= target;
-    }
-
     // Who won the knife round, as the engine's team numbers (3 = CT, 2 = T) or 0 for a dead heat the
     // caller has to flip a coin over. Alive players first, then the health they have between them - the
     // engine's own round winner is no use, because a knife round that runs out of time has none.

@@ -81,21 +81,9 @@ public class MatchSettings
     // cannot move somebody who has not joined voice yet.
     [JsonPropertyName("opening_pause_seconds")] public int OpeningPauseSeconds { get; set; } = 30;
 
-    // Call the match ourselves at the clinch instead of letting the engine end it. The engine's own match
-    // end cannot be dismissed - mp_restartgame does not do it and neither does writing the game phase, so
-    // the only way back to a warmup from there is a map load. Ending it a round earlier than the engine
-    // would means it never gets there: mp_match_can_clinch 0 keeps the engine playing, this calls the
-    // winner, and the warmup opens in place with a panel saying who won. Off hands the end back to the
-    // engine, and with it the map reload.
-    [JsonPropertyName("own_match_end")] public bool OwnMatchEnd { get; set; } = true;
-
-    // Seconds the "who won" panel stays up in the warmup afterwards.
-    [JsonPropertyName("win_panel_seconds")] public int WinPanelSeconds { get; set; } = 10;
-
-    // Seconds the final scoreboard is left up before the server goes back to a held warmup. The engine's
-    // own intermission is mp_match_restart_delay long and nothing can be sent during it, so this is how
-    // long after the win panel the warmup is asked for - and if the panel will not let go, how long
-    // before the map is reloaded to clear it.
+    // Seconds the engine's end-of-match screen is left up before the server is handed back to a held
+    // warmup - mp_match_restart_delay, which is the engine's own clock for it. Nothing may be sent while
+    // that screen is up: a warmup, a restart or a phase write inside it all leave the room stuck on it.
     [JsonPropertyName("post_match_seconds")] public int PostMatchSeconds { get; set; } = 5;
 
     [JsonPropertyName("pauses_enabled")] public bool PausesEnabled { get; set; } = true;

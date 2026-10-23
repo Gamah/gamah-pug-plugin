@@ -107,37 +107,6 @@ public class SideSwapTests
     }
 }
 
-public class ClinchTests
-{
-    [Fact]
-    public void ThirteenOfTwentyFourWinsIt()
-    {
-        Assert.Equal(13, MatchRules.ClinchScore(24));
-        Assert.False(MatchRules.MatchIsWon(12, 10, 24, roundsPlayed: 22));
-        Assert.True(MatchRules.MatchIsWon(13, 10, 24, roundsPlayed: 23));
-        Assert.True(MatchRules.MatchIsWon(5, 13, 24, roundsPlayed: 18));
-    }
-
-    // The first-to-3 the bot tests run on, where the off-by-one would be invisible at MR24.
-    [Fact]
-    public void ThreeOfFourWinsIt()
-    {
-        Assert.Equal(3, MatchRules.ClinchScore(4));
-        Assert.False(MatchRules.MatchIsWon(2, 1, 4, roundsPlayed: 3));
-        Assert.True(MatchRules.MatchIsWon(3, 0, 4, roundsPlayed: 3));
-    }
-
-    // A full regulation, a draw, and overtime all belong to the engine: it is already in its own end of
-    // the match by then, and a second opinion from here would be two endings.
-    [Fact]
-    public void TheEngineKeepsTheDistanceAndOvertime()
-    {
-        Assert.False(MatchRules.MatchIsWon(12, 12, 24, roundsPlayed: 24));
-        Assert.False(MatchRules.MatchIsWon(16, 14, 24, roundsPlayed: 30));
-        Assert.False(MatchRules.MatchIsWon(3, 0, 0, roundsPlayed: 3));
-    }
-}
-
 public class KnifeWinnerTests
 {
     [Fact]
