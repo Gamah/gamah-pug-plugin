@@ -52,6 +52,7 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         HookJoins();
         HookCaptainKnife();
         HookFunCommands();
+        HookSmokePractice();
         StartWarmupWatch();
         StartRepaintLoop();
         RegisterListener<Listeners.OnMapStart>(OnMapStart);
@@ -89,6 +90,7 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         // outgoing instance can be told to stop answering. Everything it still listens to checks it.
         _unloaded = true;
         ClearWorldPanels();
+        ClearSmokePractice();
     }
 
     // Set by Unload: this instance has been replaced and must not act on anything it still hears.
@@ -178,6 +180,8 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         HideWorldPanel(slot);
 
         // Next frame: this runs before the player is actually gone, so liveness checks still see them.
+        ForgetSmokePractice(steamId);
+
         Server.NextFrame(() =>
         {
             if (_phase == PugPhase.Draft) HandleDraftDisconnect(steamId);

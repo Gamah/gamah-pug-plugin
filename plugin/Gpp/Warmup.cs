@@ -82,6 +82,11 @@ public partial class Gpp
         if (_wasInWarmup == warmup) return;
 
         _wasInWarmup = warmup;
+
+        // Warmup ending is the other way out of smoke practice: a match nobody here started still takes
+        // the trails off whoever had them on.
+        if (!warmup) ClearSmokePractice();
+
         Server.ExecuteCommand(warmup
             ? "mp_weapons_allow_zeus -1;mp_weapons_allow_typecount -1"
             : "mp_weapons_allow_zeus 1;mp_weapons_allow_typecount 5");

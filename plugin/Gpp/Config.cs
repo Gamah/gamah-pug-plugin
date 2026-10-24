@@ -207,6 +207,10 @@ public class GppConfig : BasePluginConfig
     // mp_maxmoney and mp_startmoney only set what you are given, not what you keep. 0 turns it off.
     [JsonPropertyName("warmup_money")] public int WarmupMoney { get; set; } = 16000;
 
+    // Seconds the engine draws a practising player's grenade trail for (.smokes). 0 turns the whole
+    // feature off, command and all.
+    [JsonPropertyName("smoke_trail_seconds")] public int SmokeTrailSeconds { get; set; } = 8;
+
     // Move a lone board off to the left, out of the middle of the screen. A single board is a notice
     // rather than a layout, and the middle is where the player is aiming.
     [JsonPropertyName("hud_float_left")] public bool HudFloatLeft { get; set; } = true;

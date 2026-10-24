@@ -16,6 +16,7 @@
   -->
   <ItemGroup>
     <Compile Include="../Gpp/MatchRules.cs" />
+    <Compile Include="../Gpp/Smokes.cs" />
     <Compile Include="../Gpp/StatsStore.cs" />
     <Compile Include="../Gpp/HudLayout.cs" />
     <Compile Include="../Gpp/HudMetrics.cs" />

@@ -152,6 +152,10 @@ public partial class Gpp
             case "drug":
                 AfterTick(() => DrugCommand(PlayerBySteamId(who), rest));
                 return HookResult.Continue;
+            case "smoke":
+            case "smokes":
+                AfterTick(() => SmokesCommand(PlayerBySteamId(who), rest));
+                return HookResult.Continue;
             default:
                 return HookResult.Continue;
         }
@@ -504,6 +508,7 @@ public partial class Gpp
     // for whoever has it.
     internal void ClearFunEffects()
     {
+        ClearSmokePractice();
         foreach (var id in _fentTimers.Keys.ToList()) StopFent(id);
         foreach (var id in _drugTimers.Keys.ToList()) StopDrug(id);
 
