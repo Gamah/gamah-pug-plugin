@@ -187,7 +187,6 @@ public partial class Gpp
 
         _votedMap = winner;
         var here = HumanPlayers();
-        _expectedPlayers = here.Count;
         _expectedBots = here.Count(player => player.IsBot);
         _expectedRoster.Clear();
         foreach (var player in here.Where(player => !player.IsBot)) _expectedRoster[Id(player)] = player.PlayerName;
@@ -247,7 +246,7 @@ public partial class Gpp
         }
 
         _draftPendingMapChange = true;
-        Announce("Changing map - reconnect and wait, the knife starts when everyone is back.");
+        Announce("Changing map - the knife starts as soon as both captains have loaded in.");
         AddTimer(5.0f, () => ChangeMap(winner));
     }
 

@@ -31,9 +31,9 @@ public partial class Gpp
     private ulong _captain1;
     private ulong _captain2;
 
-    // Headcount from before a map change, and the wait for those players to come back. How many of them
-    // were bots, so a test run can ask the engine for the same number again on the new map.
-    private int _expectedPlayers;
+    // How many of the players from before a map change were bots, so a test run can ask the engine for
+    // the same number again on the new map. Nothing counts the humans: a map change does not disconnect
+    // anyone, so a headcount from the old map is a list of people who may simply not be playing this one.
     private int _expectedBots;
 
     // Who those players were, by name, so the reconnect panel can say who the room is waiting on rather
@@ -584,10 +584,9 @@ public partial class Gpp
 
         // The last player in the pool is not a choice. They go to whoever is on the clock - which is what
         // keeps uneven teams even-handed, since the pick order decides who gets the odd one - rather than
-        // leaving somebody as the last name on a screen waiting to be picked. Unless more players are
-        // still expected, in which case they are not the last one yet.
+        // leaving somebody as the last name on a screen waiting to be picked.
         var pickable = Undrafted();
-        if (pickable.Count == 1 && !WaitingForMorePlayers())
+        if (pickable.Count == 1)
         {
             Announce($"{Colorize("{green}")}{Name(pickable[0])}{Colorize("{default}")} goes to "
                 + $"{Name(CurrentCaptain())} - last in the pool.");
@@ -595,10 +594,6 @@ public partial class Gpp
             AfterTick(() => ApplyPick(last));
             return;
         }
-
-        // A hold for latecomers is over as soon as there is a real pick to make.
-        _waitTimer?.Kill();
-        _waitTimer = null;
 
         var captain = PlayerBySteamId(CurrentCaptain());
         Prompt($"{Colorize("{green}")}{Name(CurrentCaptain())}{Colorize("{default}")} picks ({UndraftedCount()} left).",
@@ -733,8 +728,6 @@ public partial class Gpp
 
     private void FinishDraft()
     {
-        if (HoldForLateJoiners()) return;
-
         _pickTimer?.Kill();
         _pickTimer = null;
         _waitTimer?.Kill();
@@ -782,34 +775,15 @@ public partial class Gpp
         HandOffToMatch();
     }
 
-    // True while players we were told to expect have not turned up yet and the join window is still open.
-    // Teams must not lock in that state, and the last player in the pool is not the last player yet.
-    private bool WaitingForMorePlayers()
-    {
-        int here = _team1.Count + _team2.Count + UndraftedCount();
-        return here < _expectedPlayers && DateTime.UtcNow < _joinsOpenUntil;
-    }
-
-    // Teams must not lock while players we were expecting are still loading in - that is how a 2v2 ends up
-    // with everyone else shut out.
-    private bool HoldForLateJoiners()
-    {
-        if (!WaitingForMorePlayers()) return false;
-        int here = _team1.Count + _team2.Count + UndraftedCount();
-
-        _pickTimer?.Kill();
-        _pickTimer = null;
-        if (_waitTimer == null)
-        {
-            Announce($"Teams on hold - {here} of {_expectedPlayers} are in. Picking resumes as they connect.");
-            _waitTimer = AddTimer(2.0f, () =>
-            {
-                if (_phase == PugPhase.Draft) PromptPick();
-            }, TimerFlags.REPEAT);
-        }
-        return true;
-    }
-
+    // The draft used to hold here until the headcount from before the map change was back in the room,
+    // and that was wrong twice over. A map change disconnects nobody, so the people who are missing are
+    // usually people who voted for a map and then decided not to play it - the draft waited on players who
+    // were never coming, and the room sat on a "7 of 8" panel. And the hold ran its own repeat timer whose
+    // tick called PromptPick directly, so when the window closed the draft was finished from inside a
+    // timer tick: FinishDraft kills the pick timer, the HUD, the spectate guard and the draft lock, and
+    // killing another repeat timer from inside a tick corrupts CSS's timer walk and segfaults the server a
+    // frame or two later (see the comment on PickTick, and commit c306e81). Whoever is in the room when
+    // the picks run out is the match; anyone who loads in later joins the pool if there are picks left.
     private void HandleDraftDisconnect(ulong steamId)
     {
         if (_phase != PugPhase.Draft) return;

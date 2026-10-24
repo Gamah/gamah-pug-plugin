@@ -98,9 +98,10 @@ load**. [`../examples/Gpp.json`](../examples/Gpp.json) is a filled-in one.
 - `vote_seconds` (45) — the map vote, which is also the captain sign-up. Closes early the moment
   everybody has voted, captains volunteered or not. `ballot_size` (0 = the whole pool on the ballot), `pick_seconds` (30, 0 = no
   timeout)
-- `reconnect_wait_seconds` (90) — after a map change, how long latecomers have. Picking starts as soon
-  as `min_players` are back, and anyone who connects inside the window joins the pool instead of being
-  locked out
+- `reconnect_wait_seconds` (90) — after a map change, how long the room waits for the two captains to
+  load before handing an armband to somebody who is actually there. Nothing waits on anybody else: a map
+  change disconnects nobody, so the players who are missing are usually players who voted for the map and
+  then sat this one out. Anyone who connects while picks remain joins the pool
 - `pick_order` — `snake` (1,2,2,1,1,2,2,1) or `alternate`
 - `hud` (true) — draw the overlay at all. With it off, lists go to chat on every pick
 - `hud_side_gap` (0 = derive it) — world units either side of the middle board
