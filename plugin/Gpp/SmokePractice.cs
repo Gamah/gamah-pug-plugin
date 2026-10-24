@@ -58,6 +58,15 @@ public partial class Gpp
                 var them = PlayerBySteamId(who);
                 if (them == null || !them.IsValid) return;
                 if (line != null) them.PrintToChat(Prefix() + line);
+            });
+
+            // The re-arm waits a quarter of a second rather than taking the next frame: the thrown smoke
+            // leaves their inventory on the engine's own schedule, and a give while it is still listed
+            // reads as "they already have one" and hands them nothing at all.
+            AddTimer(0.25f, () =>
+            {
+                var them = PlayerBySteamId(who);
+                if (them == null || !them.IsValid || !_smokePractice.Contains(who)) return;
                 ReArmSmoke(them);
             });
             return HookResult.Continue;
@@ -102,9 +111,17 @@ public partial class Gpp
                 if (them == null || !them.IsValid) return;
                 if (_phase != PugPhase.Idle || !InWarmupPeriod()) return;
                 ShowSmokeTrails(them, Config.SmokeTrailSeconds);
+                MakeInvulnerable(them);
+                StripToSmokes(them);
+                ReArmSmoke(them);
             });
             return HookResult.Continue;
         });
+
+        // What keeps the lock on. Warmup money is unlimited, so the buy menu is one click away from an
+        // AWP all evening - a purchase or a weapon off the floor is taken back the moment it lands.
+        RegisterEventHandler<EventItemPurchase>((@event, _) => KeepPracticeKit(@event.Userid, bought: true));
+        RegisterEventHandler<EventItemPickup>((@event, _) => KeepPracticeKit(@event.Userid, bought: false));
 
         // A cloud that has timed out on its own is nothing left to cull, and the index it held is about to
         // belong to something else.
@@ -120,6 +137,32 @@ public partial class Gpp
             }
             return HookResult.Continue;
         });
+    }
+
+    // Both of the ways a practising player ends up holding something else. The weapon is already theirs by
+    // the time either event fires, so this takes it back on the next frame rather than trying to refuse it.
+    private HookResult KeepPracticeKit(CCSPlayerController? player, bool bought)
+    {
+        if (Retired || player == null || !player.IsValid) return HookResult.Continue;
+
+        ulong who = Id(player);
+        if (!_smokePractice.Contains(who)) return HookResult.Continue;
+
+        AfterTick(() =>
+        {
+            var them = PlayerBySteamId(who);
+            if (them == null || !them.IsValid || !_smokePractice.Contains(who)) return;
+
+            StripToSmokes(them);
+            // Only on a purchase: a pickup is often the smoke we just handed them, and a line of chat per
+            // weapon touched would be its own kind of spam.
+            if (bought)
+            {
+                them.PrintToChat(Prefix() + $"Smokes only while practice is on - "
+                    + $"{Colorize("{lime}")}.smokes off{Colorize("{default}")} to buy.");
+            }
+        });
+        return HookResult.Continue;
     }
 
     // Everything the dot command and the console command share.
@@ -145,18 +188,20 @@ public partial class Gpp
         {
             _smokePractice.Remove(who);
             ShowSmokeTrails(player, 0);
-            player.PrintToChat(Prefix() + "Smoke practice off.");
+            TakeDamageAgain(player);
+            player.PrintToChat(Prefix() + "Smoke practice off. Buy what you like again - warmup money is "
+                + "back to being unlimited.");
             return;
         }
 
         _smokePractice.Add(who);
         ShowSmokeTrails(player, Config.SmokeTrailSeconds);
-        player.PrintToChat(Prefix() + $"Smoke practice on: {Config.SmokeTrailSeconds}s trail, and your "
-            + "throws come back. Only your last popped smoke is kept.");
-        player.PrintToChat(Prefix() + $"{Colorize("{lime}")}.smokes off{Colorize("{default}")} when you are done.");
-
-        // Something to throw, so the first one does not need the buy menu.
+        MakeInvulnerable(player);
+        StripToSmokes(player);
         ReArmSmoke(player);
+        player.PrintToChat(Prefix() + $"Smoke practice on: {Config.SmokeTrailSeconds}s trail, smokes and "
+            + "nothing else, and nothing can hurt you. Only your last popped smoke is kept.");
+        player.PrintToChat(Prefix() + $"{Colorize("{lime}")}.smokes off{Colorize("{default}")} when you are done.");
     }
 
     // The two cvars, to one client. Off writes the values back rather than leaving the client holding a
@@ -168,12 +213,72 @@ public partial class Gpp
         player.ReplicateConVar("sv_grenade_trajectory_prac_pipreview", seconds > 0 ? "true" : "false");
     }
 
-    // A smoke back in hand. ammo_grenade_limit_total caps how many anyone may hold, so this is a top-up
-    // for the one they just threw rather than a stack of them.
+    // Invulnerable while they are practising: a lineup takes a few goes, and somebody else warming up in
+    // the same room should not be able to end one. Damage is worked out server-side, so clearing the flag
+    // is enough - nothing has to be networked to the client for it to stop taking hits.
+    private static void MakeInvulnerable(CCSPlayerController player)
+    {
+        var pawn = player.PlayerPawn.Value;
+        if (pawn == null) return;
+        pawn.TakesDamage = false;
+    }
+
+    // And mortal again. Everything that ends practice comes through here: an invulnerable player left in a
+    // live match is the one failure of this feature nobody would notice until it decided a round.
+    private static void TakeDamageAgain(CCSPlayerController player)
+    {
+        var pawn = player.PlayerPawn.Value;
+        if (pawn == null) return;
+        pawn.TakesDamage = true;
+    }
+
+    // Smokes and a knife, nothing else. The point of the toggle is to look at smokes, and warmup money is
+    // unlimited - without this the first thing anybody does is buy an AWP and practice turns into a
+    // deathmatch with trails on.
+    private void StripToSmokes(CCSPlayerController player)
+    {
+        var weapons = player.PlayerPawn.Value?.WeaponServices?.MyWeapons;
+        if (weapons != null)
+        {
+            // Names first, entities second: removing an item out of the list being walked is how this
+            // reads an entity that has just gone.
+            var unwanted = new List<string>();
+            foreach (var handle in weapons)
+            {
+                string? name = handle.Value?.DesignerName;
+                if (name == null || IsPracticeKit(name)) continue;
+                if (!unwanted.Contains(name)) unwanted.Add(name);
+            }
+            foreach (var name in unwanted) Utilities.RemoveItemByDesignerName(player, name, true);
+        }
+    }
+
+    // A knife stays: it is the default melee, and it is also what everybody moves at full speed with.
+    // Skinned knives come through with their own designer name, hence the match rather than a list.
+    private static bool IsPracticeKit(string designerName) =>
+        designerName == SmokeItem
+        || designerName.Contains("knife", StringComparison.OrdinalIgnoreCase)
+        || designerName.Contains("bayonet", StringComparison.OrdinalIgnoreCase);
+
+    // A smoke back in hand, and only when they have none. A give fires item_pickup, which is one of the
+    // two hooks holding the loadout lock - without this check that hook hands them another smoke, which
+    // fires another pickup, for as long as the server is up.
     private static void ReArmSmoke(CCSPlayerController player)
     {
-        if (!player.PawnIsAlive) return;
+        if (!player.PawnIsAlive || HoldsSmoke(player)) return;
         player.GiveNamedItem(SmokeItem);
+    }
+
+    private static bool HoldsSmoke(CCSPlayerController player)
+    {
+        var weapons = player.PlayerPawn.Value?.WeaponServices?.MyWeapons;
+        if (weapons == null) return false;
+
+        foreach (var handle in weapons)
+        {
+            if (handle.Value?.DesignerName == SmokeItem) return true;
+        }
+        return false;
     }
 
     // Remove the cloud this player popped before the one that has just landed.
@@ -203,6 +308,7 @@ public partial class Gpp
         {
             if (player.IsBot) continue;
             ShowSmokeTrails(player, 0);
+            TakeDamageAgain(player);
         }
     }
 

@@ -50,7 +50,7 @@ by [`../Gpp.Tests`](../Gpp.Tests) (`dotnet test`).
 | `.slap <player> [damage]` / `!slap` | admin | Fling a player about. Warmup only |
 | `.fent <player> [seconds]` / `!fent` | admin | Spin a player's view for up to 30s. Warmup only |
 | `.drug <player> [seconds]` / `!drug` | admin | Warp a player's camera for up to 30s. Warmup only |
-| `.smokes [on\|off]` / `!smokes` | everyone | Smoke practice for yourself: trails, one popped smoke, and your throws come back. Warmup only |
+| `.smokes [on\|off]` / `!smokes` | everyone | Smoke practice for yourself: trails, smokes only, invulnerable, one popped smoke, and your throws come back. Warmup only |
 
 `force` as a second argument (`!pug draft force`) skips the `min_players` check, and ends a match that
 is already running before starting.
@@ -229,8 +229,21 @@ at the first cloud. The cloud *is* the `smokegrenade_projectile` entity (the vox
 renders is networked from it), so `Remove()` on it takes the cloud with it; entity indices are reused,
 so the tracked one is checked for a live `smokegrenade_projectile` before anything is removed.
 
+While it is on the toggle owns the player: their loadout is a knife and smokes, and anything else they
+buy or pick up is taken back on the next frame (`item_purchase` and `item_pickup`, after the fact - the
+weapon is already theirs by the time either fires). Warmup money is unlimited, so without the lock the
+first thing anyone does is buy an AWP and practice becomes a deathmatch with trails on. They are also
+invulnerable (`m_bTakesDamage` cleared on the pawn; damage is worked out server-side, so nothing has to
+reach the client) - a lineup takes a few goes and somebody else warming up should not be able to end
+one.
+
+The re-arm only fires when they are holding no smoke, and a give fires `item_pickup` - which is one of
+the two hooks holding the lock. Without that check the hook hands them another smoke, which fires
+another pickup, for as long as the server is up.
+
 Nothing survives into a pug: a vote, a draft, the handoff, a map change, warmup ending and a plugin
-unload all write the two cvars back to 0 for everyone who had them on.
+unload all write the two cvars back to 0 and make everyone mortal again. An invulnerable player left in
+a live match is the one failure here nobody would notice until it decided a round.
 
 ## The warmup toys
 
