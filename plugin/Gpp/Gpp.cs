@@ -274,20 +274,27 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
             case "reset":
                 AfterTick(() => StopEverything("An admin stopped it."));
                 break;
+            // Deferred like everything else here, and for the reason in Fun.cs: starting a test run execs
+            // the bot cvars and puts the sweep question on screen, which is work per player in the room.
+            // Done inline, inside netchan message processing, it overran the budget on a full server and
+            // the engine dropped the admin who typed it with NETWORK_DISCONNECT_OVERFLOW.
             case "test":
                 if (arg is "off" or "stop")
                 {
-                    StopTestRun();
+                    AfterTick(StopTestRun);
                     Reply(command, "Test run off - bots gone.");
                     break;
                 }
                 if (arg == "sweep")
                 {
-                    StartTestRun(player);
-                    AnswerTestRun(player!, "1");
+                    AfterTick(() =>
+                    {
+                        StartTestRun(player);
+                        AnswerTestRun(player!, "1");
+                    });
                     break;
                 }
-                StartTestRun(player);
+                AfterTick(() => StartTestRun(player));
                 Reply(command, $"Test run on - filling to 10 with bots.");
                 break;
             case "bots":
@@ -296,7 +303,7 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
                     Reply(command, "count_bots is off in Gpp.json - run !pug test instead, or set it.");
                     break;
                 }
-                KeepTestBotsTopped(size);
+                AfterTick(() => KeepTestBotsTopped(size));
                 Reply(command, size > 0
                     ? $"Keeping {size} bots on the server for a test run."
                     : "Bots off.");
