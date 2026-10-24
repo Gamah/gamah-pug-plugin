@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
@@ -178,7 +179,18 @@ public partial class Gpp
     {
         var candidates = MatchRules.CaptainCandidates(
             here, other, _spareVolunteers, _expectedRoster.Keys.ToHashSet());
-        return candidates.Count > 0 ? candidates.OrderBy(_ => _rng.Next()).First() : 0;
+        if (candidates.Count == 0) return 0;
+
+        ulong pick = candidates.OrderBy(_ => _rng.Next()).First();
+
+        // Which tier it came from, in GPP's own log: from off the server this is the only way to tell a
+        // volunteer being asked from a lucky bystander, and they look identical in chat.
+        string tier = _spareVolunteers.Contains(pick) ? "volunteer pool"
+            : _expectedRoster.ContainsKey(pick) ? "the room that voted the map in"
+            : "whoever was present";
+        Logger.LogInformation("Captain handed on to {Name} from {Tier} ({Count} candidate(s)).",
+            Name(pick), tier, candidates.Count);
+        return pick;
     }
 
     private void StartDraft(bool force, bool skipMatchCheck = false)
