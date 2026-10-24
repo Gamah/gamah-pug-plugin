@@ -16,6 +16,26 @@ internal static class MatchRules
         return minReady > 0 ? Math.Min(minReady, roster) : roster;
     }
 
+    // Who the armband goes to when a captain does not come back from the map change. Three tiers, each
+    // one only reached when the one above it is empty: whoever put their hand up with !captain and was not
+    // drawn, then the room that voted the map in, then anybody present. The caller shuffles what comes
+    // back - this only decides which group is asked.
+    //
+    // A volunteer who is still here is the closest thing to the captain who left: they asked for the job
+    // ten seconds before the vote closed. Before this, they were worth exactly as much as somebody who
+    // had never put their hand up.
+    public static List<ulong> CaptainCandidates(
+        IEnumerable<ulong> here, ulong other, ISet<ulong> volunteers, ISet<ulong> votedTheMapIn)
+    {
+        var present = here.Where(id => id != 0 && id != other).ToList();
+
+        var standing = present.Where(volunteers.Contains).ToList();
+        if (standing.Count > 0) return standing;
+
+        var fromTheRoom = present.Where(votedTheMapIn.Contains).ToList();
+        return fromTheRoom.Count > 0 ? fromTheRoom : present;
+    }
+
     public static bool CanCallTechPause(int used, int max) => max <= 0 || used < max;
 
     // Whether one side alone may resume. A tactical pause always needs both; a technical one opens up once

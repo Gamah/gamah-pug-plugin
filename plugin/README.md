@@ -102,7 +102,10 @@ load**. [`../examples/Gpp.json`](../examples/Gpp.json) is a filled-in one.
 - `reconnect_wait_seconds` (90) — after a map change, how long the room waits for the two captains to
   load before handing an armband to somebody who is actually there. Nothing waits on anybody else: a map
   change disconnects nobody, so the players who are missing are usually players who voted for the map and
-  then sat this one out. Anyone who connects while picks remain joins the pool
+  then sat this one out. Anyone who connects while picks remain joins the pool. The armband goes to a
+  leftover `!captain` volunteer if one is still here, then to somebody who voted the map in, then to
+  anybody present - a bot captain is replaced at once rather than waited out, since a map change kicks
+  the lot
 - `pick_order` — `snake` (1,2,2,1,1,2,2,1) or `alternate`
 - `hud` (true) — draw the overlay at all. With it off, lists go to chat on every pick
 - `hud_side_gap` (0 = derive it) — world units either side of the middle board

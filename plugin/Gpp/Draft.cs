@@ -172,17 +172,13 @@ public partial class Gpp
         return missing.Count == 0 ? "nobody" : string.Join(" and ", missing);
     }
 
-    // The people who voted this map in come first - they were here a minute ago and chose to be - and
-    // anybody else present after that.
+    // Leftover volunteers first, then the people who voted this map in, then anybody present:
+    // MatchRules.CaptainCandidates picks the group and this picks one out of it at random.
     private ulong ReplaceCaptain(List<ulong> here, ulong other)
     {
-        var fromThePool = here
-            .Where(steamId => steamId != other && _expectedRoster.ContainsKey(steamId))
-            .OrderBy(_ => _rng.Next())
-            .ToList();
-        if (fromThePool.Count > 0) return fromThePool[0];
-
-        return DrawCaptain(here, other);
+        var candidates = MatchRules.CaptainCandidates(
+            here, other, _spareVolunteers, _expectedRoster.Keys.ToHashSet());
+        return candidates.Count > 0 ? candidates.OrderBy(_ => _rng.Next()).First() : 0;
     }
 
     private void StartDraft(bool force, bool skipMatchCheck = false)
@@ -870,5 +866,6 @@ public partial class Gpp
         _pickIndex = 0;
         _captain1 = 0;
         _captain2 = 0;
+        _spareVolunteers.Clear();
     }
 }

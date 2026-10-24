@@ -21,6 +21,12 @@ public partial class Gpp
 {
     private readonly HashSet<ulong> _volunteers = [];
 
+    // The volunteers who were not drawn, kept past the window's close. The window itself is a mood and
+    // closes for good, but an armband that has to be handed on - a captain who never came back from the
+    // map change - should go to somebody who asked for it rather than to whoever happens to be standing
+    // there. Cleared when the next window opens and when the draft ends.
+    private readonly HashSet<ulong> _spareVolunteers = [];
+
     private int _optInSecondsLeft;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _optInTimer;
     private Action? _optInThen;
@@ -51,6 +57,7 @@ public partial class Gpp
         if (CaptainOptInOpen) return false;
 
         _volunteers.Clear();
+        _spareVolunteers.Clear();
         _optInThen = then;
         _optInSecondsLeft = Config.CaptainOptInSeconds;
         _optInTimer = AddTimer(1.0f, OptInTick, TimerFlags.REPEAT);
@@ -72,6 +79,7 @@ public partial class Gpp
         if (!draw)
         {
             _volunteers.Clear();
+            _spareVolunteers.Clear();
             return;
         }
 
@@ -92,6 +100,7 @@ public partial class Gpp
         {
             _captain1 = standing[0];
             _captain2 = standing[1];
+            foreach (ulong spare in standing.Skip(2)) _spareVolunteers.Add(spare);
             Announce($"Captains: {Colorize("{green}")}{Name(_captain1)}{Colorize("{default}")} and "
                 + $"{Colorize("{green}")}{Name(_captain2)}{Colorize("{default}")}"
                 + (standing.Count > 2 ? $" (drawn from {standing.Count} volunteers)." : "."));

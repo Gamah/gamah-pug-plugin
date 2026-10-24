@@ -258,3 +258,50 @@ public class OpeningPauseTests
         Assert.Equal(0, MatchRules.DrawNextRound(12, 11, 0, 6));
     }
 }
+
+// Who gets an armband when a captain does not come back. Three tiers, and the tie-break between equals
+// is the caller's shuffle, so what is under test is only which group gets asked.
+public class CaptainCandidateTests
+{
+    private static readonly ulong[] Here = [10, 11, 12, 13];
+
+    [Fact]
+    public void ALeftoverVolunteerComesFirst()
+    {
+        var picked = MatchRules.CaptainCandidates(
+            Here, other: 13, volunteers: new HashSet<ulong> { 12 },
+            votedTheMapIn: new HashSet<ulong> { 10, 11, 12 });
+        Assert.Equal([12UL], picked);
+    }
+
+    [Fact]
+    public void TheOtherCaptainIsNeverACandidate()
+    {
+        var picked = MatchRules.CaptainCandidates(
+            Here, other: 12, volunteers: new HashSet<ulong> { 12 },
+            votedTheMapIn: new HashSet<ulong> { 10 });
+        Assert.Equal([10UL], picked);
+    }
+
+    [Fact]
+    public void WithNoVolunteerLeftTheRoomThatVotedIsAsked()
+    {
+        var picked = MatchRules.CaptainCandidates(
+            Here, other: 13, volunteers: new HashSet<ulong>(), votedTheMapIn: new HashSet<ulong> { 11, 12 });
+        Assert.Equal([11UL, 12UL], picked);
+    }
+
+    [Fact]
+    public void WithNobodyLeftFromThatRoomAnybodyPresentWillDo()
+    {
+        var picked = MatchRules.CaptainCandidates(
+            Here, other: 13, volunteers: new HashSet<ulong>(), votedTheMapIn: new HashSet<ulong>());
+        Assert.Equal([10UL, 11UL, 12UL], picked);
+    }
+
+    [Fact]
+    public void AnEmptyRoomHasNobodyToAsk()
+    {
+        Assert.Empty(MatchRules.CaptainCandidates([], other: 0, volunteers: new HashSet<ulong>(), votedTheMapIn: new HashSet<ulong>()));
+    }
+}
