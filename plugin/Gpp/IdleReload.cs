@@ -66,8 +66,15 @@ public partial class Gpp
 
         if (Config.IdleReloadMinutes <= 0) return;
         if (idle.TotalMinutes < Config.IdleReloadMinutes) return;
-        // Nothing is offered over the top of a pug.
-        if (MatchRunning || _phase != PugPhase.Idle || CaptainOptInOpen || RestartPending) return;
+        // Nothing is offered over the top of a pug - and the engine is asked as well as our own match
+        // flag, because MatchRunning is only what this plugin knows it started. A match somebody went
+        // live on by hand, or one a reload lost track of, reads as "no match" and would be offered a
+        // map reload and a server restart that any player could answer.
+        if (MatchRunning || !InWarmupPeriod() || _phase != PugPhase.Idle
+            || CaptainOptInOpen || RestartPending)
+        {
+            return;
+        }
 
         OpenIdlePrompt(idle);
     }
@@ -95,7 +102,7 @@ public partial class Gpp
     // a pug starting, which answers the question a different way.
     private void IdlePromptTick()
     {
-        if (_phase != PugPhase.Idle || MatchRunning || CaptainOptInOpen)
+        if (_phase != PugPhase.Idle || MatchRunning || !InWarmupPeriod() || CaptainOptInOpen)
         {
             AfterTick(CloseIdlePrompt);
             return;

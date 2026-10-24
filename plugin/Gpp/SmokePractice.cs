@@ -321,17 +321,32 @@ public partial class Gpp
     // round. Called from ClearFunEffects (vote, draft, handoff, map change), on the warmup edge, and on
     // unload - a hot reload is how this plugin is deployed, and the new instance knows nothing of who had
     // it on.
-    internal void ClearSmokePractice()
+    // Returns how many players were actually practising, so the caller can say something when the answer
+    // should have been none.
+    internal int ClearSmokePractice()
     {
+        int were = _smokePractice.Count(who => PlayerBySteamId(who) != null);
+        var practising = _smokePractice.ToList();
         _smokePractice.Clear();
         _poppedSmoke.Clear();
 
+        // The cvars and the damage flag go back for everybody, not only the names this instance knows:
+        // a reload loses the set, and an invulnerable player nobody is tracking is the one failure here
+        // that would decide a round.
         foreach (var player in HumanPlayers())
         {
             if (player.IsBot) continue;
             ShowSmokeTrails(player, 0);
             TakeDamageAgain(player);
         }
+
+        // Only the people who had it on are told, and only once.
+        foreach (ulong who in practising)
+        {
+            var player = PlayerBySteamId(who);
+            if (player != null && player.IsValid) player.PrintToChat(Prefix() + "Smoke practice off.");
+        }
+        return were;
     }
 
     private void ForgetSmokePractice(ulong who)

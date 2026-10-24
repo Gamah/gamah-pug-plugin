@@ -506,9 +506,11 @@ public partial class Gpp
     // Nothing from the warmup toys may survive into a pug. Called when a vote or a draft starts, at the
     // handoff, and on every map change: a stuck FOV is invisible to whoever set it and ruins the match
     // for whoever has it.
-    internal void ClearFunEffects()
+    // Returns how many toys were live when it ran: the warmup edge logs a warning on anything above
+    // zero, because by then a phase change should already have cleared them.
+    internal int ClearFunEffects()
     {
-        ClearSmokePractice();
+        int live = ClearSmokePractice() + _fentTimers.Count + _drugTimers.Count;
         foreach (var id in _fentTimers.Keys.ToList()) StopFent(id);
         foreach (var id in _drugTimers.Keys.ToList()) StopDrug(id);
 
@@ -519,12 +521,13 @@ public partial class Gpp
             if (player.IsBot) continue;
             if (player.DesiredFOV is not (0 or NormalFov)) SoberUp(player);
         }
+        return live;
     }
 
     // Both toys are warmup-only: a slap or a swimming view during a live round decides it.
     private bool WarmupToy(CCSPlayerController? admin, out bool ok)
     {
-        ok = _phase == PugPhase.Idle && InWarmupPeriod();
+        ok = _phase == PugPhase.Idle && InWarmupPeriod() && !MatchRunning;
         if (!ok) Tell(admin, "Only during warmup, and not while a pug is running.");
         return ok;
     }

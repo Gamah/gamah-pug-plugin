@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Timers;
@@ -83,9 +84,19 @@ public partial class Gpp
 
         _wasInWarmup = warmup;
 
-        // Warmup ending is the other way out of smoke practice: a match nobody here started still takes
-        // the trails off whoever had them on.
-        if (!warmup) ClearSmokePractice();
+        // Leaving warmup takes every toy with it, whoever ended the warmup and whether this plugin is
+        // running the match or not: trails, invulnerability, a spun view, a warped FOV. Nothing here is
+        // sent to a client that did not ask for something - it is one edge, once - so there is no chat
+        // burst to overflow anybody with.
+        if (!warmup)
+        {
+            int cleared = ClearFunEffects();
+            if (cleared > 0)
+            {
+                Logger.LogWarning("Warmup ended with {Count} warmup toy(s) still live - cleared them. "
+                    + "Something went live without a phase change to clear them first.", cleared);
+            }
+        }
 
         Server.ExecuteCommand(warmup
             ? "mp_weapons_allow_zeus -1;mp_weapons_allow_typecount -1"

@@ -245,7 +245,12 @@ the two hooks holding the lock. Without that check the hook hands them another s
 another pickup, for as long as the server is up.
 
 Nothing survives into a pug: a vote, a draft, the handoff, a map change, warmup ending and a plugin
-unload all write the two cvars back to 0 and make everyone mortal again. An invulnerable player left in
+unload all write the two cvars back to 0 and make everyone mortal again — for every connected player,
+not only the ones this instance has on its list, because a reload loses the list and an invulnerable
+player nobody is tracking is the one failure here that could decide a round. Whoever had it on gets one
+line of chat saying so. The warmup edge clears the other toys (`.fent`, `.drug`) the same way and logs a
+warning if anything was still live by then: a phase change should have cleared it first, so anything
+left means something went live without one. An invulnerable player left in
 a live match is the one failure here nobody would notice until it decided a round.
 
 ## The warmup toys

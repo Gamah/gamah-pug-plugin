@@ -54,7 +54,6 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         HookFunCommands();
         HookSmokePractice();
         StartWarmupWatch();
-        StartRepaintLoop();
         RegisterListener<Listeners.OnMapStart>(OnMapStart);
         RegisterListener<Listeners.OnClientDisconnect>(OnClientDisconnect);
 
@@ -505,7 +504,16 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
     // So nothing that ends a phase runs inside a tick: ending a phase stops the HUD and the spectate
     // guard, which are repeat timers of their own. Server.NextFrame work is run from the OnTick callback,
     // which OnGameFrame fires once RunFrame has finished walking, so a frame later is outside the walk.
-    private static void AfterTick(Action work) => Server.NextFrame(work);
+    // Every deferred action in this plugin goes through here, and that is the one place a retired
+    // instance can be stopped. CounterStrikeSharp's own Dispose takes the hooks, listeners and timers
+    // with the plugin, but a closure already queued with Server.NextFrame is not registered anywhere -
+    // it is in the engine's queue and runs after the instance that queued it is gone. That is how one
+    // dot command came back answered six times after six reloads.
+    private void AfterTick(Action work) => Server.NextFrame(() =>
+    {
+        if (_unloaded) return;
+        work();
+    });
 
     // A test run's bots do not come back by themselves: a map change drops them, and bot_join_after_player
     // keeps the quota from refilling an empty server. Re-asserting the quota on the new map is what makes

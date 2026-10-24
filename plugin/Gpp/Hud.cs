@@ -37,37 +37,6 @@ public partial class Gpp
     // actually move, rather than it stepping once a second when the phase clock happens to tick.
     private Action? _repaint;
 
-    // Ten a second. Nothing is drawn unless a panel is up, and a panel is only up when the room is
-    // being asked for something - a vote, a draft, a ready, a pause - never during a live round. The
-    // send below also drops a frame that is identical to the last one, so a panel that is not moving
-    // costs one message a second per player rather than ten.
-    private const float RepaintSeconds = 0.1f;
-
-    // What each player was last sent, and when. PrintToCenter is transient - it fades in a few seconds -
-    // so an unchanged panel still has to be resent, just not ten times a second.
-    private readonly Dictionary<int, (string Text, DateTime When)> _lastSent = [];
-
-    private static readonly TimeSpan ResendAfter = TimeSpan.FromSeconds(1);
-
-    private CounterStrikeSharp.API.Modules.Timers.Timer? _repaintTimer;
-
-    private void StartRepaintLoop()
-    {
-        _repaintTimer?.Kill();
-        _repaintTimer = AddTimer(RepaintSeconds, () =>
-        {
-            if (_repaint == null) return;
-            // Ten redraws a second exist to beat PrintToCenter's fade and to move a scrolling line.
-            // World text does neither: it holds what it was last given until it is told otherwise, and
-            // nothing scrolls. Composing thirty boards ten times a second instead of once was costing
-            // frames on a full server - measured as 17ms frames during a ten-man draft, 2026-10-19.
-            // Nothing to redraw between ticks: world text holds what it was last given. The ten-a-second
-            // repaint this ran existed to beat PrintToCenter's fade and to move a scrolling line, and it
-            // was costing 17ms frames during a ten-man draft.
-            return;
-        }, TimerFlags.REPEAT);
-    }
-
     private CounterStrikeSharp.API.Modules.Timers.Timer? _hudTimer;
 
     private void StartHud()
