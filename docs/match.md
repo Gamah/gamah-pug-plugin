@@ -101,8 +101,12 @@ The schema and its three statements are in `StatsStore.cs`, with no CounterStrik
   score means knowing which side it is on. The plugin tracks that in one field, flipped by `.switch` and
   by every half swap. The swap rounds - the half and every overtime half - are the one piece of
   arithmetic that is easy to get wrong, and are under test.
-- `mp_weapons_allow_typecount` (engine default 5), not `mp_weapons_allow_zeus`, is the per-round buy cap.
-  The plugin follows the warmup edge: `-1` in warmup, `5` once live. No cfg sets it, so the plugin is its
-  only owner.
+- There are two per-round buy caps and the zeus has its own. `mp_weapons_allow_typecount` (engine
+  default 5) is "how many purchases of each weapon type allowed per player per round"; it does not cover
+  the zeus. `mp_weapons_allow_zeus` is a count too, not a 0/1 toggle - "how many Zeus purchases a player
+  can make per round (0 to disallow, -1 to have no limit)". So unlimited warmup zeuses needs `-1` on the
+  zeus cvar specifically. [SOURCE: `help` on both cvars, CS2 1.41.9.2, read 2026-10-24]
+  The plugin follows the warmup edge: both `-1` in warmup, `1`/`5` once live. No cfg sets typecount, so
+  the plugin is its only owner; a map change resets both, so the edge is re-armed on map start.
 - A chat command runs inside the engine's netchan message processing, which has a CPU budget per call and
   drops the client whose message overran it. Every chat handler hands its work to the next frame.

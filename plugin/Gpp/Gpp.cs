@@ -154,6 +154,9 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         // this plugin's job.
         _matchPhase = MatchPhase.None;
         ResetPauses();
+        // The new map's own cfgs put the buy caps back to the engine defaults, and the warmup edge the
+        // caps are followed on does not fire again if the server was already in warmup before the change.
+        _wasInWarmup = null;
         AddTimer(1.0f, ExecWarmupCfg);
 
         if (!_draftPendingMapChange) return;

@@ -67,8 +67,11 @@ public partial class Gpp
     }
 
     // Warmup hands out unlimited money, so a per-round buy cap reads as a bug - it is what stops a fifth
-    // zeus, and dying does not clear it because a held warmup is one long round. mp_weapons_allow_zeus is
-    // only a 0/1 toggle; the cap is mp_weapons_allow_typecount, which defaults to 5.
+    // zeus, and dying does not clear it because a held warmup is one long round. There are two caps and
+    // the zeus is not covered by the general one: mp_weapons_allow_typecount is "purchases of each weapon
+    // type per player per round" (default 5) and mp_weapons_allow_zeus is a count of its own, not a 0/1
+    // toggle - "how many Zeus purchases a player can make per round (0 to disallow, -1 to have no limit)".
+    // [SOURCE: `help` on both cvars, CS2 1.41.9.2, read 2026-10-24]
     //
     // Followed on the warmup edge rather than asserted at load or on map start, because the server has to
     // get the cap back for a live match and nothing else puts it back: the warmup cfg does not set it at
@@ -80,7 +83,7 @@ public partial class Gpp
 
         _wasInWarmup = warmup;
         Server.ExecuteCommand(warmup
-            ? "mp_weapons_allow_zeus 1;mp_weapons_allow_typecount -1"
+            ? "mp_weapons_allow_zeus -1;mp_weapons_allow_typecount -1"
             : "mp_weapons_allow_zeus 1;mp_weapons_allow_typecount 5");
     }
 
