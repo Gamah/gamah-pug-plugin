@@ -47,6 +47,7 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
     public override void Load(bool hotReload)
     {
         HookMatch();
+        HookDrawVote();
         HookGuardedCommands();
         HookJoins();
         HookCaptainKnife();

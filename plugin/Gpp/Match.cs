@@ -450,6 +450,7 @@ public partial class Gpp
             + "mp_match_end_restart false");
 
         StartDemoAfterRestart(LiveRestartSeconds);
+        ResetDrawVote();
         CaptureStatsBaseline();
         RecordMatchStart();
 

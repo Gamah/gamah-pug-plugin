@@ -166,6 +166,9 @@ public partial class Gpp
         // The test run's own question, which is asked of one person and is not a phase.
         if (AnswerTestRun(player, number)) return;
 
+        // The draw vote is asked of everyone, mid-match, and is not a phase either.
+        if (AnswerDrawVote(player, number)) return;
+
         switch (_phase)
         {
             case PugPhase.MapVote:

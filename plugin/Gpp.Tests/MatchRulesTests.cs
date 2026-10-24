@@ -230,4 +230,31 @@ public class OpeningPauseTests
                 line => Assert.True(line.Length <= HudLayout.AlertWidth, line));
         }
     }
+
+    // The draw vote has one round's notice, and only ever at 12-11 or its overtime equivalents.
+    [Theory]
+    [InlineData(12, 11, 12)]
+    [InlineData(11, 12, 12)]
+    [InlineData(11, 11, 0)]
+    [InlineData(12, 12, 0)]
+    [InlineData(10, 9, 0)]
+    [InlineData(15, 14, 15)]
+    [InlineData(14, 15, 15)]
+    [InlineData(15, 15, 0)]
+    [InlineData(18, 17, 18)]
+    [InlineData(13, 12, 0)]
+    [InlineData(16, 15, 0)]
+    public void ADrawIsOneRoundAway(int score1, int score2, int expected)
+    {
+        Assert.Equal(expected, MatchRules.DrawNextRound(score1, score2, maxRounds: 24, overtimeMaxRounds: 6));
+    }
+
+    // No overtime configured: regulation can still be drawn, and nothing after it can.
+    [Fact]
+    public void WithoutOvertimeOnlyRegulationDraws()
+    {
+        Assert.Equal(12, MatchRules.DrawNextRound(12, 11, 24, 0));
+        Assert.Equal(0, MatchRules.DrawNextRound(15, 14, 24, 0));
+        Assert.Equal(0, MatchRules.DrawNextRound(12, 11, 0, 6));
+    }
 }

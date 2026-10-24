@@ -51,6 +51,27 @@ internal static class MatchRules
         return (otRound + perOtHalf) % (2 * perOtHalf) == 0;
     }
 
+    // The score the next round can draw level at, or 0 if it cannot. Regulation is drawn at half of
+    // mp_maxrounds each - 12-12 of 24 - and every overtime adds half of mp_overtime_maxrounds to that, so
+    // the draws come at 12-12, 15-15, 18-18 with a six-round overtime. A round can only make one of those
+    // from one side being there already and the other one behind, which is 12-11 and 11-12 and nothing
+    // else: at 11-11 the next round cannot draw, and at 12-12 the draw has already happened.
+    public static int DrawNextRound(int score1, int score2, int maxRounds, int overtimeMaxRounds)
+    {
+        int regulation = maxRounds / 2;
+        if (regulation <= 0) return 0;
+
+        int high = Math.Max(score1, score2);
+        int low = Math.Min(score1, score2);
+        if (high - low != 1) return 0;
+        if (high < regulation) return 0;
+        if (high == regulation) return regulation;
+
+        int perOtHalf = overtimeMaxRounds / 2;
+        if (perOtHalf <= 0) return 0;
+        return (high - regulation) % perOtHalf == 0 ? high : 0;
+    }
+
     // Who won the knife round, as the engine's team numbers (3 = CT, 2 = T) or 0 for a dead heat the
     // caller has to flip a coin over. Alive players first, then the health they have between them - the
     // engine's own round winner is no use, because a knife round that runs out of time has none.

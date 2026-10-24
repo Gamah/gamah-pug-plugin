@@ -139,6 +139,8 @@ load**. [`../examples/Gpp.json`](../examples/Gpp.json) is a filled-in one.
   - `post_match_seconds` (15) — `mp_match_restart_delay`, the engine's own end-of-match screen
   - `pauses_enabled` (true), `max_tech_pauses` (0 = unlimited), `tech_pause_seconds` (0 = both sides
     always have to `.unpause`)
+  - `draw_vote` (true), `draw_vote_seconds` (20) — ask the room whether a level match goes to overtime.
+    See below
   - `demos_enabled`, `demo_path` (`gpp-demos`, relative to `csgo/`), `demo_name_format`
     (`{TIME}_{MAP}_{TEAM1}_vs_{TEAM2}`). Needs `tv_enable 1`, or `tv_record` does nothing and the log
     says so once
@@ -273,5 +275,11 @@ scrolls by character count, one character every three paints.
   engine's own default and what a real match runs - nothing in Valve's gamemode configs touches it, and
   MatchZy says 20. The five seconds were ours alone.
   [SOURCE: `help mp_halftime_duration` and the shipped gamemode cfgs, CS2 1.41.9.2, read 2026-10-24]
+- **Overtime is the room's call.** The engine reads `mp_overtime_enable` the moment a round makes the
+  score level, so the question has to be asked before that: at 12-11 (and 15-14, 18-17 - every score a
+  single round can draw from, which `MatchRules.DrawNextRound` knows and is tested on) everyone gets
+  `!1` to play it out or `!2` to call it a draw. The cvar is written on every vote, not when the clock
+  runs out, because the deciding round can end first. Nobody voting, or an even split, is a draw: that is
+  the answer that stops. Going live resets it, so a match always starts with the config's own overtime.
 - Players the pug puts in spectator are tracked and handed the team menu back when the draft ends, the
   pug is cancelled, or the match finishes. Anyone who chose to spectate is left alone.

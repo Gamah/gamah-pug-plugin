@@ -87,6 +87,12 @@ public class MatchSettings
 
     [JsonPropertyName("pauses_enabled")] public bool PausesEnabled { get; set; } = true;
 
+    // Ask the room whether a level match goes to overtime, one round before it can happen. Nobody voting
+    // is a draw: see DrawVote.cs.
+    [JsonPropertyName("draw_vote")] public bool DrawVote { get; set; } = true;
+
+    [JsonPropertyName("draw_vote_seconds")] public int DrawVoteSeconds { get; set; } = 20;
+
     // Technical pauses a side may call per match. 0 is unlimited.
     [JsonPropertyName("max_tech_pauses")] public int MaxTechPauses { get; set; } = 0;
 
