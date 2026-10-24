@@ -265,5 +265,13 @@ scrolls by character count, one character every three paints.
   budget and drops the client whose message overran it: building a vote inline disconnected the admin
   who typed `!pug start` with `NETWORK_DISCONNECT_OVERFLOW` while the vote came up normally for
   everyone else. Anything that moves players, execs cvars or writes a file goes through `AfterTick`.
+- **A five-second halftime left the MVP anthem playing into the second half.** The anthem is started by
+  `round_mvp` and stopped by the client, and with `mp_halftime_duration 5` the stop never arrived. Read
+  off the logs rather than guessed: `gpp.db`'s MVP counts equal the rounds played exactly, so nothing
+  fires twice, and every complaint in the chat log is in the second half within minutes of the half swap,
+  with nothing through first halves of 21 and 10 minutes. `live.cfg` now asks for 15, which is the
+  engine's own default and what a real match runs - nothing in Valve's gamemode configs touches it, and
+  MatchZy says 20. The five seconds were ours alone.
+  [SOURCE: `help mp_halftime_duration` and the shipped gamemode cfgs, CS2 1.41.9.2, read 2026-10-24]
 - Players the pug puts in spectator are tracked and handed the team menu back when the draft ends, the
   pug is cancelled, or the match finishes. Anyone who chose to spectate is left alone.
