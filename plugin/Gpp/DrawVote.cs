@@ -23,6 +23,12 @@ namespace Gpp;
 // The cvar is written on every vote rather than once at the end, because the round can finish before the
 // clock does and the engine reads mp_overtime_enable the moment the score goes level - a close that waits
 // for the timer would be a frame or two late, which is a whole overtime nobody asked for.
+//
+// It is a pause, the same shape as the Discord hold at round one: mp_pause_match lands at the end of the
+// round and holds the freeze time of the round being asked about, so nobody plays it before the room has
+// decided what it is for. Like that hold it is the plugin's pause, not a team's - it ignores
+// pauses_enabled and counts against nobody's technical pauses - and it ends the moment everyone has
+// answered rather than running the clock out. Unpausing hands the freeze time back where it left off.
 public partial class Gpp
 {
     // The score a draw would land on, once the room has been asked about it. Keeps the question from
@@ -38,14 +44,19 @@ public partial class Gpp
 
     private void HookDrawVote()
     {
+        // Asked at the start of the round that can draw, not the end of the one before it, because that
+        // is where a pause lands: mp_pause_match holds the freeze time of the round it is called in.
+        RegisterEventHandler<EventRoundStart>((_, _) =>
+        {
+            if (_matchPhase == MatchPhase.Live) AfterTick(OpenDrawVoteIfNeeded);
+            return HookResult.Continue;
+        }, HookMode.Post);
+
+        // A vote somehow still open when the round ends has run out of round rather than out of time.
+        // Whatever the room has said by now is the answer, and the cvar already carries it.
         RegisterEventHandler<EventRoundEnd>((_, _) =>
         {
-            if (_matchPhase != MatchPhase.Live) return HookResult.Continue;
-
-            // A vote still open when the next round ends has run out of round, not out of time: whatever
-            // the room has said by now is the answer, and it has to be written before the engine looks.
             if (DrawVoteOpen) AfterTick(() => CloseDrawVote("the round ended"));
-            else AfterTick(OpenDrawVoteIfNeeded);
             return HookResult.Continue;
         }, HookMode.Post);
     }
@@ -79,17 +90,30 @@ public partial class Gpp
         // Nobody has said anything yet, so the standing answer is the one that stops.
         ApplyDrawVote();
 
-        Announce($"Next round can make it {Colorize("{green}")}{draw}-{draw}{Colorize("{default}")}.");
+        Server.ExecuteCommand("mp_pause_match");
+        Logger.LogInformation("Draw vote: {Seconds}s paused at {Draw}-{Behind}.",
+            _drawVoteSecondsLeft, draw, draw - 1);
+        Announce($"This round can make it {Colorize("{green}")}{draw}-{draw}{Colorize("{default}")}.");
         Prompt("Overtime, or call it a draw?", "!1 play it out  -  !2 draw", Everybody);
+
         _drawVoteTimer = AddTimer(1.0f, DrawVoteTick, TimerFlags.REPEAT);
+        DrawVotePanel();
     }
 
     private void DrawVoteTick()
     {
+        if (_matchPhase != MatchPhase.Live)
+        {
+            AfterTick(() => CloseDrawVote("the match is not live any more"));
+            return;
+        }
+
         _drawVoteSecondsLeft--;
 
-        // Everyone who could answer has: no reason to hold the rest of the clock.
-        if (_drawVotes.Count >= AnsweringPlayers().Count)
+        // Everyone connected has answered: there is nobody left to wait for, so the clock is the
+        // backstop rather than the gate. Anyone in the server votes - a pug has no roster the server
+        // itself believes in, and the people watching are in the room too.
+        if (EveryoneAnswered())
         {
             AfterTick(() => CloseDrawVote("everybody answered"));
             return;
@@ -101,11 +125,22 @@ public partial class Gpp
             return;
         }
 
-        if (_drawVoteSecondsLeft % 10 == 0)
-        {
-            var (playOn, draw) = DrawVoteTally();
-            Announce($"Overtime {playOn} - draw {draw}. {_drawVoteSecondsLeft}s. !1 play it out, !2 draw.");
-        }
+        DrawVotePanel();
+    }
+
+    private bool EveryoneAnswered()
+    {
+        var here = AnsweringPlayers();
+        return here.Count > 0 && here.All(player => _drawVotes.ContainsKey(Id(player)));
+    }
+
+    // The board everything else in the pug is drawn on: the score a draw would land on, the two answers
+    // with their counts, and the clock.
+    private void DrawVotePanel()
+    {
+        if (!Config.Hud || !DrawVoteOpen) return;
+        _repaint = DrawVotePanel;
+        WorldDrawVotePanel();
     }
 
     // A split room stops: overtime is the thing being asked for, so it needs more than half of those who
@@ -146,6 +181,8 @@ public partial class Gpp
 
         var (playOn, draw) = DrawVoteTally();
         bool overtime = ApplyDrawVote();
+        Clear();
+        Server.ExecuteCommand("mp_unpause_match");
         Logger.LogInformation("Draw vote at {Score}-{Score}: play on {PlayOn}, draw {Draw} ({Why}) - "
             + "mp_overtime_enable {Value}.", _drawVoteAsked, _drawVoteAsked, playOn, draw, why, overtime ? 1 : 0);
 

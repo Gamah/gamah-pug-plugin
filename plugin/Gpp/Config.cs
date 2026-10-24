@@ -91,7 +91,7 @@ public class MatchSettings
     // is a draw: see DrawVote.cs.
     [JsonPropertyName("draw_vote")] public bool DrawVote { get; set; } = true;
 
-    [JsonPropertyName("draw_vote_seconds")] public int DrawVoteSeconds { get; set; } = 20;
+    [JsonPropertyName("draw_vote_seconds")] public int DrawVoteSeconds { get; set; } = 30;
 
     // Technical pauses a side may call per match. 0 is unlimited.
     [JsonPropertyName("max_tech_pauses")] public int MaxTechPauses { get; set; } = 0;

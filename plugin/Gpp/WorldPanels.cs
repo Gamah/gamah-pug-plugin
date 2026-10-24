@@ -421,6 +421,34 @@ public partial class Gpp
         return $"Discord hold now shows {(_openingBoards ? "3 boards" : "1 board")}.";
     }
 
+    // --- the one panel that is drawn mid-match -------------------------------------------------------
+
+    // The draw vote, on the same board as everything else. Drawn while the match is paused, so it is the
+    // only thing on screen, and it says who has answered rather than who has not: the room is waiting on
+    // itself here, not on one person.
+    private void WorldDrawVotePanel()
+    {
+        _keepCentred = false;
+        var (playOn, drawn) = DrawVoteTally();
+        int answered = _drawVotes.Count;
+        int here = AnsweringPlayers().Count;
+
+        foreach (var player in HumanPlayers())
+        {
+            bool mine = _drawVotes.ContainsKey(Id(player));
+            string panel = WorldLayout.MainPanel($"THIS ROUND CAN MAKE IT {_drawVoteAsked}-{_drawVoteAsked}",
+                [
+                    WorldLayout.Section.Of($"!1    PLAY IT OUT        {playOn}",
+                        $"!2    CALL IT A DRAW     {drawn}"),
+                    WorldLayout.Section.Of($"{answered}/{here} ANSWERED"),
+                ],
+                WorldLayout.Footer(mine ? null : "!1 OR !2",
+                    $"{_drawVoteSecondsLeft}s - DRAWN IF NOBODY SAYS OTHERWISE"),
+                _hudTicks);
+            WorldShow(player, panel, null, null);
+        }
+    }
+
     // --- the two panels that are not part of a pug at all --------------------------------------------
 
     private void WorldIdlePanel()
