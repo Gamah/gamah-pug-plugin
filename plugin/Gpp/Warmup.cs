@@ -99,6 +99,7 @@ public partial class Gpp
     {
         SyncBuyCap();
         TrackIdleTime();
+        TopUpPracticeSmokes();
 
         if (Config.WarmupMoney <= 0 || !InWarmupPeriod()) return;
 

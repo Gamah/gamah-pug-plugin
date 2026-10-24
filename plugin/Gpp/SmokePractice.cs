@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
@@ -45,6 +46,10 @@ public partial class Gpp
             ulong who = Id(player);
             if (!_smokePractice.Contains(who)) return HookResult.Continue;
 
+            // One line per practice throw, in GPP's own log: it is the only way to see from off the server
+            // whether grenade_thrown fires at all and what it calls the weapon.
+            Logger.LogInformation("smokes: {Player} threw {Weapon}", player.PlayerName, @event.Weapon);
+
             // Where they were standing and looking as it left their hand: the numbers nobody can read off
             // their own screen, and the half of a lineup that pixels cannot give you.
             var pawn = player.PlayerPawn.Value;
@@ -62,7 +67,8 @@ public partial class Gpp
 
             // The re-arm waits a quarter of a second rather than taking the next frame: the thrown smoke
             // leaves their inventory on the engine's own schedule, and a give while it is still listed
-            // reads as "they already have one" and hands them nothing at all.
+            // reads as "they already have one" and hands them nothing at all. The warmup tick re-arms
+            // anyway, so this is the fast path rather than the only one.
             AddTimer(0.25f, () =>
             {
                 var them = PlayerBySteamId(who);
@@ -137,6 +143,22 @@ public partial class Gpp
             }
             return HookResult.Continue;
         });
+    }
+
+    // Called from the warmup tick, once a second. The throw hook re-arms within a quarter of a second
+    // when it fires; this is what makes an empty hand impossible whether it fires or not - a practising
+    // player with nothing to throw is the feature not working, and it is a cheap thing to assert.
+    internal void TopUpPracticeSmokes()
+    {
+        if (_smokePractice.Count == 0) return;
+        if (_phase != PugPhase.Idle || !InWarmupPeriod()) return;
+
+        foreach (ulong who in _smokePractice.ToList())
+        {
+            var player = PlayerBySteamId(who);
+            if (player == null || !player.IsValid) continue;
+            ReArmSmoke(player);
+        }
     }
 
     // Both of the ways a practising player ends up holding something else. The weapon is already theirs by
