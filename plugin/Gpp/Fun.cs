@@ -417,6 +417,33 @@ public partial class Gpp
             pawn.AbsVelocity.Y + _rng.Next(-240, 241),
             pawn.AbsVelocity.Z + 300);
         pawn.Teleport(null, null, velocity);
+        SlapSound(pawn);
+    }
+
+    // A slap you can hear. Velocity alone is somebody silently flying sideways, which reads as a bug
+    // rather than a joke, and the flurry a .slap 10 makes is only funny if it ticks.
+    //
+    // CS2 has no slap sound, so it borrows a hit: the sound event is emitted from the pawn, so it is
+    // positional and the room hears it where the slapped player is. Configurable because the name is the
+    // one part of this that a CS2 update can take away - an empty string turns it off, and a wrong name
+    // is silent rather than fatal, so the fallback is already the old behaviour.
+    private bool _slapSoundComplained;
+
+    private void SlapSound(CBasePlayerPawn pawn)
+    {
+        string sound = Config.SlapSound;
+        if (sound.Length == 0) return;
+
+        try
+        {
+            pawn.EmitSound(sound);
+        }
+        catch (Exception exception)
+        {
+            if (_slapSoundComplained) return;
+            _slapSoundComplained = true;
+            Logger.LogWarning("Slap sound \"{Sound}\" would not play: {Message}", sound, exception.Message);
+        }
     }
 
     private const int EffectMaxSeconds = 30;

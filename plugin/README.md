@@ -138,6 +138,9 @@ load**. [`../examples/Gpp.json`](../examples/Gpp.json) is a filled-in one.
 - `map_confirm_seconds` (10) — how long an admin has to `.yes` a `.map`. 0 turns `.map` off entirely
 - `map_vote_seconds` (30) — how long the players' own `.map` vote runs when no admin is connected. It
   needs everybody, and saying nothing is a no
+- `slap_sound` (`Player.DamageBody`) — the sound event `.slap` plays, from the slapped player's pawn.
+  Empty turns it off. A soundevent name is the kind of thing a CS2 update renames, and a wrong one is
+  silent rather than fatal
 - `idle_reload_minutes` (30) — how long the server has to have been empty before the first person to
   connect is offered the fix for it. 0 turns it off. See below
 - `restart_warning_seconds` (30) — the countdown on `!pug restart`. The idle panel's `!restart` uses 10,
@@ -279,6 +282,8 @@ tenths of a second — `.slap 4 5 2` is five shoves at player 4, 200ms apart. Ca
 tenths, because fifteen slaps a second apart is fifteen seconds of somebody else's warmup. The default
 gap is 0.4s, and the first slap always lands immediately, so a bare `.slap` is not a command with a
 delay on it. A slap does no damage: the whole of `.slap` is velocity, and `.kill` is what kills somebody.
+It makes a noise, emitted from the slapped player so the room hears where it came from — `slap_sound`
+names the sound event and an empty string turns it off.
 
 Both amounts come off the *end* of the argument, and never the last token standing — that one is always
 the target. So `.slap 5 2` is two slaps at player 5, and five slaps on yourself is `.slap me 5`. The

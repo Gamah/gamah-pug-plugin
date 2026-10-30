@@ -197,6 +197,12 @@ public class GppConfig : BasePluginConfig
     // How long the players' own .map vote stays open. It needs everybody, and no answer is a no.
     [JsonPropertyName("map_vote_seconds")] public int MapVoteSeconds { get; set; } = 30;
 
+    // The sound event .slap plays, emitted from the slapped player's pawn so the room hears where it
+    // came from. CS2 has no slap sound; this is a hit. It is a config key rather than a constant because
+    // a soundevent name is the kind of thing a CS2 update renames, and the symptom is silence rather
+    // than an error. Empty turns it off.
+    [JsonPropertyName("slap_sound")] public string SlapSound { get; set; } = "Player.DamageBody";
+
     // Move everyone to spectator when the draft starts, so only drafted players are on a team.
     [JsonPropertyName("force_spectate")] public bool ForceSpectate { get; set; } = true;
 
