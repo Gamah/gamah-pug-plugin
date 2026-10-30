@@ -18,7 +18,7 @@
   "spectate_mid_match_joins": true,
   "map_confirm_seconds": 10,
   "map_vote_seconds": 30,
-  "slap_sound": "Player.DamageBody",
+  "slap_sound": "Player.DamageKevlar",
   "auto_start_match": true,
   "knife_round": true,
   "min_ready": 0,

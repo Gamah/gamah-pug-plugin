@@ -201,7 +201,7 @@ public class GppConfig : BasePluginConfig
     // came from. CS2 has no slap sound; this is a hit. It is a config key rather than a constant because
     // a soundevent name is the kind of thing a CS2 update renames, and the symptom is silence rather
     // than an error. Empty turns it off.
-    [JsonPropertyName("slap_sound")] public string SlapSound { get; set; } = "Player.DamageBody";
+    [JsonPropertyName("slap_sound")] public string SlapSound { get; set; } = "Player.DamageKevlar";
 
     // Move everyone to spectator when the draft starts, so only drafted players are on a team.
     [JsonPropertyName("force_spectate")] public bool ForceSpectate { get; set; } = true;

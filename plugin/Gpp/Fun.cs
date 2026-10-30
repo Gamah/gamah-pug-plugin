@@ -149,6 +149,9 @@ public partial class Gpp
             case "map":
                 AfterTick(() => MapCommand(PlayerBySteamId(who), rest));
                 return HookResult.Continue;
+            case "sound":
+                AfterTick(() => SoundCommand(PlayerBySteamId(who), rest));
+                return HookResult.Continue;
             case "yes":
                 AfterTick(() => AnswerMapRequest(PlayerBySteamId(who), yes: true));
                 return HookResult.Continue;
@@ -207,6 +210,14 @@ public partial class Gpp
     {
         string arg = command.ArgCount > 1 ? command.ArgString.Trim() : "";
         AfterTick(() => KillCommand(player, arg));
+    }
+
+    [ConsoleCommand("css_sound", "Play a sound event off your own pawn, to find one that works")]
+    [CommandHelper(minArgs: 0, usage: "[sound event name]")]
+    public void OnSoundCommand(CCSPlayerController? player, CommandInfo command)
+    {
+        string arg = command.ArgCount > 1 ? command.ArgString.Trim() : "";
+        AfterTick(() => SoundCommand(player, arg));
     }
 
     [ConsoleCommand("css_slap", "Slap yourself, or a player (admin), warmup only")]
@@ -420,6 +431,78 @@ public partial class Gpp
         SlapSound(pawn);
     }
 
+    // .sound, an admin's probe for the one thing about a sound that cannot be read off a disk: whether the
+    // engine will actually play it. A soundevent name that does not resolve is silence and no error, and
+    // the names in the engine binary's string table are not all live soundevents, so the only way to tell
+    // slap_sound from a typo is to fire it at a pawn and listen.
+    //
+    // The GUID EmitSound hands back is not the answer: every name below came back with one and only some
+    // of them made a noise, so the log narrows nothing and the ears decide. Bare .sound walks the lot
+    // 1.5s apart so one person can hear which is which.
+    //
+    // [SOURCE: measured on this server, CS2 PatchVersion 1.41.9.2, 2026-10-30 - Player.DamageKevlar is
+    // audible, Player.DamageBody is not, both returned a non-zero guid.]
+    private static readonly string[] SoundCandidates =
+    [
+        "Player.DamageBody",
+        "Player.DamageKevlar",
+        "Player.DamageHeadShot",
+        "Player.DamageFall",
+        "Player.Death",
+        "Player.PickupWeapon",
+        "Flesh.BulletImpact",
+        "Weapon_Knife.Hit",
+        "Weapon_Knife.HitWall",
+        "UI.CounterBeep",
+        "Buttons.snd9",
+    ];
+
+    private void SoundCommand(CCSPlayerController? caller, string arg)
+    {
+        if (!WarmupToy(caller, out _)) return;
+        if (!IsAdmin(caller))
+        {
+            Tell(caller, "You do not have access to this command.");
+            return;
+        }
+        if (caller == null || !caller.IsValid || !caller.PawnIsAlive)
+        {
+            Tell(caller, ".sound plays off your own pawn, so it needs one - be alive and in the room.");
+            return;
+        }
+
+        var names = arg.Length > 0 ? [arg] : SoundCandidates;
+        float at = 0;
+        foreach (string name in names)
+        {
+            string sound = name;
+            AddTimer(at, () => PlayProbeSound(caller, sound));
+            at += 1.5f;
+        }
+    }
+
+    private void PlayProbeSound(CCSPlayerController caller, string sound)
+    {
+        if (!caller.IsValid) return;
+        var pawn = caller.PlayerPawn.Value;
+        if (pawn == null || !pawn.IsValid) return;
+
+        uint guid;
+        try
+        {
+            guid = pawn.EmitSound(sound);
+        }
+        catch (Exception exception)
+        {
+            Tell(caller, $"{sound}: threw - {exception.Message}");
+            Logger.LogWarning("Sound probe \"{Sound}\" threw: {Message}", sound, exception.Message);
+            return;
+        }
+
+        Tell(caller, $"{sound}: guid {guid}");
+        Logger.LogInformation("Sound probe \"{Sound}\" -> guid {Guid}.", sound, guid);
+    }
+
     // A slap you can hear. Velocity alone is somebody silently flying sideways, which reads as a bug
     // rather than a joke, and the flurry a .slap 10 makes is only funny if it ticks.
     //
@@ -436,7 +519,13 @@ public partial class Gpp
 
         try
         {
-            pawn.EmitSound(sound);
+            uint guid = pawn.EmitSound(sound);
+            // Once a run, because the answer cannot change until the config does. The guid is not a
+            // verdict - the engine hands one back for a name it then plays nothing for - so this is a
+            // breadcrumb for the next person reading the log, and .sound is how you actually check.
+            if (_slapSoundComplained) return;
+            _slapSoundComplained = true;
+            Logger.LogInformation("Slap sound \"{Sound}\" -> guid {Guid}.", sound, guid);
         }
         catch (Exception exception)
         {
