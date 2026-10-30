@@ -208,6 +208,10 @@ public partial class Gpp
         "mp_maxrounds 24;mp_halftime 1;mp_overtime_enable 1;mp_overtime_maxrounds 6;mp_freezetime 15;"
         + "mp_maxmoney 16000;mp_startmoney 800;mp_roundtime 1.92;mp_roundtime_defuse 1.92;"
         + "mp_free_armor 0;mp_give_player_c4 1;mp_autoteambalance 0;mp_limitteams 0;"
+        // Both of these are the halftime anthem: the intros off so the half is not shortened to under
+        // the length of the song, and the MVP award back on for an ordinary round. Without them here a
+        // missing live.cfg is a match that plays music over every halftime.
+        + "mp_team_intro_type none;sv_nomvp 0;"
         + "mp_warmup_pausetimer 0";
 
     internal void ExecWarmupCfg() => ExecPhaseCfg(Config.Match.WarmupCfg, WarmupFallback, "Warmup");
