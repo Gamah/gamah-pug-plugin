@@ -568,15 +568,14 @@ public partial class Gpp
         foreach (var chunk in chunks) Announce(chunk);
     }
 
-    [ConsoleCommand("css_players", "Show the undrafted players and their numbers")]
+    // One .players, two answers: during a draft it is the pool a captain is picking from, and the rest of
+    // the time it is the room with the numbers the warmup toys take. Both are "who is here, numbered",
+    // and asking the room to remember which word goes with which phase would be asking too much.
+    [ConsoleCommand("css_players", "Show who is here and their numbers")]
+    [ConsoleCommand("css_who", "Show who is here and their numbers")]
     public void OnPlayersCommand(CCSPlayerController? player, CommandInfo command)
     {
-        if (_phase != PugPhase.Draft)
-        {
-            command.ReplyToCommand("No draft is running.");
-            return;
-        }
-        PrintAvailable(player);
+        AfterTick(() => PlayersOrPool(player));
     }
 
     private void PromptPick()

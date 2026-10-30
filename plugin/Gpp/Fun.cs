@@ -141,10 +141,26 @@ public partial class Gpp
                 });
                 return HookResult.Continue;
             case "kill":
-                AfterTick(() => KillCommand(PlayerBySteamId(who)));
+                AfterTick(() => KillCommand(PlayerBySteamId(who), rest));
                 return HookResult.Continue;
             case "slap":
                 AfterTick(() => SlapCommand(PlayerBySteamId(who), rest));
+                return HookResult.Continue;
+            case "map":
+                AfterTick(() => MapCommand(PlayerBySteamId(who), rest));
+                return HookResult.Continue;
+            case "yes":
+                AfterTick(() => AnswerMapRequest(PlayerBySteamId(who), yes: true));
+                return HookResult.Continue;
+            case "no":
+                AfterTick(() => AnswerMapRequest(PlayerBySteamId(who), yes: false));
+                return HookResult.Continue;
+            case "narcan":
+                AfterTick(() => NarcanCommand(PlayerBySteamId(who), rest));
+                return HookResult.Continue;
+            case "players":
+            case "who":
+                AfterTick(() => PlayersOrPool(PlayerBySteamId(who)));
                 return HookResult.Continue;
             case "fent":
                 AfterTick(() => FentCommand(PlayerBySteamId(who), rest));
@@ -184,86 +200,167 @@ public partial class Gpp
         }
     }
 
-    // The same three as console commands, so they answer !kill / /kill and work from rcon.
-    [ConsoleCommand("css_kill", "Kill yourself")]
-    public void OnKillCommand(CCSPlayerController? player, CommandInfo command) =>
-        AfterTick(() => KillCommand(player));
+    // The same ones as console commands, so they answer !kill / /kill and work from rcon.
+    [ConsoleCommand("css_kill", "Kill yourself, or a player (admin, warmup only)")]
+    [CommandHelper(minArgs: 0, usage: "[player]")]
+    public void OnKillCommand(CCSPlayerController? player, CommandInfo command)
+    {
+        string arg = command.ArgCount > 1 ? command.ArgString.Trim() : "";
+        AfterTick(() => KillCommand(player, arg));
+    }
 
-    [ConsoleCommand("css_slap", "Slap a player (admin, warmup only)")]
-    [CommandHelper(minArgs: 0, usage: "<player> [damage]")]
+    [ConsoleCommand("css_slap", "Slap yourself, or a player (admin), warmup only")]
+    [CommandHelper(minArgs: 0, usage: "[player] [damage]")]
     public void OnSlapCommand(CCSPlayerController? player, CommandInfo command)
     {
         string arg = command.ArgCount > 1 ? command.ArgString.Trim() : "";
         AfterTick(() => SlapCommand(player, arg));
     }
 
-    [ConsoleCommand("css_fent", "Spin a player's view for a few seconds (admin, warmup only)")]
-    [CommandHelper(minArgs: 0, usage: "<player> [seconds]")]
+    [ConsoleCommand("css_fent", "Spin your own view, or a player's (admin), warmup only")]
+    [CommandHelper(minArgs: 0, usage: "[player] [seconds]")]
     public void OnFentCommand(CCSPlayerController? player, CommandInfo command)
     {
         string arg = command.ArgCount > 1 ? command.ArgString.Trim() : "";
         AfterTick(() => FentCommand(player, arg));
     }
 
-    [ConsoleCommand("css_drug", "Warp a player's camera for a few seconds (admin, warmup only)")]
-    [CommandHelper(minArgs: 0, usage: "<player> [seconds]")]
+    [ConsoleCommand("css_drug", "Warp your own camera, or a player's (admin), warmup only")]
+    [CommandHelper(minArgs: 0, usage: "[player] [seconds]")]
     public void OnDrugCommand(CCSPlayerController? player, CommandInfo command)
     {
         string arg = command.ArgCount > 1 ? command.ArgString.Trim() : "";
         AfterTick(() => DrugCommand(player, arg));
     }
 
-    // .kill is for the player who is stuck in a corner of a warmup map, not a way out of a lost round, and
-    // it must not decide a captains' duel either.
-    private void KillCommand(CCSPlayerController? player)
+    [ConsoleCommand("css_narcan", "Clear .fent and .drug off yourself, a player (admin) or everyone")]
+    [CommandHelper(minArgs: 0, usage: "[player|all]")]
+    public void OnNarcanCommand(CCSPlayerController? player, CommandInfo command)
     {
-        if (player == null || !player.IsValid) return;
+        string arg = command.ArgCount > 1 ? command.ArgString.Trim() : "";
+        AfterTick(() => NarcanCommand(player, arg));
+    }
+
+    // --- aiming a toy -----------------------------------------------------------------------------
+
+    // Every toy takes the same argument: "[target] [amount]". The target is a roster number from
+    // .players, "me", or a name; the amount is seconds for .fent and .drug, damage for .slap.
+    //
+    // A single bare number is a target, never an amount: ".fent 4" is player 4, not four seconds on
+    // yourself. .players advertises the numbers, so that is the reading somebody typing one expects, and
+    // a duration on yourself is ".fent me 4" - which has to be spelled out anyway, because the number
+    // that means "me" is only one of twenty on the board.
+    private static (string Needle, int? Amount) SplitToyArg(string arg)
+    {
+        var parts = arg.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0) return ("", null);
+        if (parts.Length > 1 && int.TryParse(parts[^1], out int amount))
+        {
+            return (string.Join(' ', parts[..^1]), amount);
+        }
+        return (string.Join(' ', parts), null);
+    }
+
+    private static bool MeansYourself(string needle) =>
+        needle.Length == 0 || needle is "me" or "self" or "myself";
+
+    // Who the toy lands on, with the access rule that goes with it: anybody may point one of these at
+    // themselves, and pointing one at somebody else is still the admin flag.
+    //
+    // Self-serve is the whole reason the room asked for it - .fent is funniest when the person who typed
+    // it is the one spinning - and it opens nothing: the server has no kick path, so a toy that any
+    // player could aim at any other player would be the first griefing lever on it.
+    private CCSPlayerController? ToyTarget(CCSPlayerController? caller, string needle, string verb)
+    {
+        if (MeansYourself(needle))
+        {
+            // From rcon there is nobody to aim at. The console has to name somebody.
+            if (caller == null || !caller.IsValid)
+            {
+                Tell(caller, $"Usage: {verb} <player> - the console has no \"me\".");
+                return null;
+            }
+            return caller;
+        }
+
+        // A number is the roster number from .players and resolves to that player or to nobody at all.
+        // It is never fallen back to a name match: an unambiguous handle that quietly guesses is worse
+        // than one that fails.
+        // TryParse rather than Parse: char.IsDigit is true of every digit in Unicode, and twenty digits
+        // of one is not an int either. Both are "nobody here is that", not an exception.
+        CCSPlayerController? target;
+        if (needle.All(char.IsDigit))
+        {
+            target = int.TryParse(needle, out int number) ? PlayerByNumber(number) : null;
+            if (target == null)
+            {
+                Tell(caller, $"Nobody here is {needle} - .players for the list.");
+                return null;
+            }
+        }
+        else
+        {
+            target = FindPlayer(caller, needle);
+            if (target == null) return null;
+        }
+
+        if (caller != null && caller.IsValid && Id(target) == Id(caller)) return target;
+        if (IsAdmin(caller)) return target;
+
+        Tell(caller, $"You can only {verb} yourself - {verb} on its own, or \"{verb} me\".");
+        return null;
+    }
+
+    // .kill is for the player who is stuck in a corner of a warmup map, not a way out of a lost round, and
+    // it must not decide a captains' duel either. An admin may point it at whoever is being obnoxious in
+    // the warmup, under the same fence as every other toy.
+    private void KillCommand(CCSPlayerController? player, string arg)
+    {
+        var (needle, _) = SplitToyArg(arg);
 
         if (_phase != PugPhase.Idle)
         {
-            player.PrintToChat(Prefix() + "Not during a pug - wait for the teams.");
+            Tell(player, "Not during a pug - wait for the teams.");
             return;
         }
-        if (!InWarmupPeriod())
+        if (!InWarmupPeriod() || MatchRunning)
         {
-            player.PrintToChat(Prefix() + "Only during warmup.");
-            return;
-        }
-        if (!player.PawnIsAlive)
-        {
-            player.PrintToChat(Prefix() + "You are already dead.");
+            Tell(player, "Only during warmup.");
             return;
         }
 
-        player.CommitSuicide(explode: false, force: true);
+        var target = ToyTarget(player, needle, ".kill");
+        if (target == null) return;
+
+        // Worked out after the target is resolved, not from the argument: an admin who typed their own
+        // roster number has killed themselves, whatever they typed to say so.
+        bool onSomebodyElse = player == null || !player.IsValid || Id(target) != Id(player);
+
+        if (!target.PawnIsAlive)
+        {
+            Tell(player, onSomebodyElse ? $"{target.PlayerName} is already dead." : "You are already dead.");
+            return;
+        }
+
+        target.CommitSuicide(explode: false, force: true);
+        if (onSomebodyElse)
+        {
+            Announce($"{Colorize("{green}")}{target.PlayerName}{Colorize("{default}")} was killed by an admin.");
+        }
     }
 
-    private void SlapCommand(CCSPlayerController? admin, string arg)
+    private void SlapCommand(CCSPlayerController? caller, string arg)
     {
-        if (!IsAdmin(admin))
-        {
-            if (admin != null && admin.IsValid) admin.PrintToChat(Prefix() + "You do not have access to this command.");
-            return;
-        }
-        if (!WarmupToy(admin, out _)) return;
+        if (!WarmupToy(caller, out _)) return;
 
-        var parts = arg.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 0)
-        {
-            Tell(admin, "Usage: .slap <player> [damage]");
-            return;
-        }
-
-        int damage = parts.Length > 1 && int.TryParse(parts[^1], out int parsed) ? Math.Max(0, parsed) : 0;
-        string needle = parts.Length > 1 && damage.ToString() == parts[^1]
-            ? string.Join(' ', parts[..^1])
-            : string.Join(' ', parts);
-
-        var target = FindPlayer(admin, needle);
+        var (needle, amount) = SplitToyArg(arg);
+        var target = ToyTarget(caller, needle, ".slap");
         if (target == null) return;
+
+        int damage = Math.Max(0, amount ?? 0);
         if (!target.PawnIsAlive || target.PlayerPawn.Value == null)
         {
-            Tell(admin, $"{target.PlayerName} is not alive.");
+            Tell(caller, $"{target.PlayerName} is not alive.");
             return;
         }
 
@@ -332,40 +429,67 @@ public partial class Gpp
         Announce($"{Colorize("{green}")}{target.PlayerName}{Colorize("{default}")} is seeing things ({seconds}s).");
     }
 
-    // Shared by both: admin, warmup, "<player> [seconds]", and the player has to be alive.
-    private CCSPlayerController? EffectTarget(CCSPlayerController? admin, string arg, string verb, out int seconds)
+    // Shared by both: warmup, "[player] [seconds]", and the player has to be alive.
+    private CCSPlayerController? EffectTarget(CCSPlayerController? caller, string arg, string verb, out int seconds)
     {
         seconds = 10;
+        if (!WarmupToy(caller, out _)) return null;
 
-        if (!IsAdmin(admin))
-        {
-            if (admin != null && admin.IsValid) admin.PrintToChat(Prefix() + "You do not have access to this command.");
-            return null;
-        }
-        if (!WarmupToy(admin, out _)) return null;
+        var (needle, amount) = SplitToyArg(arg);
+        if (amount != null) seconds = Math.Clamp(amount.Value, 1, EffectMaxSeconds);
 
-        var parts = arg.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 0)
-        {
-            Tell(admin, $"Usage: {verb} <player> [seconds]");
-            return null;
-        }
-
-        string needle = string.Join(' ', parts);
-        if (parts.Length > 1 && int.TryParse(parts[^1], out int parsed))
-        {
-            seconds = Math.Clamp(parsed, 1, EffectMaxSeconds);
-            needle = string.Join(' ', parts[..^1]);
-        }
-
-        var target = FindPlayer(admin, needle);
+        var target = ToyTarget(caller, needle, verb);
         if (target == null) return null;
         if (!target.PawnIsAlive)
         {
-            Tell(admin, $"{target.PlayerName} is not alive.");
+            Tell(caller, $"{target.PlayerName} is not alive.");
             return null;
         }
         return target;
+    }
+
+    // .narcan takes it all back off again: the effect, the spun view and the warped camera. It exists
+    // because .fent on yourself for thirty seconds is funny for about eight of them, and because a
+    // player who has been handed a spinning view has no way to put it down.
+    //
+    // Yourself for free, somebody else on the admin flag, and "all" for the room - which is the one an
+    // admin actually reaches for, because by then four people are spinning at once.
+    private void NarcanCommand(CCSPlayerController? caller, string arg)
+    {
+        if (!WarmupToy(caller, out _)) return;
+
+        var (needle, _) = SplitToyArg(arg);
+
+        if (needle is "all" or "everyone" or "*")
+        {
+            if (!IsAdmin(caller))
+            {
+                Tell(caller, "Only an admin can .narcan the room - .narcan on its own sobers you up.");
+                return;
+            }
+            int live = ClearFunEffects();
+            Announce(live > 0
+                ? $"Narcan all round - {live} effect(s) cleared."
+                : "Narcan all round - nothing was running.");
+            return;
+        }
+
+        var target = ToyTarget(caller, needle, ".narcan");
+        if (target == null) return;
+
+        Narcan(target);
+        Announce($"{Colorize("{green}")}{target.PlayerName}{Colorize("{default}")} got narcan'd.");
+    }
+
+    // One player, all the way back to normal: both timers stopped, the view levelled, the camera and the
+    // screen put back. StopFent and StopDrug each undo their own, and Sober runs over the top of them so
+    // somebody who was hit by a toy the plugin has since forgotten about - a reconnect, a plugin reload
+    // mid-trip - is still cleaned up.
+    private void Narcan(CCSPlayerController player)
+    {
+        StopFent(Id(player));
+        StopDrug(Id(player));
+        Sober(player);
     }
 
     // One timer per drugged player, keyed by id so a second .drug on the same person restarts the clock
@@ -388,6 +512,10 @@ public partial class Gpp
                 // different one from in here is what segfaults the server (see AfterTick in Gpp.cs).
                 timer?.Kill();
                 _fentTimers.Remove(id);
+                // A spin that runs its time out has to level the view the same way one that is stopped
+                // early does. Without this the common case - nobody touches it, the ten seconds elapse -
+                // is the one that leaves somebody staring at the floor.
+                LevelTheView(id);
                 return;
             }
 
@@ -408,12 +536,17 @@ public partial class Gpp
     {
         if (!_fentTimers.Remove(id, out var running)) return;
         running.Kill();
+        LevelTheView(id);
+    }
 
-        // Level them up again. The spin leaves the view wherever the last nudge put it, which is usually
-        // staring at the sky or the floor, and in a match that is somebody's first round ruined.
+    // Level them up again, keeping the yaw. The spin leaves the view wherever the last nudge put it,
+    // which is usually staring at the sky or the floor, and in a match that is somebody's first round
+    // ruined.
+    private void LevelTheView(ulong id)
+    {
         var player = PlayerBySteamId(id);
         var pawn = player?.PlayerPawn.Value;
-        if (pawn == null) return;
+        if (pawn == null || !pawn.IsValid) return;
         pawn.Teleport(null, new QAngle(0, pawn.V_angle.Y, 0), null);
     }
 
@@ -464,6 +597,15 @@ public partial class Gpp
         running.Kill();
         var player = PlayerBySteamId(id);
         if (player != null && player.IsValid) SoberUp(player);
+    }
+
+    // Everything a toy can leave behind on one player, put back: the camera, the screen and the view
+    // angles. SoberUp is the camera and the screen, which is all .drug touches; .fent leaves the pawn's
+    // transform wherever it stopped, so .narcan and the warmup edge go through here instead.
+    private void Sober(CCSPlayerController player)
+    {
+        SoberUp(player);
+        LevelTheView(Id(player));
     }
 
     // Puts the camera back. A warped FOV outlives the timer that set it, outlives the round, and would
@@ -519,7 +661,7 @@ public partial class Gpp
         foreach (var player in HumanPlayers())
         {
             if (player.IsBot) continue;
-            if (player.DesiredFOV is not (0 or NormalFov)) SoberUp(player);
+            if (player.DesiredFOV is not (0 or NormalFov)) Sober(player);
         }
         return live;
     }

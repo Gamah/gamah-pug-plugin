@@ -304,4 +304,48 @@ public class CaptainCandidateTests
     {
         Assert.Empty(MatchRules.CaptainCandidates([], other: 0, volunteers: new HashSet<ulong>(), votedTheMapIn: new HashSet<ulong>()));
     }
+
+    // --- the two lines the panels are read off ----------------------------------------------------
+
+    [Fact]
+    public void TheMovingSideIsNamedWithItsTeamLetter() =>
+        Assert.Equal("TERRORISTS - TEAM B", MatchRules.OpeningLines(2, "B")[0]);
+
+    [Fact]
+    public void WithNoTeamLetterTheSideStandsAlone() =>
+        Assert.Equal("COUNTER-TERRORISTS", MatchRules.OpeningLines(3)[0]);
+
+    [Fact]
+    public void TheCaptainLineSaysYouAreInAndHowMany() =>
+        Assert.Equal("3 UP FOR CAPTAIN - YOU ARE IN", MatchRules.CaptainPoolLine(3, youAreIn: true));
+
+    [Fact]
+    public void TheCaptainLineAsksWhenYouAreNotIn() =>
+        Assert.Equal("3 UP FOR CAPTAIN - !captain TO JOIN", MatchRules.CaptainPoolLine(3, youAreIn: false));
+
+    [Fact]
+    public void TheCaptainLineAsksWhenNobodyIsIn() =>
+        Assert.Equal("!captain TO BE CAPTAIN - NOBODY YET", MatchRules.CaptainPoolLine(0, youAreIn: false));
+
+    // Both of these go in a panel title, which is the one line that is never paged away and so the one
+    // line that must not wrap. Twenty is a bigger pug than this is sized for, so if the widest case
+    // fits, every case does.
+    [Fact]
+    public void NeitherLineOutgrowsTheBoard()
+    {
+        int budget = HudMetrics.Width(WorldLayout.Rule(WorldLayout.MainBoardWidth));
+
+        foreach (int volunteers in new[] { 0, 1, 9, 20 })
+        {
+            foreach (bool inPool in new[] { true, false })
+            {
+                Assert.True(HudMetrics.Width(MatchRules.CaptainPoolLine(volunteers, inPool)) <= budget);
+            }
+        }
+
+        foreach (int side in new[] { 0, 2, 3 })
+        {
+            Assert.True(HudMetrics.Width(MatchRules.OpeningLines(side, "B")[0]) <= budget);
+        }
+    }
 }

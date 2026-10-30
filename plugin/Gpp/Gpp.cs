@@ -54,6 +54,10 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         HookFunCommands();
         HookSmokePractice();
         StartWarmupWatch();
+
+        // Whoever is already standing there: a plugin loads after the players it loads into, and a
+        // number has to exist before the first .players.
+        NumberEveryone();
         RegisterListener<Listeners.OnMapStart>(OnMapStart);
         RegisterListener<Listeners.OnClientDisconnect>(OnClientDisconnect);
 

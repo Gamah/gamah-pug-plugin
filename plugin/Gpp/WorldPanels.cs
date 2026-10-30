@@ -53,6 +53,11 @@ public partial class Gpp
 
     private string RightBoard() => TeamBoard(TeamBLabel(), _captain2, _team2);
 
+    // "A - MOVE" or "A - STAY" while the Discord hold is up, and plain "A" everywhere else.
+    private static string BoardLabel(string label, string moving) => moving.Length == 0
+        ? label
+        : $"{label} - {(label == moving ? "MOVE" : "STAY")}";
+
     private string TeamALabel() => "A";
 
     private string TeamBLabel() => "B";
@@ -74,7 +79,7 @@ public partial class Gpp
         {
             bool mine = _volunteers.Contains(Id(player));
             string panel = WorldLayout.MainPanel(
-                mine ? "YOU ARE IN THE POOL FOR CAPTAIN" : "TYPE !captain TO JOIN THE CAPTAIN POOL",
+                MatchRules.CaptainPoolLine(volunteers.Count, mine),
                 [
                     // Two lines, because one of them is thirty-seven characters of board for the state
                     // nobody needs to read twice.
@@ -119,9 +124,10 @@ public partial class Gpp
             // The one line of the captain block that is about this player, and the only one they can act
             // on. Somebody already in keeps being told so, because the whole point of volunteering early
             // is not having to wonder whether it took.
+            // The count is in it because the two facts arrive together: somebody who has put their hand
+            // up wants to know it took, and whether three other people did too.
             string? poolAsk = !_votePoolOpen ? null
-                : inPool ? "YOU ARE IN THE POOL FOR CAPTAIN"
-                : "TYPE !captain TO JOIN THE CAPTAIN POOL";
+                : MatchRules.CaptainPoolLine(pool.Count, inPool);
 
             string panel = _votes.ContainsKey(Id(player))
                 // Somebody who has voted gets the whole ballot with its tally against it - every map,
@@ -379,7 +385,7 @@ public partial class Gpp
         _keepCentred = false;
         // The loudest panel of the night, and the last one: after this the match is live and the overlay
         // is gone until the next pug. The three shouted lines are the owner's words, kept exactly.
-        var lines = MatchRules.OpeningLines((int)_moveSide);
+        var lines = MatchRules.OpeningLines((int)_moveSide, MovingTeamLabel());
         var playing = OpeningPlayers();
         var waiting = playing.Where(player => !_openingReady.Contains(Id(player)))
             .Select(player => player.PlayerName)
@@ -388,8 +394,13 @@ public partial class Gpp
         // Whether the team boards earn their place here is the open question: by now everybody knows who
         // they are playing with, and what matters is which voice channel to be in. _openingBoards is what
         // !pug discord switches, so both can be looked at on a screen rather than argued about.
-        string? left = _openingBoards ? ReadyBoard(TeamALabel(), _captain1, _team1) : null;
-        string? right = _openingBoards ? ReadyBoard(TeamBLabel(), _captain2, _team2) : null;
+        // The word goes on the board of the team it is about, so "TEAM B" in the title and the board
+        // being pointed at are the same thing read twice rather than two things to work out.
+        string moving = MovingTeamLabel();
+        string? left = _openingBoards
+            ? ReadyBoard(BoardLabel(TeamALabel(), moving), _captain1, _team1) : null;
+        string? right = _openingBoards
+            ? ReadyBoard(BoardLabel(TeamBLabel(), moving), _captain2, _team2) : null;
 
         foreach (var player in HumanPlayers())
         {
@@ -465,6 +476,64 @@ public partial class Gpp
                         "!SKIP     LEAVE IT"),
                 ],
                 "TYPE ONE OF THEM IN CHAT",
+                _hudTicks);
+            WorldShow(player, panel);
+        }
+    }
+
+    // --- .map -------------------------------------------------------------------------------------
+
+    // Two shapes, because two different questions are being asked. The admin confirm is a yes/no held in
+    // front of one person; the room's vote is a count and a list of who has not said anything, which is
+    // the only thing anybody can act on while it is open.
+    private void WorldMapRequestPanel()
+    {
+        _keepCentred = false;
+        var map = _mapRequest;
+        if (map == null) return;
+        string label = map.Label.ToUpperInvariant();
+
+        if (!_mapRequestIsVote)
+        {
+            foreach (var player in HumanPlayers())
+            {
+                string panel = IsAdmin(player)
+                    ? WorldLayout.MainPanel($"CHANGE THE MAP TO {label}?",
+                        [
+                            WorldLayout.Section.Of(
+                                ".yes      CHANGE IT - FOR PRACTICE",
+                                ".no       LEAVE IT ALONE"),
+                            WorldLayout.Section.Of(
+                                "!pug start RUNS ITS OWN MAP VOTE -",
+                                "YOU DO NOT NEED .map TO START A PUG"),
+                        ],
+                        WorldLayout.Footer($"{_mapSecondsLeft}s - NOTHING HAPPENS IF YOU SAY NOTHING"),
+                        _hudTicks)
+                    : WorldLayout.MainPanel($"{_mapRequestBy.ToUpperInvariant()} WANTS {label}",
+                        [WorldLayout.Section.Of("AN ADMIN HAS TO CONFIRM IT")],
+                        WorldLayout.Footer($"{_mapSecondsLeft}s"), _hudTicks);
+                WorldShow(player, panel);
+            }
+            return;
+        }
+
+        var voters = AnsweringPlayers();
+        var quiet = voters.Where(player => !_mapYes.Contains(Id(player)))
+            .Select(player => player.PlayerName)
+            .ToList();
+
+        foreach (var player in HumanPlayers())
+        {
+            bool said = _mapYes.Contains(Id(player));
+            string panel = WorldLayout.MainPanel(
+                said ? $"{_mapYes.Count}/{voters.Count} UP FOR {label}" : $"CHANGE THE MAP TO {label}?",
+                [
+                    WorldLayout.Section.Of(said ? null : ".yes      CHANGE IT",
+                        said ? null : ".no       LEAVE IT ALONE"),
+                    WorldLayout.Section.Of("EVERYBODY HAS TO AGREE:"),
+                    WorldLayout.Section.List(WorldLayout.Grid(quiet.Select(WorldLayout.Clip))),
+                ],
+                WorldLayout.Footer($"{_mapSecondsLeft}s", "NO ANSWER = NO CHANGE"),
                 _hudTicks);
             WorldShow(player, panel);
         }

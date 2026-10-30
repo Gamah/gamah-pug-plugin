@@ -38,8 +38,8 @@ public partial class Gpp
         _openingReady.Clear();
         _openingSecondsLeft = Config.Match.OpeningPauseSeconds;
         Server.ExecuteCommand("mp_pause_match");
-        Logger.LogInformation("Opening pause: {Seconds}s for {Side} to move in Discord.",
-            _openingSecondsLeft, _moveSide == CsTeam.CounterTerrorist ? "CT" : "T");
+        Logger.LogInformation("Opening pause: {Seconds}s for {Side} (team {Label}) to move in Discord.",
+            _openingSecondsLeft, _moveSide == CsTeam.CounterTerrorist ? "CT" : "T", MovingTeamLabel());
         Announce($"{Colorize("{green}")}{SideWord(_moveSide)}{Colorize("{default}")} - move into your "
             + $"Discord channel. Live in {_openingSecondsLeft}s.");
         Prompt("In your channel?", ".ready", Everybody);
@@ -115,5 +115,13 @@ public partial class Gpp
         WorldOpeningPanel();
     }
 
-    private static string SideWord(CsTeam side) => MatchRules.OpeningLines((int)side)[0];
+    private string SideWord(CsTeam side) => MatchRules.OpeningLines((int)side, MovingTeamLabel())[0];
+
+    // Which drafted team is on the side that has to move. The boards are A and B all night; this is the
+    // one moment the letters have to be tied to a side, and it is the moment it matters most.
+    internal string MovingTeamLabel()
+    {
+        if (_moveSide is not (CsTeam.CounterTerrorist or CsTeam.Terrorist)) return "";
+        return _moveSide == _team1Side ? TeamALabel() : TeamBLabel();
+    }
 }

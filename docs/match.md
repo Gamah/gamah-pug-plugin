@@ -44,6 +44,15 @@ Left alone the engine clears it by itself: the intermission times out, the engin
 is in the warmup that was already set up. So the hand-back waits for the phase to leave 5 and only then
 puts the server back, with a map reload as a last resort if the phase never leaves.
 
+**Whoever was dead when the match was called stays dead in the warmup after it.** `mp_restartgame` does
+not hand their pawn back, and the warmup cfg sets `mp_respawn_on_death_ct` / `_t` to 0, so nothing is
+left to respawn them: the room splits into the people who survived the last round, walking about, and
+the people who did not, locked by `mp_forcecamera` to a team-mate's camera for the rest of the warmup.
+That reads exactly like being stuck in spectator, and a reconnect clears it, because it is not spectator
+at all - it is a corpse. So the hand-back respawns them, for several seconds rather than once: the
+restart lands a second or so late and takes the freeze period with it, undoing anything respawned
+before it.
+
 An admin ending a match that is still live (`!pug stop`) is the other case, and there the order matters:
 `mp_restartgame` first, the warmup cfg after. The other way round opens the warmup inside the round-end
 freeze, and a warmup whose clock is paused never counts that freeze down - the room can take a step and
@@ -97,6 +106,21 @@ The schema and its three statements are in `StatsStore.cs`, with no CounterStrik
   per name and runs all of them. [SOURCE: CounterStrikeSharp 1.0.376 `Core/Commands/CommandManager.cs`
   RegisterCommand, read 2026-10-19]
 - `CCSGameRules.GamePhase`: 4 is halftime, 5 is the post-game panel.
+- **`mp_halftime_duration` is a target, not a duration.** Its own help text says "shortened if team
+  intros are active", and the floor it is shortened to is `mp_min_halftime_duration` (8.5). Team intros
+  count as active whenever `mp_team_intro_type` is `auto` - the default - and `mp_halftime` is set, so a
+  configured halftime is itself what switches them on. `mp_team_intro_time 0` sets their length and does
+  not stop them counting. An MVP anthem is longer than nine seconds, which is the whole of why one plays
+  on into the second half: nothing stops it, the half is simply shorter than the song. `live.cfg` sets
+  `mp_team_intro_type none`, and the plugin measures and logs how long the half actually lasted so the
+  figure is a number rather than a theory. [SOURCE: cvar help text read off the engine, CS2 1.41.9.2,
+  2026-10-30]
+- **The pug's phases do not cover a live match.** `_phase` is `Idle` from the handoff onwards, so once a
+  match is live nothing in the plugin is placing people - and the engine assigns a team to anyone who
+  sits in the team-select menu past `mp_force_pick_time`. That is how a player who reconnected mid-match
+  ended up on the side opposite the one they had played the first half on, without touching a key.
+  `spectate_mid_match_joins` puts them in spectator instead and leaves the choice to them; nothing is
+  blocked and nobody is kicked.
 - Scores live on the `cs_team_manager` entities, per side (`CT` / `TERRORIST`), so reading a *team's*
   score means knowing which side it is on. The plugin tracks that in one field, flipped by `.switch` and
   by every half swap. The swap rounds - the half and every overtime half - are the one piece of

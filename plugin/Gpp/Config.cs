@@ -177,6 +177,20 @@ public class GppConfig : BasePluginConfig
     // Seconds before the duel is decided on health (and then a coin flip) instead of a kill.
     [JsonPropertyName("captain_knife_seconds")] public int CaptainKnifeSeconds { get; set; } = 60;
 
+    // Put somebody who connects into a live match in spectator rather than letting the engine pick a
+    // side for them. Nothing is blocked and nobody is kicked: they press M and join whichever side they
+    // meant to. Off leaves it to mp_force_pick_time, which is what put a returning player on the wrong
+    // team mid-match.
+    [JsonPropertyName("spectate_mid_match_joins")] public bool SpectateMidMatchJoins { get; set; } = true;
+
+    // .map during warmup. An admin types it and the map changes, after a second .yes from an admin inside
+    // map_confirm_seconds; with no admin connected it opens a vote the whole room has to agree to.
+    // 0 turns the command off.
+    [JsonPropertyName("map_confirm_seconds")] public int MapConfirmSeconds { get; set; } = 10;
+
+    // How long the players' own .map vote stays open. It needs everybody, and no answer is a no.
+    [JsonPropertyName("map_vote_seconds")] public int MapVoteSeconds { get; set; } = 30;
+
     // Move everyone to spectator when the draft starts, so only drafted players are on a team.
     [JsonPropertyName("force_spectate")] public bool ForceSpectate { get; set; } = true;
 
@@ -187,8 +201,11 @@ public class GppConfig : BasePluginConfig
     // Knife round for sides once everybody has readied. Off goes straight live with the drafted sides.
     [JsonPropertyName("knife_round")] public bool KnifeRound { get; set; } = true;
 
-    // How many .ready are needed to start the match. 0 means every drafted player.
-    [JsonPropertyName("min_ready")] public int MinReady { get; set; } = 2;
+    // How many .ready are needed to start the match. 0, the default, means every drafted player who is
+    // connected - which is the only threshold that means anything: two readies out of twelve starts a
+    // knife round ten people were not looking at, and the knife decides the sides they play the match on.
+    // A number here is the way out for a room that would rather not wait for somebody.
+    [JsonPropertyName("min_ready")] public int MinReady { get; set; }
 
     [JsonPropertyName("match")] public MatchSettings Match { get; set; } = new();
 

@@ -15,9 +15,12 @@
   "captain_knife": true,
   "captain_knife_seconds": 60,
   "force_spectate": true,
+  "spectate_mid_match_joins": true,
+  "map_confirm_seconds": 10,
+  "map_vote_seconds": 30,
   "auto_start_match": true,
   "knife_round": true,
-  "min_ready": 2,
+  "min_ready": 0,
   "match": {
     "warmup_cfg": "gpp/warmup.cfg",
     "knife_cfg": "gpp/knife.cfg",

@@ -39,7 +39,16 @@ public partial class Gpp
             var player = Utilities.GetPlayerFromSlot(slot);
             if (player == null || !player.IsValid || player.IsBot || player.IsHLTV) return;
             if (!player.IsBot && player.SteamID == 0) return;
-            if (_phase is PugPhase.Idle or PugPhase.MapVote) return;
+
+            // Before anything else, and whatever phase it is: the number is handed out in connection
+            // order, so it cannot be skipped on the phases that return early below.
+            NumberPlayer(Id(player));
+
+            if (_phase is PugPhase.Idle or PugPhase.MapVote)
+            {
+                HoldMidMatchArrival(player);
+                return;
+            }
 
             _names[Id(player)] = player.PlayerName;
             if (_phase != PugPhase.Draft)
@@ -74,6 +83,44 @@ public partial class Gpp
             if (Config.ForceSpectate && !player.IsBot) HoldInSpectator(player);
             AddToPool(Id(player));
         });
+    }
+
+    // Somebody connecting into a live match. The pug's phase is Idle for the whole match - the phases are
+    // the pre-match machinery - so none of the sweeps above are running and the engine assigns the team
+    // itself: sit in the team-select menu past mp_force_pick_time and it picks a side for you. Which is
+    // how somebody who had been on CT all night came back from a disconnect onto T without touching a
+    // key, and how a player who was tabbed out joined a round in progress.
+    //
+    // So they land in spectator and choose for themselves. Nothing is blocked and nobody is kicked - the
+    // server is open, and once a pug is live anyone may walk in and take a side. They just have to say
+    // which one.
+    private void HoldMidMatchArrival(CCSPlayerController player)
+    {
+        if (!MatchRunning || !Config.SpectateMidMatchJoins) return;
+        if (player.Team is CsTeam.CounterTerrorist or CsTeam.Terrorist) return;
+
+        // Somebody who was drafted into this match has a right answer, and it is not a question: put them
+        // back on their own team. The side it is on now is read live rather than from the ready roster,
+        // because the halftime swap moves it and nothing updates that roster.
+        ulong id = Id(player);
+        if (_team1.Contains(id) || _team2.Contains(id))
+        {
+            var side = _team1.Contains(id) ? _team1Side : SideOf(2);
+            player.ChangeTeam(side);
+            player.PrintToChat(Prefix() + "Welcome back - you are on "
+                + $"{(side == CsTeam.CounterTerrorist ? "CT" : "T")} with your team.");
+            Logger.LogInformation("{Name} came back mid-match - put back on {Side} with their team.",
+                player.PlayerName, side == CsTeam.CounterTerrorist ? "CT" : "T");
+            return;
+        }
+
+        // Anybody else chooses for themselves. Not held in _heldInSpectator: that set is the pug's own
+        // parking, swept and released by the phases. This is a one-off nudge, and from here it is their
+        // call.
+        player.ChangeTeam(CsTeam.Spectator);
+        player.PrintToChat(Prefix() + "A match is live - you are in spectator so the server does not "
+            + "pick a side for you. Press M to join one.");
+        Logger.LogInformation("{Name} arrived mid-match - held in spectator to choose a side.", player.PlayerName);
     }
 
     // Everyone the plugin itself has put in spectator. The pug moves people out of the way for the knife

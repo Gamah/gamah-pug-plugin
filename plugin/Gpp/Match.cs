@@ -77,6 +77,7 @@ public partial class Gpp
                 _team1Side = _team1Side == CsTeam.CounterTerrorist ? CsTeam.Terrorist : CsTeam.CounterTerrorist;
                 Logger.LogInformation("Half swap: {Team} is now {Side}.", _team1Name,
                     _team1Side == CsTeam.CounterTerrorist ? "CT" : "T");
+                AfterTick(TimeTheHalftime);
             }
             return HookResult.Continue;
         }, HookMode.Post);
@@ -539,6 +540,42 @@ public partial class Gpp
         ReturnToHeldWarmup();
     }
 
+    // How long halftime actually lasted, which is the only number that settles whether an MVP anthem is
+    // outliving it. mp_halftime_duration is a target the engine shortens when team intros are active, and
+    // nothing announces the figure it settled on - so it is measured.
+    //
+    // GamePhase 4 is halftime. The watch starts at the round end that swaps the sides, waits for the
+    // phase to arrive and logs how long it took to leave again.
+    private void TimeTheHalftime()
+    {
+        var started = DateTime.UtcNow;
+        bool arrived = false;
+        int ticks = 0;
+        CounterStrikeSharp.API.Modules.Timers.Timer? timer = null;
+        timer = AddTimer(0.5f, () =>
+        {
+            bool atHalftime = GameRules()?.GamePhase == 4;
+            if (atHalftime && !arrived)
+            {
+                arrived = true;
+                started = DateTime.UtcNow;
+            }
+
+            // A minute is far longer than any halftime, so this is the "it never arrived" exit as well.
+            if (++ticks > 120 || (arrived && !atHalftime))
+            {
+                timer?.Kill();
+                Logger.LogInformation(arrived
+                    ? $"Halftime lasted {(DateTime.UtcNow - started).TotalSeconds:F1}s "
+                        + $"(mp_halftime_duration {ConVar.Find("mp_halftime_duration")?.GetPrimitiveValue<float>()}, "
+                        + $"mp_min_halftime_duration {ConVar.Find("mp_min_halftime_duration")?.GetPrimitiveValue<float>()}, "
+                        + $"mp_team_intro_type {ConVar.Find("mp_team_intro_type")?.StringValue}). "
+                        + "An MVP anthem that is longer than this plays on into the second half."
+                    : "Halftime never showed as GamePhase 4 - the side swap happened without one.");
+            }
+        }, TimerFlags.REPEAT);
+    }
+
     // Ten seconds of what the server actually looks like after a called match: the game phase, and
     // whether anybody's pawn is being held still. Both of those have been the answer tonight - the
     // intermission freeze reads as a pawn nobody can move, and the two movetype fields disagree when
@@ -586,6 +623,51 @@ public partial class Gpp
     {
         Server.ExecuteCommand("mp_unpause_match;mp_match_end_restart false;mp_restartgame 1");
         ExecWarmupCfg();
+        RespawnIntoTheWarmup();
+    }
+
+    // Whoever was dead when the match was called stays dead in the warmup that follows. mp_restartgame
+    // does not give them a pawn back, and the warmup cfg sets mp_respawn_on_death_ct/t to 0, so there is
+    // nothing left to respawn them: the room splits into the people who survived the last round, walking
+    // about, and the people who did not, locked by mp_forcecamera to a team-mate's camera for as long as
+    // the warmup lasts. That is what "stuck in spectator after the match" is, and why a reconnect fixes
+    // it - it is not spectator at all, it is a corpse.
+    //
+    // So the warmup respawns them. It runs for a few seconds rather than once, because the restart the
+    // line above asks for lands a second or so later and takes the freeze period with it: a Respawn
+    // called before that is undone by it.
+    private void RespawnIntoTheWarmup()
+    {
+        int ticks = 0;
+        CounterStrikeSharp.API.Modules.Timers.Timer? timer = null;
+        timer = AddTimer(1.0f, () =>
+        {
+            // A new pug owns the server now, and its own sweeps place people deliberately.
+            // Twelve seconds: the restart lands around five, and the warmup has to have arrived before
+            // any of this counts - a Respawn during the intermission is undone by the restart behind it.
+            if (++ticks > 12 || MatchRunning || _phase != PugPhase.Idle)
+            {
+                timer?.Kill();
+                return;
+            }
+            if (!InWarmupPeriod()) return;
+
+            foreach (var player in HumanPlayers())
+            {
+                if (player.PawnIsAlive) continue;
+                if (player.Team is not (CsTeam.CounterTerrorist or CsTeam.Terrorist)) continue;
+                try
+                {
+                    player.Respawn();
+                    Logger.LogInformation("Respawned {Name} into the warmup after the match.", player.PlayerName);
+                }
+                catch (Exception error)
+                {
+                    Logger.LogWarning("Could not respawn {Name} into the warmup: {Error}",
+                        player.PlayerName, error.Message);
+                }
+            }
+        }, TimerFlags.REPEAT);
     }
 
     // The engine ended the match itself: its end-of-match screen is up and GamePhase is 5 for

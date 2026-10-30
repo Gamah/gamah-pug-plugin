@@ -102,7 +102,8 @@ public partial class Gpp
     // a pug starting, which answers the question a different way.
     private void IdlePromptTick()
     {
-        if (_phase != PugPhase.Idle || MatchRunning || !InWarmupPeriod() || CaptainOptInOpen)
+        if (_phase != PugPhase.Idle || MatchRunning || !InWarmupPeriod() || CaptainOptInOpen
+            || MapRequestOpen)
         {
             AfterTick(CloseIdlePrompt);
             return;

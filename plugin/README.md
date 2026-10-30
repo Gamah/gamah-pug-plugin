@@ -37,8 +37,8 @@ by [`../Gpp.Tests`](../Gpp.Tests) (`dotnet test`).
 | `!<number>` | everyone | **The main one.** Votes for that map during a vote, makes that pick during a draft. Silent outside both |
 | `!vote <number\|map>` | everyone | Vote during a map vote. `!<number>` is shorter |
 | `!draft <number\|name>` | captain on the clock | Make a pick by name; no argument reprints the list |
-| `!players` | everyone | The numbered list of undrafted players, in chat |
-| `.ready` / `.r` / `.gaben` / `!ready` | everyone | Ready up. `min_ready` of them starts the match — and, during round one's Discord hold, says you are in your channel |
+| `.players` / `.who` / `!players` | everyone | Who is here, numbered — the undrafted pool during a draft, the whole room in warmup. The number is what the toys below take |
+| `.ready` / `.r` / `.gaben` / `!ready` | everyone | Ready up. Everybody on either team has to, unless `min_ready` says a number — and, during round one's Discord hold, says you are in your channel |
 | `.unready` / `.ur` / `.notready` | everyone | Take it back |
 | `.forceready` | admin | Ready everybody and start, whoever is missing |
 | `.stay` / `.switch` | the winning side's captain | Keep this side, or take the other one. `side_choice_captain_only` false lets their whole side answer |
@@ -46,10 +46,13 @@ by [`../Gpp.Tests`](../Gpp.Tests) (`dotnet test`).
 | `.tech` | players in the match | Technical pause — capped per side by `max_tech_pauses` |
 | `.unpause` | players in the match | Ask to resume |
 | `!link-discord` | everyone | Get a code to link your Steam account to Discord (needs the optional bot) |
-| `.kill` / `!kill` | everyone | Kill yourself. Warmup only, and never during a pug phase |
-| `.slap <player> [damage]` / `!slap` | admin | Fling a player about. Warmup only |
-| `.fent <player> [seconds]` / `!fent` | admin | Spin a player's view for up to 30s. Warmup only |
-| `.drug <player> [seconds]` / `!drug` | admin | Warp a player's camera for up to 30s. Warmup only |
+| `.kill [player]` / `!kill` | everyone / admin | Kill yourself. A target needs admin. Warmup only, and never during a pug phase |
+| `.slap [player] [damage]` / `!slap` | everyone / admin | Fling yourself about. A target needs admin. Warmup only |
+| `.fent [player] [seconds]` / `!fent` | everyone / admin | Spin your own view for up to 30s. A target needs admin. Warmup only |
+| `.drug [player] [seconds]` / `!drug` | everyone / admin | Warp your own camera for up to 30s. A target needs admin. Warmup only |
+| `.narcan [player\|all]` / `!narcan` | everyone / admin | Clear `.fent` and `.drug` and put the view back. Yourself free; a target or `all` needs admin. Warmup only |
+| `.map <map>` / `!map` | admin / everyone | Change the map for practice. An admin's `.map` waits for an admin `.yes`; with no admin connected the whole room has to agree. Warmup only |
+| `.yes` / `.no` | admin / everyone | Answer the `.map` on offer |
 | `.smokes [on\|off]` / `!smokes` | everyone | Smoke practice for yourself: trails, smokes only, invulnerable, one popped smoke, and your throws come back. Warmup only |
 
 `force` as a second argument (`!pug draft force`) skips the `min_players` check, and ends a match that
@@ -122,7 +125,16 @@ load**. [`../examples/Gpp.json`](../examples/Gpp.json) is a filled-in one.
 - `auto_start_match` (true) — start the match as soon as the draft ends. Off waits for `!pug match`
 - `knife_round` (true) — knife round for sides once everybody has readied. Off goes straight live on the
   drafted sides
-- `min_ready` (2) — `.ready` needed to start the match. 0 means every drafted player
+- `min_ready` (0) — `.ready` needed to start the match. 0, the default, means every drafted player who
+  is connected. A knife round decides the sides the match is played on, so two readies out of twelve is
+  a decision ten people were not looking at; a number here is the way out for a room that would rather
+  not wait for somebody
+- `spectate_mid_match_joins` (true) — somebody who connects into a live match lands in spectator and
+  presses M to pick a side, rather than having one picked for them by `mp_force_pick_time`. Nothing is
+  blocked and nobody is kicked
+- `map_confirm_seconds` (10) — how long an admin has to `.yes` a `.map`. 0 turns `.map` off entirely
+- `map_vote_seconds` (30) — how long the players' own `.map` vote runs when no admin is connected. It
+  needs everybody, and saying nothing is a no
 - `idle_reload_minutes` (30) — how long the server has to have been empty before the first person to
   connect is offered the fix for it. 0 turns it off. See below
 - `restart_warning_seconds` (30) — the countdown on `!pug restart`. The idle panel's `!restart` uses 10,
@@ -254,6 +266,25 @@ left means something went live without one. An invulnerable player left in
 a live match is the one failure here nobody would notice until it decided a round.
 
 ## The warmup toys
+
+Every one of them takes `[target] [amount]`, and a bare one is aimed at whoever typed it: `.fent` spins
+your own view, `.fent 4` spins player 4's, and a duration on yourself is `.fent me 20`. A lone number is
+always a target and never an amount, because `.players` is what people read the number off.
+
+Anybody may point one of these at themselves. Pointing one at somebody else is the admin flag, and that
+asymmetry is deliberate: the server has no kick path, so a toy any player could aim at any other player
+would be the first griefing lever on it.
+
+`.players` numbers the room in connection order, and the numbers are never reused — somebody leaving
+does not renumber anybody, so a number read off the list a moment ago still means the same person. A
+number belongs to its SteamID for as long as the plugin is loaded, so a reconnect keeps it, and the
+counter only goes up. Which is also why the numbers get sparse over a long night. A number nobody holds
+resolves to nobody and is never fallen back to a name match.
+
+`.narcan` takes it all back off: both timers stopped, the view levelled, the camera and the screen put
+back. It exists because `.fent` on yourself for thirty seconds is funny for about eight of them, and
+because the spin leaves the view wherever its last nudge put it — which until now happened on the common
+path too, where the clock simply ran out.
 
 `.fent` teleports the view angles ten times a second — the player's transform yanked around under them,
 which is not a camera effect at all but is funny enough to keep.

@@ -132,12 +132,26 @@ internal static class MatchRules
     public static int OtherSide(int side) => side == CtTeam ? TTeam : side == TTeam ? CtTeam : 0;
 
     // The three lines of the round-one panel, which are shouted on purpose.
-    public static string[] OpeningLines(int side) =>
+    // The side that has to move, and which of the two drafted teams that is. "TERRORISTS" alone is the
+    // wrong half of the fact: everybody has spent the last ten minutes being told they are on A or on B,
+    // and nobody has been told yet which side their letter ended up on.
+    public static string[] OpeningLines(int side, string teamLabel = "") =>
     [
-        side == CtTeam ? "COUNTER-TERRORISTS" : side == TTeam ? "TERRORISTS" : "EVERYONE",
+        (side == CtTeam ? "COUNTER-TERRORISTS" : side == TTeam ? "TERRORISTS" : "EVERYONE")
+            + (teamLabel.Length == 0 ? "" : $" - TEAM {teamLabel.ToUpperInvariant()}"),
         "STFU AND MOVE",
         "IN DISCORD",
     ];
+
+    // The captain sign-up, in one line of board. Both halves matter and neither is worth a line of its
+    // own: how many hands are up, and whether yours is one of them.
+    public static string CaptainPoolLine(int volunteers, bool youAreIn)
+    {
+        if (youAreIn) return $"{volunteers} UP FOR CAPTAIN - YOU ARE IN";
+        return volunteers == 0
+            ? "!captain TO BE CAPTAIN - NOBODY YET"
+            : $"{volunteers} UP FOR CAPTAIN - !captain TO JOIN";
+    }
 
     // mp_teamname_1/2 take the raw rest of the console line, so a team name is letters, digits and the one
     // underscore and nothing else - a quote or a semicolon in a player's name would otherwise be part of
