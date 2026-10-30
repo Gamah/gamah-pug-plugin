@@ -348,9 +348,10 @@ public partial class Gpp
     // A slap does no damage at all now - it is a shove, and .kill is the one that kills.
     //
     // The third is the gap between them in tenths of a second, so ".slap 4 5 2" is five slaps 200ms
-    // apart. Both are capped: fifteen slaps a second apart is fifteen seconds of somebody else's warmup,
-    // which is already the far end of funny.
-    private const int SlapsMax = 15;
+    // apart. Both are capped, and the cap on the count is a long way past funny on purpose: fifty slaps
+    // a second apart is most of a minute of somebody else's warmup, and the gap is what makes that a
+    // choice rather than an accident.
+    private const int SlapsMax = 50;
     private const int SlapTenthsMax = 10;
     private const int SlapTenthsDefault = 4;
 

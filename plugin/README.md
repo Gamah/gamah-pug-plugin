@@ -47,7 +47,7 @@ by [`../Gpp.Tests`](../Gpp.Tests) (`dotnet test`).
 | `.unpause` | players in the match | Ask to resume |
 | `!link-discord` | everyone | Get a code to link your Steam account to Discord (needs the optional bot) |
 | `.kill [player]` / `!kill` | everyone / admin | Kill yourself. A target needs admin. Warmup only, and never during a pug phase |
-| `.slap [player] [slaps] [tenths]` / `!slap` | everyone / admin | Fling yourself about, up to 15 times, 1–10 tenths of a second apart. No damage — `.kill` is the one that kills. A target needs admin. Warmup only |
+| `.slap [player] [slaps] [tenths]` / `!slap` | everyone / admin | Fling yourself about, up to 50 times, 1–10 tenths of a second apart. No damage — `.kill` is the one that kills. A target needs admin. Warmup only |
 | `.fent [player] [seconds]` / `!fent` | everyone / admin | Spin your own view for up to 30s. A target needs admin. Warmup only |
 | `.drug [player] [seconds]` / `!drug` | everyone / admin | Warp your own camera for up to 30s. A target needs admin. Warmup only |
 | `.narcan [player\|all]` / `!narcan` | everyone / admin | Clear `.fent` and `.drug` and put the view back. Yourself free; a target or `all` needs admin. Warmup only |
@@ -279,8 +279,8 @@ your own view, `.fent 4` spins player 4's, and a duration on yourself is `.fent 
 always a target and never an amount, because `.players` is what people read the number off.
 
 The amount is seconds for `.fent` and `.drug`. `.slap` takes two: how many slaps, and how far apart in
-tenths of a second — `.slap 4 5 2` is five shoves at player 4, 200ms apart. Capped at 15 slaps and 10
-tenths, because fifteen slaps a second apart is fifteen seconds of somebody else's warmup. The default
+tenths of a second — `.slap 4 5 2` is five shoves at player 4, 200ms apart. Capped at 50 slaps and 10
+tenths, because fifty slaps a second apart is most of a minute of somebody else's warmup. The default
 gap is 0.4s, and the first slap always lands immediately, so a bare `.slap` is not a command with a
 delay on it. A slap does no damage: the whole of `.slap` is velocity, and `.kill` is what kills somebody.
 It makes a noise, emitted from the slapped player so the room hears where it came from — `slap_sound`
