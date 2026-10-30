@@ -30,6 +30,7 @@
     "opening_pause_seconds": 30,
     "post_match_seconds": 15,
     "pauses_enabled": true,
+    "silence_halftime_mvp": true,
     "draw_vote": true,
     "draw_vote_seconds": 30,
     "max_tech_pauses": 0,

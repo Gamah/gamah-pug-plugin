@@ -44,12 +44,17 @@ Left alone the engine clears it by itself: the intermission times out, the engin
 is in the warmup that was already set up. So the hand-back waits for the phase to leave 5 and only then
 puts the server back, with a map reload as a last resort if the phase never leaves.
 
-**`mp_restartgame` resurrects nobody.** It tops the living back up to full health and leaves the dead
-where they are. So a warmup with `mp_respawn_on_death_ct` / `_t` at 0 - which is right for a match and
-wrong for a warmup - splits the room into the people who survived the last round, walking about, and the
-people who did not, locked by `mp_forcecamera` to a team-mate's camera until the next map. That reads
-exactly like being stuck in spectator, and a reconnect clears it, because it is not spectator at all: it
-is a corpse. `warmup.cfg` sets both to 1, which is the only thing in the server that will respawn them.
+**Warmup respawns the people who die in it, not the people who were already dead when it opened.** So the
+warmup after a match splits the room in two: whoever was alive when it was called stays alive, and
+whoever was not stays a corpse, locked by `mp_forcecamera` to a team-mate's camera until the next map.
+That reads exactly like being stuck in spectator, and a reconnect clears it, because it is not spectator
+at all - a reconnect is a fresh spawn.
+
+`mp_restartgame` does not cover it: it tops the living back up to full health and resurrects nobody. Nor
+is it the `mp_respawn_on_death_ct` / `_t` cvars - the warmup runs with both at 0 and people respawn in it
+regardless, so warmup respawn does not read them. The gap is only the transition, so it is closed once
+at the transition: the hand-back arms a flag and the round start the restart itself produces respawns
+whoever is dead. Which is what the ready phase's own sweep does at its own transition.
 
 An admin ending a match that is still live (`!pug stop`) is the other case, and there the order matters:
 `mp_restartgame` first, the warmup cfg after. The other way round opens the warmup inside the round-end

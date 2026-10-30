@@ -89,6 +89,12 @@ public class MatchSettings
 
     // Ask the room whether a level match goes to overtime, one round before it can happen. Nobody voting
     // is a draw: see DrawVote.cs.
+    // Never award an MVP for the round that ends a half, so no anthem is playing when the half is. The
+    // half is shorter than the song - see live.cfg on mp_halftime_duration - and sv_nomvp is the only
+    // lever the engine offers: nothing addresses the anthem on its own. It costs that round's MVP from
+    // the stats, one per half, because what is turned off is the award and not the sound.
+    [JsonPropertyName("silence_halftime_mvp")] public bool SilenceHalftimeMvp { get; set; } = true;
+
     [JsonPropertyName("draw_vote")] public bool DrawVote { get; set; } = true;
 
     [JsonPropertyName("draw_vote_seconds")] public int DrawVoteSeconds { get; set; } = 30;

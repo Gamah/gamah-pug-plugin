@@ -95,6 +95,13 @@ public partial class Gpp
         {
             StartPendingDemo();
 
+            // The warmup the hand-back opened has started its first round. Anyone the match left dead is
+            // still dead in it, and this is the only moment that is true and fixable.
+            if (_respawnTheDeadNextRound && !MatchRunning)
+            {
+                AfterTick(RespawnWhoeverTheMatchLeftDead);
+            }
+
             // Round one, freeze time: hold it while the losing side sorts out Discord. Not from GoLive
             // itself, because the restart it runs has not happened yet at that point.
             if (_matchPhase == MatchPhase.Live && !_openingDone && (GameRules()?.TotalRoundsPlayed ?? 1) == 0)
@@ -117,6 +124,7 @@ public partial class Gpp
             {
                 Server.ExecuteCommand("mp_match_can_clinch 1;mp_match_restart_delay "
                     + Math.Max(1, Config.Match.PostMatchSeconds));
+                SilenceTheHalftimeAnthem();
             }
             return HookResult.Continue;
         });
@@ -188,7 +196,7 @@ public partial class Gpp
     private const string WarmupFallback =
         "mp_autoteambalance 0;mp_limitteams 0;mp_maxmoney 16000;mp_startmoney 16000;mp_free_armor 0;"
         + "mp_freezetime 0;mp_ignore_round_win_conditions 0;mp_warmup_start;mp_warmuptime 9999;"
-        + "mp_respawn_on_death_ct 1;mp_respawn_on_death_t 1;mp_warmup_pausetimer 1";
+        + "mp_warmup_pausetimer 1";
 
     private const string KnifeFallback =
         "mp_ct_default_secondary \"\";mp_t_default_secondary \"\";mp_free_armor 1;mp_freezetime 10;"
@@ -540,6 +548,38 @@ public partial class Gpp
         ReturnToHeldWarmup();
     }
 
+    // The MVP anthem that plays on into the second half, not fixed but prevented: the award for the round
+    // that ends a half is simply never made, so there is no music to outlive the halftime.
+    //
+    // sv_nomvp is the only lever the engine has here - nothing addresses the anthem on its own, and
+    // snd_musicvolume is a client archive cvar the server cannot touch. It costs that round's MVP: one
+    // per half, not recorded in the stats, because the award is what is turned off rather than the sound.
+    // That trade is the config key.
+    //
+    // Asked a round early, at the round start, because the award is handed out as the round ends. It is
+    // written on every round rather than once, so a 1 left behind by a reload or an abandoned match is
+    // cleared by the next ordinary round.
+    private void SilenceTheHalftimeAnthem()
+    {
+        if (!Config.Match.SilenceHalftimeMvp) return;
+
+        var rules = GameRules();
+        if (rules == null) return;
+
+        bool endsAHalf = MatchRules.RoundEndsAHalf(
+            rules.TotalRoundsPlayed,
+            ConVar.Find("mp_maxrounds")?.GetPrimitiveValue<int>() ?? 24,
+            ConVar.Find("mp_overtime_maxrounds")?.GetPrimitiveValue<int>() ?? 6,
+            ConVar.Find("mp_halftime")?.GetPrimitiveValue<bool>() ?? false);
+
+        Server.ExecuteCommand($"sv_nomvp {(endsAHalf ? 1 : 0)}");
+        if (endsAHalf)
+        {
+            Logger.LogInformation("Round {Round} ends a half - no MVP award for it, so no anthem to play "
+                + "on into the next one.", rules.TotalRoundsPlayed + 1);
+        }
+    }
+
     // How long halftime actually lasted, which is the only number that settles whether an MVP anthem is
     // outliving it. mp_halftime_duration is a target the engine shortens when team intros are active, and
     // nothing announces the figure it settled on - so it is measured.
@@ -623,6 +663,44 @@ public partial class Gpp
     {
         Server.ExecuteCommand("mp_unpause_match;mp_match_end_restart false;mp_restartgame 1");
         ExecWarmupCfg();
+        _respawnTheDeadNextRound = true;
+    }
+
+    // Warmup respawns the people who die in it. It does not respawn the people who were already dead when
+    // it opened: whoever was alive when the match was called stays alive and whoever was not stays a
+    // corpse, locked by mp_forcecamera to a team-mate's camera until the next map. That is the whole of
+    // "stuck in spectator after a match" - it is not spectator, and a reconnect clears it because a
+    // reconnect is a fresh spawn.
+    //
+    // mp_restartgame does not cover it either: it tops the living back up to full health and resurrects
+    // nobody. And it is not the mp_respawn_on_death cvars - this server runs the warmup with both at 0
+    // and people respawn in it regardless, so warmup respawn does not read them.
+    //
+    // So the one gap is the transition, and it is closed once rather than watched for: the hand-back
+    // arms this, and the round start that the restart itself produces fires it. Which is the same thing
+    // the ready phase's sweep does at its own transition, for the same reason.
+    private bool _respawnTheDeadNextRound;
+
+    private void RespawnWhoeverTheMatchLeftDead()
+    {
+        _respawnTheDeadNextRound = false;
+
+        foreach (var player in HumanPlayers())
+        {
+            if (player.PawnIsAlive) continue;
+            if (player.Team is not (CsTeam.CounterTerrorist or CsTeam.Terrorist)) continue;
+            try
+            {
+                player.Respawn();
+                Logger.LogInformation("Respawned {Name}, who the match left dead, into the warmup.",
+                    player.PlayerName);
+            }
+            catch (Exception error)
+            {
+                Logger.LogWarning("Could not respawn {Name} into the warmup: {Error}",
+                    player.PlayerName, error.Message);
+            }
+        }
     }
 
     // The engine ended the match itself: its end-of-match screen is up and GamePhase is 5 for

@@ -71,6 +71,12 @@ internal static class MatchRules
         return (otRound + perOtHalf) % (2 * perOtHalf) == 0;
     }
 
+    // Whether the round about to be played is the one that ends a half - so the MVP award for it can be
+    // turned off before it is handed out. roundsPlayed here is the count *before* the round, which is
+    // what the engine has at a round start, so the question is about the round after it.
+    public static bool RoundEndsAHalf(int roundsPlayed, int maxRounds, int overtimeMaxRounds, bool halftimeEnabled) =>
+        IsSideSwapRound(roundsPlayed + 1, maxRounds, overtimeMaxRounds, halftimeEnabled);
+
     // The score the next round can draw level at, or 0 if it cannot. Regulation is drawn at half of
     // mp_maxrounds each - 12-12 of 24 - and every overtime adds half of mp_overtime_maxrounds to that, so
     // the draws come at 12-12, 15-15, 18-18 with a six-round overtime. A round can only make one of those

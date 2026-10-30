@@ -125,6 +125,9 @@ load**. [`../examples/Gpp.json`](../examples/Gpp.json) is a filled-in one.
 - `auto_start_match` (true) — start the match as soon as the draft ends. Off waits for `!pug match`
 - `knife_round` (true) — knife round for sides once everybody has readied. Off goes straight live on the
   drafted sides
+- `match.silence_halftime_mvp` (true) — never award an MVP for the round that ends a half, so there is
+  no anthem playing when the half is. It costs that round's MVP from the stats, one per half: `sv_nomvp`
+  is the only lever the engine has, and it turns off the award rather than the sound
 - `min_ready` (0) — `.ready` needed to start the match. 0, the default, means every drafted player who
   is connected. A knife round decides the sides the match is played on, so two readies out of twelve is
   a decision ten people were not looking at; a number here is the way out for a room that would rather

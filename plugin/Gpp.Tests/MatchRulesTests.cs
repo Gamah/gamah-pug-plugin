@@ -305,6 +305,31 @@ public class CaptainCandidateTests
         Assert.Empty(MatchRules.CaptainCandidates([], other: 0, volunteers: new HashSet<ulong>(), votedTheMapIn: new HashSet<ulong>()));
     }
 
+    // --- the round whose MVP is never awarded -----------------------------------------------------
+    //
+    // Asked at a round start, where roundsPlayed is the count before the round. Off by one here is
+    // either an anthem over halftime or eleven rounds of a match with no MVP in them.
+
+    [Fact]
+    public void TheRoundThatEndsTheHalfIsTheTwelfth() =>
+        Assert.True(MatchRules.RoundEndsAHalf(11, maxRounds: 24, overtimeMaxRounds: 6, halftimeEnabled: true));
+
+    [Fact]
+    public void TheRoundBeforeItIsNot() =>
+        Assert.False(MatchRules.RoundEndsAHalf(10, maxRounds: 24, overtimeMaxRounds: 6, halftimeEnabled: true));
+
+    [Fact]
+    public void TheRoundAfterItIsNot() =>
+        Assert.False(MatchRules.RoundEndsAHalf(12, maxRounds: 24, overtimeMaxRounds: 6, halftimeEnabled: true));
+
+    [Fact]
+    public void OvertimeHalvesCountToo() =>
+        Assert.True(MatchRules.RoundEndsAHalf(26, maxRounds: 24, overtimeMaxRounds: 6, halftimeEnabled: true));
+
+    [Fact]
+    public void WithNoHalftimeNoRoundEndsOne() =>
+        Assert.False(MatchRules.RoundEndsAHalf(11, maxRounds: 24, overtimeMaxRounds: 6, halftimeEnabled: false));
+
     // --- the two lines the panels are read off ----------------------------------------------------
 
     [Fact]
