@@ -188,7 +188,7 @@ public partial class Gpp
     private const string WarmupFallback =
         "mp_autoteambalance 0;mp_limitteams 0;mp_maxmoney 16000;mp_startmoney 16000;mp_free_armor 0;"
         + "mp_freezetime 0;mp_ignore_round_win_conditions 0;mp_warmup_start;mp_warmuptime 9999;"
-        + "mp_warmup_pausetimer 1";
+        + "mp_respawn_on_death_ct 1;mp_respawn_on_death_t 1;mp_warmup_pausetimer 1";
 
     private const string KnifeFallback =
         "mp_ct_default_secondary \"\";mp_t_default_secondary \"\";mp_free_armor 1;mp_freezetime 10;"
@@ -623,51 +623,6 @@ public partial class Gpp
     {
         Server.ExecuteCommand("mp_unpause_match;mp_match_end_restart false;mp_restartgame 1");
         ExecWarmupCfg();
-        RespawnIntoTheWarmup();
-    }
-
-    // Whoever was dead when the match was called stays dead in the warmup that follows. mp_restartgame
-    // does not give them a pawn back, and the warmup cfg sets mp_respawn_on_death_ct/t to 0, so there is
-    // nothing left to respawn them: the room splits into the people who survived the last round, walking
-    // about, and the people who did not, locked by mp_forcecamera to a team-mate's camera for as long as
-    // the warmup lasts. That is what "stuck in spectator after the match" is, and why a reconnect fixes
-    // it - it is not spectator at all, it is a corpse.
-    //
-    // So the warmup respawns them. It runs for a few seconds rather than once, because the restart the
-    // line above asks for lands a second or so later and takes the freeze period with it: a Respawn
-    // called before that is undone by it.
-    private void RespawnIntoTheWarmup()
-    {
-        int ticks = 0;
-        CounterStrikeSharp.API.Modules.Timers.Timer? timer = null;
-        timer = AddTimer(1.0f, () =>
-        {
-            // A new pug owns the server now, and its own sweeps place people deliberately.
-            // Twelve seconds: the restart lands around five, and the warmup has to have arrived before
-            // any of this counts - a Respawn during the intermission is undone by the restart behind it.
-            if (++ticks > 12 || MatchRunning || _phase != PugPhase.Idle)
-            {
-                timer?.Kill();
-                return;
-            }
-            if (!InWarmupPeriod()) return;
-
-            foreach (var player in HumanPlayers())
-            {
-                if (player.PawnIsAlive) continue;
-                if (player.Team is not (CsTeam.CounterTerrorist or CsTeam.Terrorist)) continue;
-                try
-                {
-                    player.Respawn();
-                    Logger.LogInformation("Respawned {Name} into the warmup after the match.", player.PlayerName);
-                }
-                catch (Exception error)
-                {
-                    Logger.LogWarning("Could not respawn {Name} into the warmup: {Error}",
-                        player.PlayerName, error.Message);
-                }
-            }
-        }, TimerFlags.REPEAT);
     }
 
     // The engine ended the match itself: its end-of-match screen is up and GamePhase is 5 for
