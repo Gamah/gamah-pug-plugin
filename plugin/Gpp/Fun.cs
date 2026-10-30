@@ -210,7 +210,7 @@ public partial class Gpp
     }
 
     [ConsoleCommand("css_slap", "Slap yourself, or a player (admin), warmup only")]
-    [CommandHelper(minArgs: 0, usage: "[player] [damage]")]
+    [CommandHelper(minArgs: 0, usage: "[player] [slaps]")]
     public void OnSlapCommand(CCSPlayerController? player, CommandInfo command)
     {
         string arg = command.ArgCount > 1 ? command.ArgString.Trim() : "";
@@ -244,7 +244,8 @@ public partial class Gpp
     // --- aiming a toy -----------------------------------------------------------------------------
 
     // Every toy takes the same argument: "[target] [amount]". The target is a roster number from
-    // .players, "me", or a name; the amount is seconds for .fent and .drug, damage for .slap.
+    // .players, "me", or a name; the amount is seconds for .fent and .drug, and a count of slaps
+    // for .slap.
     //
     // A single bare number is a target, never an amount: ".fent 4" is player 4, not four seconds on
     // yourself. .players advertises the numbers, so that is the reading somebody typing one expects, and
@@ -349,6 +350,10 @@ public partial class Gpp
         }
     }
 
+    // The second argument is how many slaps, not how much damage: ".slap 4 5" is five slaps at player 4.
+    // A slap does no damage at all now - it is a shove, and .kill is the one that kills.
+    private const int SlapsMax = 20;
+
     private void SlapCommand(CCSPlayerController? caller, string arg)
     {
         if (!WarmupToy(caller, out _)) return;
@@ -357,39 +362,73 @@ public partial class Gpp
         var target = ToyTarget(caller, needle, ".slap");
         if (target == null) return;
 
-        int damage = Math.Max(0, amount ?? 0);
+        int slaps = Math.Clamp(amount ?? 1, 1, SlapsMax);
         if (!target.PawnIsAlive || target.PlayerPawn.Value == null)
         {
             Tell(caller, $"{target.PlayerName} is not alive.");
             return;
         }
 
-        Slap(target, damage);
+        StartSlaps(Id(target), slaps);
         Announce($"{Colorize("{green}")}{target.PlayerName}{Colorize("{default}")} got slapped"
-            + (damage > 0 ? $" for {damage}." : "."));
+            + (slaps > 1 ? $" {slaps} times." : "."));
+    }
+
+    // Spaced out rather than all at once: twenty shoves in one frame is one big shove, and the joke is
+    // the flurry. The first lands immediately so a single .slap is not a command with a delay on it.
+    //
+    // One timer per target, keyed by id, so a second .slap restarts the count instead of stacking two
+    // timers that fight over the same pawn - the same reason .fent and .drug are keyed that way.
+    private const float SlapInterval = 0.4f;
+
+    private readonly Dictionary<ulong, CounterStrikeSharp.API.Modules.Timers.Timer> _slapTimers = new();
+
+    private void StartSlaps(ulong id, int slaps)
+    {
+        StopSlaps(id);
+
+        var first = PlayerBySteamId(id);
+        if (first != null && first.IsValid) Slap(first);
+        if (slaps <= 1) return;
+
+        int left = slaps - 1;
+        CounterStrikeSharp.API.Modules.Timers.Timer? timer = null;
+        timer = AddTimer(SlapInterval, () =>
+        {
+            var player = PlayerBySteamId(id);
+            if (--left < 0 || player == null || !player.IsValid || !player.PawnIsAlive
+                || _phase != PugPhase.Idle || !InWarmupPeriod())
+            {
+                // Killing this timer from inside its own tick is the one case CSSharp handles - see
+                // StartFent for what killing a different one from in here does.
+                timer?.Kill();
+                _slapTimers.Remove(id);
+                return;
+            }
+            Slap(player);
+        }, TimerFlags.REPEAT);
+
+        _slapTimers[id] = timer;
+    }
+
+    private void StopSlaps(ulong id)
+    {
+        if (!_slapTimers.Remove(id, out var running)) return;
+        running.Kill();
     }
 
     // Velocity goes on through Teleport rather than by assigning to AbsVelocity: the field is networked
     // from the pawn and writing it in place is not replicated, so the player never actually moves.
-    private void Slap(CCSPlayerController target, int damage)
+    private void Slap(CCSPlayerController target)
     {
         var pawn = target.PlayerPawn.Value;
-        if (pawn == null) return;
+        if (pawn == null || !pawn.IsValid) return;
 
         var velocity = new Vector(
             pawn.AbsVelocity.X + _rng.Next(-240, 241),
             pawn.AbsVelocity.Y + _rng.Next(-240, 241),
             pawn.AbsVelocity.Z + 300);
         pawn.Teleport(null, null, velocity);
-
-        if (damage <= 0) return;
-        if (pawn.Health <= damage)
-        {
-            target.CommitSuicide(explode: false, force: true);
-            return;
-        }
-        pawn.Health -= damage;
-        Utilities.SetStateChanged(pawn, "CBaseEntity", "m_iHealth");
     }
 
     private const int EffectMaxSeconds = 30;
@@ -489,6 +528,7 @@ public partial class Gpp
     {
         StopFent(Id(player));
         StopDrug(Id(player));
+        StopSlaps(Id(player));
         Sober(player);
     }
 
@@ -652,9 +692,10 @@ public partial class Gpp
     // zero, because by then a phase change should already have cleared them.
     internal int ClearFunEffects()
     {
-        int live = ClearSmokePractice() + _fentTimers.Count + _drugTimers.Count;
+        int live = ClearSmokePractice() + _fentTimers.Count + _drugTimers.Count + _slapTimers.Count;
         foreach (var id in _fentTimers.Keys.ToList()) StopFent(id);
         foreach (var id in _drugTimers.Keys.ToList()) StopDrug(id);
+        foreach (var id in _slapTimers.Keys.ToList()) StopSlaps(id);
 
         // Timers only know the players they were started on. Anyone who reconnected, or who was drugged
         // before a plugin reload, is caught by sweeping the whole server.
