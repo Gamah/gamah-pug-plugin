@@ -210,7 +210,7 @@ public partial class Gpp
     }
 
     [ConsoleCommand("css_slap", "Slap yourself, or a player (admin), warmup only")]
-    [CommandHelper(minArgs: 0, usage: "[player] [slaps]")]
+    [CommandHelper(minArgs: 0, usage: "[player] [slaps] [tenths between]")]
     public void OnSlapCommand(CCSPlayerController? player, CommandInfo command)
     {
         string arg = command.ArgCount > 1 ? command.ArgString.Trim() : "";
@@ -243,27 +243,10 @@ public partial class Gpp
 
     // --- aiming a toy -----------------------------------------------------------------------------
 
-    // Every toy takes the same argument: "[target] [amount]". The target is a roster number from
-    // .players, "me", or a name; the amount is seconds for .fent and .drug, and a count of slaps
-    // for .slap.
-    //
-    // A single bare number is a target, never an amount: ".fent 4" is player 4, not four seconds on
-    // yourself. .players advertises the numbers, so that is the reading somebody typing one expects, and
-    // a duration on yourself is ".fent me 4" - which has to be spelled out anyway, because the number
-    // that means "me" is only one of twenty on the board.
-    private static (string Needle, int? Amount) SplitToyArg(string arg)
-    {
-        var parts = arg.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 0) return ("", null);
-        if (parts.Length > 1 && int.TryParse(parts[^1], out int amount))
-        {
-            return (string.Join(' ', parts[..^1]), amount);
-        }
-        return (string.Join(' ', parts), null);
-    }
-
-    private static bool MeansYourself(string needle) =>
-        needle.Length == 0 || needle is "me" or "self" or "myself";
+    // The argument shape, and the rules it is read by, are in ToyArgs - under test, because "is a lone
+    // number a target or an amount" is exactly the kind of question that gets answered differently by
+    // two call sites a month apart.
+    private static bool MeansYourself(string needle) => ToyArgs.MeansYourself(needle);
 
     // Who the toy lands on, with the access rule that goes with it: anybody may point one of these at
     // themselves, and pointing one at somebody else is still the admin flag.
@@ -317,7 +300,7 @@ public partial class Gpp
     // the warmup, under the same fence as every other toy.
     private void KillCommand(CCSPlayerController? player, string arg)
     {
-        var (needle, _) = SplitToyArg(arg);
+        string needle = ToyArgs.Split(arg).Needle;
 
         if (_phase != PugPhase.Idle)
         {
@@ -352,38 +335,43 @@ public partial class Gpp
 
     // The second argument is how many slaps, not how much damage: ".slap 4 5" is five slaps at player 4.
     // A slap does no damage at all now - it is a shove, and .kill is the one that kills.
-    private const int SlapsMax = 20;
+    //
+    // The third is the gap between them in tenths of a second, so ".slap 4 5 2" is five slaps 200ms
+    // apart. Both are capped: fifteen slaps a second apart is fifteen seconds of somebody else's warmup,
+    // which is already the far end of funny.
+    private const int SlapsMax = 15;
+    private const int SlapTenthsMax = 10;
+    private const int SlapTenthsDefault = 4;
 
     private void SlapCommand(CCSPlayerController? caller, string arg)
     {
         if (!WarmupToy(caller, out _)) return;
 
-        var (needle, amount) = SplitToyArg(arg);
+        var (needle, amount, gap) = ToyArgs.Split(arg);
         var target = ToyTarget(caller, needle, ".slap");
         if (target == null) return;
 
         int slaps = Math.Clamp(amount ?? 1, 1, SlapsMax);
+        int tenths = Math.Clamp(gap ?? SlapTenthsDefault, 1, SlapTenthsMax);
         if (!target.PawnIsAlive || target.PlayerPawn.Value == null)
         {
             Tell(caller, $"{target.PlayerName} is not alive.");
             return;
         }
 
-        StartSlaps(Id(target), slaps);
+        StartSlaps(Id(target), slaps, tenths);
         Announce($"{Colorize("{green}")}{target.PlayerName}{Colorize("{default}")} got slapped"
             + (slaps > 1 ? $" {slaps} times." : "."));
     }
 
-    // Spaced out rather than all at once: twenty shoves in one frame is one big shove, and the joke is
+    // Spaced out rather than all at once: fifteen shoves in one frame is one big shove, and the joke is
     // the flurry. The first lands immediately so a single .slap is not a command with a delay on it.
     //
     // One timer per target, keyed by id, so a second .slap restarts the count instead of stacking two
     // timers that fight over the same pawn - the same reason .fent and .drug are keyed that way.
-    private const float SlapInterval = 0.4f;
-
     private readonly Dictionary<ulong, CounterStrikeSharp.API.Modules.Timers.Timer> _slapTimers = new();
 
-    private void StartSlaps(ulong id, int slaps)
+    private void StartSlaps(ulong id, int slaps, int tenths)
     {
         StopSlaps(id);
 
@@ -393,7 +381,7 @@ public partial class Gpp
 
         int left = slaps - 1;
         CounterStrikeSharp.API.Modules.Timers.Timer? timer = null;
-        timer = AddTimer(SlapInterval, () =>
+        timer = AddTimer(tenths / 10.0f, () =>
         {
             var player = PlayerBySteamId(id);
             if (--left < 0 || player == null || !player.IsValid || !player.PawnIsAlive
@@ -474,7 +462,7 @@ public partial class Gpp
         seconds = 10;
         if (!WarmupToy(caller, out _)) return null;
 
-        var (needle, amount) = SplitToyArg(arg);
+        var (needle, amount, _) = ToyArgs.Split(arg);
         if (amount != null) seconds = Math.Clamp(amount.Value, 1, EffectMaxSeconds);
 
         var target = ToyTarget(caller, needle, verb);
@@ -497,7 +485,7 @@ public partial class Gpp
     {
         if (!WarmupToy(caller, out _)) return;
 
-        var (needle, _) = SplitToyArg(arg);
+        string needle = ToyArgs.Split(arg).Needle;
 
         if (needle is "all" or "everyone" or "*")
         {

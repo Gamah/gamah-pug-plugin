@@ -624,9 +624,9 @@ public partial class Gpp
     {
         int ticks = 0;
         CounterStrikeSharp.API.Modules.Timers.Timer? timer = null;
-        timer = AddTimer(1.0f, () =>
+        timer = AddTimer(2.0f, () =>
         {
-            if (++ticks > 10 || MatchRunning)
+            if (++ticks > 30 || MatchRunning)
             {
                 timer?.Kill();
                 return;
@@ -638,11 +638,15 @@ public partial class Gpp
                     .Select(player =>
                     {
                         var pawn = player.PlayerPawn.Value;
+                        // The team is in here because "stuck in spectator" turned out to be two different
+                        // things wearing the same face: a corpse on a team, and an actual move to
+                        // spectator by something that is not this plugin.
                         return pawn == null || !pawn.IsValid
-                            ? $"{player.PlayerName}: no pawn"
-                            : $"{player.PlayerName}: {pawn.MoveType}/{pawn.ActualMoveType} hp {pawn.Health}";
+                            ? $"{player.PlayerName}: {player.Team}, no pawn"
+                            : $"{player.PlayerName}: {player.Team}, {pawn.MoveType}/{pawn.ActualMoveType} "
+                                + $"hp {pawn.Health}";
                     }));
-                Logger.LogInformation("Warmup +{Ticks}s: phase {Phase}, warmup {Warmup}, freeze {Freeze}, "
+                Logger.LogInformation("Warmup +{Ticks}x2s: phase {Phase}, warmup {Warmup}, freeze {Freeze}, "
                     + "clinch {Clinch}, freezetime {FreezeTime}. {Movement}",
                     ticks, rules?.GamePhase, rules?.WarmupPeriod, rules?.FreezePeriod,
                     ConVar.Find("mp_match_can_clinch")?.GetPrimitiveValue<bool>(),
@@ -687,19 +691,40 @@ public partial class Gpp
 
         foreach (var player in HumanPlayers())
         {
-            if (player.PawnIsAlive) continue;
-            if (player.Team is not (CsTeam.CounterTerrorist or CsTeam.Terrorist)) continue;
-            try
+            // A drafted player who is off the sides altogether goes back on their own one. Being dead on
+            // a team and being moved off it look identical from the inside - both are somebody else's
+            // camera - and only one of them is fixed by a respawn, so both are handled here. The side is
+            // read live, because the halftime swap moved it.
+            ulong id = Id(player);
+            if (player.Team is not (CsTeam.CounterTerrorist or CsTeam.Terrorist))
             {
-                player.Respawn();
-                Logger.LogInformation("Respawned {Name}, who the match left dead, into the warmup.",
-                    player.PlayerName);
+                if (!_team1.Contains(id) && !_team2.Contains(id)) continue;
+                var side = _team1.Contains(id) ? _team1Side : SideOf(2);
+                player.ChangeTeam(side);
+                Logger.LogInformation("Put {Name} back on {Side} after the match - they came out of it "
+                    + "off the sides.", player.PlayerName, side == CsTeam.CounterTerrorist ? "CT" : "T");
             }
-            catch (Exception error)
+            else if (player.PawnIsAlive)
             {
-                Logger.LogWarning("Could not respawn {Name} into the warmup: {Error}",
-                    player.PlayerName, error.Message);
+                continue;
             }
+
+            // A team change hands no pawn back in the same frame, so the respawn waits for one.
+            Server.NextFrame(() =>
+            {
+                if (!player.IsValid || player.PawnIsAlive) return;
+                try
+                {
+                    player.Respawn();
+                    Logger.LogInformation("Respawned {Name} into the warmup after the match.",
+                        player.PlayerName);
+                }
+                catch (Exception error)
+                {
+                    Logger.LogWarning("Could not respawn {Name} into the warmup: {Error}",
+                        player.PlayerName, error.Message);
+                }
+            });
         }
     }
 
