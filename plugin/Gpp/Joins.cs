@@ -22,7 +22,10 @@ public partial class Gpp
     // part of that: people carry on playing while they vote.
     private HookResult OnJoinTeam(CCSPlayerController? player, CommandInfo command)
     {
-        if (_phase is PugPhase.Idle or PugPhase.MapVote) return HookResult.Continue;
+        if (_phase is PugPhase.Idle or PugPhase.MapVote)
+        {
+            return JoinLiveMatchNow(player, command);
+        }
         if (player == null || !player.IsValid || player.IsBot) return HookResult.Continue;
 
         player.PrintToChat(Prefix() + (_phase == PugPhase.Draft
@@ -85,6 +88,67 @@ public partial class Gpp
         });
     }
 
+    // A spectator picking a side in a live match. The engine queues that pick to the round boundary, so
+    // the side does not take for up to two minutes - and the mid-match nudge below reads the player as a
+    // spectator in the meantime and parks them again, which cancels the pick outright. So the pick is
+    // honoured here instead: on a team and alive this round, the same way the draft seats people.
+    //
+    // Only a spectator in a live match is taken over. Everything else - a team change in warmup, the
+    // vote, a bot - is the engine's to handle.
+    private HookResult JoinLiveMatchNow(CCSPlayerController? player, CommandInfo command)
+    {
+        if (player == null || !player.IsValid || player.IsBot || player.IsHLTV) return HookResult.Continue;
+        if (!MatchRunning || !Config.SpectateMidMatchJoins) return HookResult.Continue;
+        if (player.Team is CsTeam.CounterTerrorist or CsTeam.Terrorist) return HookResult.Continue;
+
+        // jointeam <team>: 2 is T, 3 is CT. Anything else - spectator, the unassigned slot, a malformed
+        // argument - is not a side, so it is left alone.
+        var side = command.GetArg(1) switch
+        {
+            "2" => CsTeam.Terrorist,
+            "3" => CsTeam.CounterTerrorist,
+            _ => CsTeam.None,
+        };
+        if (side == CsTeam.None) return HookResult.Continue;
+
+        // The team is taken here rather than left to the engine, which would hold the pick as pending and
+        // let the nudge above cancel it. No respawn: they join the next round like anyone else, and are a
+        // dead teammate until it starts - which is the whole reason they are told so.
+        _midMatchNudged.Remove(Id(player));
+        _heldInSpectator.Remove(Id(player));
+        player.ChangeTeam(side);
+        HoldSpawnNotice(player);
+        Announce($"{player.PlayerName} YOU WILL SPAWN NEXT ROUND");
+        Logger.LogInformation("{Name} picked {Side} mid-match - on the team now, spawning next round.",
+            player.PlayerName, side == CsTeam.CounterTerrorist ? "CT" : "T");
+        return HookResult.Stop;
+    }
+
+    // The alert box is transient - one print fades - so it is redrawn at 1Hz for as long as the notice
+    // should stand, and only ever to the player it is addressed to. Everybody else reads it in chat.
+    private void HoldSpawnNotice(CCSPlayerController player)
+    {
+        ulong id = Id(player);
+        var ticksLeft = 6;
+        CounterStrikeSharp.API.Modules.Timers.Timer? notice = null;
+        notice = AddTimer(1.0f, () =>
+        {
+            var them = Utilities.GetPlayers().FirstOrDefault(p => p.IsValid && Id(p) == id);
+            var pawn = them?.PlayerPawn.Value;
+            var alive = pawn != null && pawn.IsValid && pawn.Health > 0;
+
+            // Retired, gone, spawned, or shown for long enough: the notice has nothing left to say, and a
+            // repeating timer nobody kills outlives the match it belongs to.
+            if (Retired || them == null || alive || ticksLeft-- <= 0)
+            {
+                notice?.Kill();
+                return;
+            }
+
+            them.PrintToCenterAlert(Alert(them.PlayerName, "YOU WILL SPAWN NEXT ROUND"));
+        }, TimerFlags.REPEAT);
+    }
+
     // Somebody connecting into a live match. The pug's phase is Idle for the whole match - the phases are
     // the pre-match machinery - so none of the sweeps above are running and the engine assigns the team
     // itself: sit in the team-select menu past mp_force_pick_time and it picks a side for you. Which is
@@ -117,6 +181,10 @@ public partial class Gpp
         // Anybody else chooses for themselves. Not held in _heldInSpectator: that set is the pug's own
         // parking, swept and released by the phases. This is a one-off nudge, and from here it is their
         // call.
+        // OnClientPutInServer fires on every pawn the engine makes for them, not just on arrival, so the
+        // nudge is once per match: told twice it reads as the server fighting them for the slot.
+        if (!_midMatchNudged.Add(Id(player))) return;
+
         player.ChangeTeam(CsTeam.Spectator);
         player.PrintToChat(Prefix() + "A match is live - you are in spectator so the server does not "
             + "pick a side for you. Press M to join one.");
@@ -127,6 +195,10 @@ public partial class Gpp
     // and the draft, and before this nothing ever moved them back: an undrafted player, or anyone swept
     // while the teams were being built, sat in spectator through the match and through the one after it.
     private readonly HashSet<ulong> _heldInSpectator = [];
+
+    // Who has already been told, this match, that they are in spectator and may pick. Cleared with the
+    // held-spectator sweep, so the next pug asks again.
+    private readonly HashSet<ulong> _midMatchNudged = [];
 
     private void HoldInSpectator(CCSPlayerController player)
     {
@@ -175,6 +247,7 @@ public partial class Gpp
     // who chose to spectate stays where they are.
     private void ReleaseHeldSpectators()
     {
+        _midMatchNudged.Clear();
         if (_heldInSpectator.Count == 0) return;
 
         foreach (var player in HumanPlayers())
