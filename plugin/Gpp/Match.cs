@@ -689,6 +689,10 @@ public partial class Gpp
     // the ready phase's sweep does at its own transition, for the same reason.
     private bool _respawnTheDeadNextRound;
 
+    // Set by the hand-back: the housekeeping sweep owed to a match that ended by itself, which has to
+    // wait for the respawn pass below to finish reading the drafted rosters.
+    private bool _housekeepAfterRespawn;
+
     private void RespawnWhoeverTheMatchLeftDead()
     {
         _respawnTheDeadNextRound = false;
@@ -730,6 +734,27 @@ public partial class Gpp
                 }
             });
         }
+
+        HousekeepAfterMatch();
+    }
+
+    // The same sweep `!pug stop` runs, owed to every match that ends by itself: a finished pug leaves
+    // behind the armbands, the volunteer pool, the pinned team size and whatever HUD was up, and the next
+    // pug inherits all of it. Deferred to a frame after the respawns above so a sweep cannot land between
+    // a team change and the respawn that follows it.
+    private void HousekeepAfterMatch()
+    {
+        if (!_housekeepAfterRespawn) return;
+        _housekeepAfterRespawn = false;
+
+        Server.NextFrame(() =>
+        {
+            // A new pug got going while the intermission ran: it owns this state now.
+            if (MatchRunning || _phase != PugPhase.Idle) return;
+
+            SweepPugState();
+            Logger.LogInformation("Post-match housekeeping done - armbands, phases and HUDs cleared.");
+        });
     }
 
     // The engine ended the match itself: its end-of-match screen is up and GamePhase is 5 for
@@ -758,11 +783,23 @@ public partial class Gpp
                 Logger.LogWarning("The end-of-match panel has not let go after {Seconds}s - reloading the "
                     + "map, which is the only other thing that clears it.", waited);
                 ReloadThisMap();
+                // The reload spawns everybody itself, so nothing is waiting on the drafted rosters.
+                SweepPugState();
+                Logger.LogInformation("Post-match housekeeping done - armbands, phases and HUDs cleared.");
                 return;
             }
             Logger.LogInformation("Intermission over after {Seconds}s - warmup back, no map reload.", waited);
             ReturnServerToWarmup();
             LogTheWarmupWeOpened();
+
+            // Not here: the sweep clears _team1/_team2, and the respawn pass armed by the hand-back needs
+            // them one round start later to put a drafted player back on their own side. So it goes last,
+            // after that pass has run.
+            _housekeepAfterRespawn = true;
+
+            // And a backstop, because the sweep is owed whether or not that round start ever arrives:
+            // leaving the armbands set is how this bug hid in the first place.
+            AddTimer(20.0f, HousekeepAfterMatch);
         }
 
         if (!InPostGame())
@@ -806,6 +843,13 @@ public partial class Gpp
         ReturnDiscordTeams();
 
         ReturnServerToWarmup();
+
+        // Same housekeeping as a match that ends by itself, and on the same delay: the respawn pass still
+        // has to read the rosters first. `!pug stop` has already swept by the time it gets here, and a
+        // second sweep costs nothing.
+        _housekeepAfterRespawn = true;
+        AddTimer(20.0f, HousekeepAfterMatch);
+
         if (wasRunning) Announce($"Match ended. {why}");
     }
 

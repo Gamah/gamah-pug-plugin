@@ -16,8 +16,14 @@ namespace Gpp;
 // way to hold it is to keep writing it back.
 public partial class Gpp
 {
-    // Everything off, everything back to warmup. Safe to run from any phase, including none.
-    internal void StopEverything(string why)
+    // Everything the plugin was holding, put down. No cvars and no announcements: this is the state
+    // sweep, which `!pug stop` runs as part of stopping the server and the hand-back after a match runs
+    // on its own - a finished pug leaves as much behind as an abandoned one.
+    //
+    // ResetDraft is what clears the armbands, and that is the point of running it after a match: while
+    // the captains stayed set, the next pug's vote saw them as pinned, never opened the !captain window
+    // and kept them - which is how the same two people captained three pugs in a row.
+    internal void SweepPugState()
     {
         // Phase state first, so nothing below is fighting a timer that is still running.
         CloseCaptainOptIn(draw: false);
@@ -42,6 +48,12 @@ public partial class Gpp
 
         // The harness, if a test run left one going.
         StopTestRun();
+    }
+
+    // Everything off, everything back to warmup. Safe to run from any phase, including none.
+    internal void StopEverything(string why)
+    {
+        SweepPugState();
 
         // Any match, ours or one nobody here started: !pug stop is the command people reach for when the
         // server is in a state nothing else will clear, so it ends the match and execs the warmup cfg
