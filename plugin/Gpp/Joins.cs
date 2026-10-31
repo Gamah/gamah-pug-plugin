@@ -117,6 +117,7 @@ public partial class Gpp
         _midMatchNudged.Remove(Id(player));
         _heldInSpectator.Remove(Id(player));
         player.ChangeTeam(side);
+        _owedASpawn.Add(Id(player));
         HoldSpawnNotice(player);
         Announce($"{player.PlayerName} YOU WILL SPAWN NEXT ROUND");
         Logger.LogInformation("{Name} picked {Side} mid-match - on the team now, spawning next round.",
@@ -171,6 +172,7 @@ public partial class Gpp
         {
             var side = _team1.Contains(id) ? _team1Side : SideOf(2);
             player.ChangeTeam(side);
+            _owedASpawn.Add(id);
             player.PrintToChat(Prefix() + "Welcome back - you are on "
                 + $"{(side == CsTeam.CounterTerrorist ? "CT" : "T")} with your team.");
             Logger.LogInformation("{Name} came back mid-match - put back on {Side} with their team.",
@@ -189,6 +191,40 @@ public partial class Gpp
         player.PrintToChat(Prefix() + "A match is live - you are in spectator so the server does not "
             + "pick a side for you. Press M to join one.");
         Logger.LogInformation("{Name} arrived mid-match - held in spectator to choose a side.", player.PlayerName);
+    }
+
+    // Taken a side mid-match and not spawned yet. A team change made by the plugin does not reliably put
+    // somebody on the engine's round-start spawn list, so the promise made on their screen is kept here
+    // instead of hoped for: at the next round start anyone in this set who is on a side and not alive is
+    // spawned, and the set empties either way.
+    private readonly HashSet<ulong> _owedASpawn = [];
+
+    internal void SpawnWhoeverTookASideMidMatch()
+    {
+        if (_owedASpawn.Count == 0) return;
+
+        foreach (var player in HumanPlayers())
+        {
+            ulong id = Id(player);
+            if (!_owedASpawn.Remove(id)) continue;
+            if (player.Team is not (CsTeam.CounterTerrorist or CsTeam.Terrorist)) continue;
+            if (player.PawnIsAlive) continue;
+
+            try
+            {
+                player.Respawn();
+                Logger.LogInformation("Spawned {Name} into the round they picked a side for - the engine "
+                    + "had not.", player.PlayerName);
+            }
+            catch (Exception error)
+            {
+                Logger.LogWarning("Could not spawn {Name} after their mid-match pick: {Error}",
+                    player.PlayerName, error.Message);
+            }
+        }
+
+        // Anyone left in the set is no longer here: they do not come back owed a spawn.
+        _owedASpawn.Clear();
     }
 
     // Everyone the plugin itself has put in spectator. The pug moves people out of the way for the knife

@@ -95,6 +95,12 @@ public partial class Gpp
         {
             StartPendingDemo();
 
+            // Whoever took a side mid-match and was promised the next round. The engine spawns a late
+            // joiner it placed itself; one the plugin placed is not reliably on that list, and the player
+            // sits dead through the round they were told they would play - which is the whole complaint
+            // the mid-match join was meant to answer, arriving one step later.
+            AfterTick(SpawnWhoeverTookASideMidMatch);
+
             // The warmup the hand-back opened has started its first round. Anyone the match left dead is
             // still dead in it, and this is the only moment that is true and fixable.
             if (_respawnTheDeadNextRound && !MatchRunning)

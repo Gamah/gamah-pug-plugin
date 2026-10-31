@@ -46,6 +46,9 @@ public partial class Gpp
         // Anyone the pug parked in spectator gets the team menu back.
         ReleaseHeldSpectators();
 
+        // A spawn owed to a mid-match pick belongs to the match that was running.
+        _owedASpawn.Clear();
+
         // The harness, if a test run left one going.
         StopTestRun();
     }
