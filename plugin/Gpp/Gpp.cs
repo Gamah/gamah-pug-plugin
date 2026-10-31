@@ -55,9 +55,17 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         HookSmokePractice();
         StartWarmupWatch();
 
-        // Whoever is already standing there: a plugin loads after the players it loads into, and a
-        // number has to exist before the first .players.
-        NumberEveryone();
+        // Whoever is already standing there - on a hot reload, which is how this plugin is deployed: into
+        // a server that is already up, with a room full of people, and a number has to exist before the
+        // first .players.
+        //
+        // Never on a cold start. CounterStrikeSharp loads plugins before the engine has a game server, so
+        // there is no room to read and asking is a category error: Server.MaxPlayers throws there, and a
+        // throw out of Load costs the whole server rather than this plugin - CSS cannot unload what
+        // half-loaded, forces cleanup, and the first client to connect aborts the process on a native
+        // hook whose managed delegate has gone. Nobody is connected on a cold start, so nothing is lost
+        // by not asking.
+        if (hotReload) NumberEveryone();
         RegisterListener<Listeners.OnMapStart>(OnMapStart);
         RegisterListener<Listeners.OnClientDisconnect>(OnClientDisconnect);
 
