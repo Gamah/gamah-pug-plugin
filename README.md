@@ -4,12 +4,13 @@ Ten-man pug flow for a CS2 server: map vote, captain sign-up, a captain knife fo
 then the match itself - ready up, knife for sides, go live, pauses, a demo and a stats row.
 [`docs/match.md`](docs/match.md) is the match engine, and what it deliberately does not do.
 
-Two parts, and **the second one is optional**:
+Three parts, and **only the first is required**:
 
 | | What it is | Needs |
 | --- | --- | --- |
 | [`plugin/`](plugin/) | The CounterStrikeSharp plugin. The whole pug lives here. | CS2 server, Metamod, CounterStrikeSharp |
 | [`bot/`](bot/) | A Discord bot that moves the drafted teams into voice channels. | Python 3.11+, a Discord bot token |
+| [`web/`](web/) | The stats site: match history, player totals, demo files. Reads `gpp.db` and writes nothing. | .NET 10, read access to the plugin's database |
 
 The plugin does not need the bot. With `discord.base_url` left empty in `Gpp.json` it makes no
 network calls at all, `!link-discord` tells players the server has no bot, and everything else behaves
@@ -23,6 +24,7 @@ The bot does need the plugin: it has no way to know who drafted whom otherwise.
 plugin/Gpp/        CounterStrikeSharp plugin (C#, .NET 10)
 plugin/Gpp.Tests/  the engine-free rules and the stats SQL, under xunit
 bot/               Discord companion (Python) - optional
+web/Gpp.Web/       the stats site (C#, .NET 10) - a read-only reader of gpp.db
 docs/              deployment, the match engine, the overlay, and the plugin <-> bot contract
 examples/          a filled-in Gpp.json, the three phase cfgs, and an install script to adapt
 ```

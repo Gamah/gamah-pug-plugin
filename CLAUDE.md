@@ -52,6 +52,7 @@ contract. It carries the version read and the date, because it can change withou
 | [`docs/deploy.md`](docs/deploy.md) | installing it on a server, and why `Gpp.dll` is written last |
 | [`docs/discord.md`](docs/discord.md) | the plugin ↔ bot HTTP contract and the linking flow |
 | [`bot/README.md`](bot/README.md) | how to run the bot |
+| [`web/README.md`](web/README.md) | the stats site: its pages, why it opens the db read-only, how it is deployed |
 
 The server this runs on is documented in its own repo, not here: the box, the units, the updater and
 what bites you there.

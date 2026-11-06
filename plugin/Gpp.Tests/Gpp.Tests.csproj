@@ -23,6 +23,8 @@
     <Compile Include="../Gpp/HudMetrics.cs" />
     <Compile Include="../Gpp/WorldLayout.cs" />
     <Compile Include="../Gpp/WorldGeometry.cs" />
+    <!-- The stats site's read side: same deal, and the pairing with StatsStore is what it tests. -->
+    <Compile Include="../../web/Gpp.Web/StatsQueries.cs" />
   </ItemGroup>
 
   <ItemGroup>
