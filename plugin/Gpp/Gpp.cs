@@ -125,7 +125,12 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
 
         if (_botTarget == 0)
         {
-            Server.ExecuteCommand("bot_quota 0;bot_join_after_player 1;bot_kick");
+            // Never a bare bot_kick: the engine's GOTV client is a bot controller - it logs in as
+            // "SourceTV<0><BOT><Unassigned>" - so bot_kick takes SourceTV with it, and a demo being
+            // recorded loses its frame source and finalises as a header with no frames in it. Kicked by
+            // name instead, with the HLTV client left alone.
+            Server.ExecuteCommand("bot_quota 0;bot_join_after_player 1");
+            KickTestBots();
             Logger.LogInformation("count_bots: bots turned off.");
             return;
         }
@@ -133,6 +138,26 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         _botTopUpTimer = AddTimer(2.0f, TopUpTestBots, TimerFlags.REPEAT);
         TopUpTestBots();
     }
+
+    // Every bot on the server except the GOTV client, by name. bot_kick with no argument would be one
+    // command instead of ten, and it is what kicked SourceTV off every map start.
+    //
+    // IsHLTV is not enough on its own: a second after the map loads the GOTV client is still
+    // STEAM_ID_PENDING and does not report itself as HLTV yet, so the name is checked as well. The engine
+    // names it "SourceTV" and it is the only bot nobody asked for.
+    // [SOURCE: measured on this server 2026-11-06]
+    private void KickTestBots()
+    {
+        foreach (var bot in Utilities.GetPlayers()
+                     .Where(player => player.IsValid && player.IsBot && !player.IsHLTV
+                                   && !IsGotvClient(player)))
+        {
+            Server.ExecuteCommand($"bot_kick \"{bot.PlayerName}\"");
+        }
+    }
+
+    private static bool IsGotvClient(CCSPlayerController player) =>
+        player.PlayerName.StartsWith("SourceTV", StringComparison.OrdinalIgnoreCase);
 
     private void TopUpTestBots()
     {

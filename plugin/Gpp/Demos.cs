@@ -14,6 +14,12 @@ namespace Gpp;
 //  - at the end of a match GOTV is still sending the last round. Stopping the recording immediately
 //    truncates it, so the stop waits out the broadcast delay (see FinishMatch, which stretches
 //    mp_match_restart_delay to cover the same window).
+//  - nothing is on disk until the recording stops. The engine writes the whole file at tv_stoprecord or
+//    at the level change, and prints nothing at all when tv_record is accepted.
+//
+// Two things silently produce a demo with no frames in it, and both have bitten this server: GOTV being
+// delayed (tv_delay, reset to 105 by every gamemode cfg) and SourceTV being kicked, which a bare
+// bot_kick does because the GOTV client is a bot controller - see KickTestBots.
 //
 // [SOURCE: a third-party pug plugin, MatchZy 0.9.1 DemoManagement.cs, read 2026-10-19]
 public partial class Gpp
@@ -87,14 +93,18 @@ public partial class Gpp
         _demoFile = absolute;
         Logger.LogInformation("Recording demo {Path}", absolute);
 
-        // tv_record failing says so on the server console and nowhere else, so look for the file instead.
-        AddTimer(5.0f, () =>
+        // The engine writes the file at tv_stoprecord or at the level change, never while recording, so
+        // the file not being there yet says nothing. What does kill a recording silently is a delayed
+        // GOTV master: it holds a single frame, the recorder captures none of them, and the demo
+        // finalises as a header with "Recording time -0.0". tv_delay is reset to 105 by every map's
+        // gamemode cfg, which is why the phase cfgs assert it back to 0 and why this warns rather than
+        // trusting them. [SOURCE: measured on this server 2026-11-06]
+        int delay = ConVar.Find("tv_delay")?.GetPrimitiveValue<int>() ?? 0;
+        if (delay > 0)
         {
-            if (_recording && !File.Exists(absolute))
-            {
-                Logger.LogWarning("Demo file {Path} was not created - check the console for CDemoFile errors.", absolute);
-            }
-        });
+            Logger.LogWarning("tv_delay is {Delay}, so GOTV is delayed and the demo will record no "
+                + "frames. tv_delay 0 belongs in the phase cfgs.", delay);
+        }
     }
 
     private void StopDemo(float delaySeconds)
