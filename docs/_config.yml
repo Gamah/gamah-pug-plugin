@@ -1,5 +1,5 @@
 title: GPP
-description: The pug plugin - how to run a pug, and how to play one
+description: How to run a pug, and how to play one
 defaults:
   - scope:
       path: ""
