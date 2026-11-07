@@ -118,6 +118,16 @@
       "name": "cs_militia",
       "workshop_id": "3089953774",
       "display": "Militia 2017"
+    },
+    {
+      "name": "de_aztec",
+      "workshop_id": "3070960099",
+      "display": "Aztec"
+    },
+    {
+      "name": "de_cpl_mill",
+      "workshop_id": "3073499287",
+      "display": "CPL Mill"
     }
   ]
 }
