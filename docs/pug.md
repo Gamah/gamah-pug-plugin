@@ -24,6 +24,19 @@ Admin page: [running a pug](admin.md).
 
 Your draft number stays yours. Picks do not renumber anyone.
 
+## The overtime vote
+
+At 12-11 the match pauses in freeze time and asks the room, because the engine decides overtime the
+instant the score goes level and will not take an answer after that.
+
+* `!1` plays it out. That is six more rounds.
+* `!2` calls it a draw at 12-12.
+
+Majority wins. Nobody answering, or an even split, is a draw. It unpauses as soon as everyone has
+answered, or when the clock runs out, 30 seconds on this server.
+
+If overtime does not settle it the same question comes back at 15-14, then 18-17.
+
 ## Commands
 
 | | |
@@ -58,7 +71,6 @@ Your draft number stays yours. Picks do not renumber anyone.
 * You cannot join a team during the draft. Spectator is how it knows you are undrafted.
 * Nothing times out at ready. The countdown is just the overlay. `.ready` still starts it.
 * `!1` outside a vote or draft does nothing.
-* Level at the end asks the room: `!1` overtime, `!2` draw.
 * Join mid match and you land in spectator. Press M.
 * `.kick` keeps you out for that pug only, not forever.
 * `.spec` is not a kick. Press M and you are back.
