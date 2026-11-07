@@ -40,7 +40,8 @@
     "demo_path": "gpp-demos",
     "demo_name_format": "{TIME}_{MAP}_{TEAM1}_vs_{TEAM2}",
     "stats_enabled": true,
-    "stats_database": "gpp.db"
+    "stats_database": "gpp.db",
+    "stats_snapshot": "/var/lib/gpp-web/gpp.db"
   },
   "count_bots": false,
   "discord": {

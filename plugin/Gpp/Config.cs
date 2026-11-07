@@ -119,6 +119,15 @@ public class MatchSettings
 
     // SQLite file for match and player rows. A bare name sits next to the plugin dll.
     [JsonPropertyName("stats_database")] public string StatsDatabase { get; set; } = "gpp.db";
+
+    // Where to drop a read-only copy of the database after each write. Empty disables it.
+    //
+    // The live file is WAL, so a reader needs write access to the plugin directory to create its "-shm"
+    // sidecar - which is not a thing to hand the stats site. The snapshot is a plain, non-WAL database,
+    // readable with no write access at all, so it goes somewhere the reader owns and the plugin directory
+    // stays shut: "/var/lib/gpp-web/gpp.db" is the one on this server. A bare name sits next to the
+    // plugin dll, which defeats the point.
+    [JsonPropertyName("stats_snapshot")] public string StatsSnapshot { get; set; } = "";
 }
 
 public class GppConfig : BasePluginConfig

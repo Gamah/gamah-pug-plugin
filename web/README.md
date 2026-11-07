@@ -26,11 +26,18 @@ played, `/player/{steamid64}` one player's totals and their matches, `/demos` th
 
 ## Two things that will bite you
 
-- **The database is opened `Mode=ReadOnly`, and that is load-bearing.** A reader shares the file with a
-  live match because the plugin turns WAL on, and read-only means a bug here cannot damage a night's
-  stats. `immutable=1` would also open it without write access and must not be used: it reads the main
-  database file alone, so every row still in the `-wal` file is silently missing - measured, the last
-  committed match disappears.
+- **Point `GPP_DB` at the plugin's `stats_snapshot`, not at the live database.** Opening a WAL database
+  means creating its `-shm` sidecar in the database's own directory, and that is true of a read-only
+  connection too - SQLite keeps its reader bookkeeping in there. The service user has no write access to
+  the plugin directory, so pointed at the live file every page 500s on `SQLite Error 14: unable to open
+  database file` while the data behind it is perfectly fine. Granting that write bit is the wrong answer:
+  a reader of match history has no business holding one next to a live `Gpp.dll`. GPP's snapshot is a
+  `VACUUM INTO` copy taken the moment each write commits, in rollback-journal mode, so reading it asks
+  for nothing. It is as fresh as the last completed match, which is all these pages show.
+- **The database is opened `Mode=ReadOnly`, and that is load-bearing.** A bug here cannot damage a
+  night's stats. `immutable=1` would also open without write access and must not be used: it reads the
+  main database file alone, so every row still in a `-wal` file is silently missing - measured against
+  the live database, the last committed match disappears.
 - **Nothing in the database records a demo's filename**, so a match's demos are found by matching the
   map and both team names against what is on disk, which is what `demo_name_format` puts there by
   default. Change that format and the links go quiet rather than wrong. A `demo` column on
@@ -39,8 +46,9 @@ played, `/player/{steamid64}` one player's totals and their matches, `/demos` th
 ## Deploying it
 
 A systemd unit on the game VM, bound to localhost, reverse-proxied by whatever already holds the
-certificate. It needs read access to the plugin directory - the service user must be able to open
-`gpp.db` and its `-wal`/`-shm` files, which is a group membership, not a copy of the database.
+certificate. It reads GPP's snapshot, so it needs no access to the plugin directory at all - only to the
+snapshot directory, which it owns, and to the demo directory. Set `stats_snapshot` in `Gpp.json` to the
+same path and reload the plugin.
 
     [Unit]
     Description=GPP stats site
@@ -49,14 +57,20 @@ certificate. It needs read access to the plugin directory - the service user mus
     [Service]
     User=gppweb
     SupplementaryGroups=steam
-    Environment=GPP_DB=/home/steam/cs2/game/csgo/addons/counterstrikesharp/plugins/Gpp/gpp.db
+    Environment=GPP_DB=/var/lib/gpp-web/gpp.db
     Environment=GPP_DEMOS=/home/steam/cs2/game/csgo/gpp-demos
     Environment=ASPNETCORE_URLS=http://127.0.0.1:5057
     ExecStart=/usr/bin/dotnet /opt/gpp-web/Gpp.Web.dll
     Restart=always
     ProtectSystem=strict
+    StateDirectory=gpp-web
     ReadOnlyPaths=/home/steam/cs2
     PrivateTmp=true
+
+`SupplementaryGroups=steam` is still what gets the demo files read; the snapshot needs nothing. GPP runs
+as `steam` and writes the snapshot, so the directory has to be writable by `steam` and readable by
+`gppweb` - `StateDirectory=gpp-web` creates it `gppweb:gppweb`, so it wants `chgrp steam` and `chmod
+g+w`, or simply `install -d -o steam -g gppweb -m 750 /var/lib/gpp-web`.
 
     [Install]
     WantedBy=multi-user.target

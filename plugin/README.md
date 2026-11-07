@@ -173,6 +173,11 @@ load**. [`../examples/Gpp.json`](../examples/Gpp.json) is a filled-in one.
     that does not start at a level load captures nothing. The demo opens on the draft, not on LIVE, and
     stops when the match ends. See [../docs/match.md](../docs/match.md)
   - `stats_enabled` (true), `stats_database` (`gpp.db`, next to the plugin dll)
+  - `stats_snapshot` ("") - after each write, copy the database here for anything outside the plugin to
+    read. Empty disables it. The live file is WAL, and opening a WAL database at all - read-only
+    included - means creating its `-shm` sidecar in the database's own directory, so a reader needs write
+    access there. The snapshot is a plain non-WAL copy that reads with no write access at all, so it goes
+    somewhere the reader owns. `/var/lib/gpp-web/gpp.db` is the one the stats site uses.
 - `discord` — optional, off while `base_url` is empty. See [../docs/discord.md](../docs/discord.md)
 
 ## Build and install

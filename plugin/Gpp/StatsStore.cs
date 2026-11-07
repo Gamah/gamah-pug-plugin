@@ -65,6 +65,41 @@ internal static class StatsStore
         command.ExecuteNonQuery();
     }
 
+    // A read-only copy of the database for anything outside this process to read.
+    //
+    // The live file is WAL, and a WAL database cannot be opened *at all* - not even read-only - without
+    // creating its "-shm" sidecar in the database's own directory. The stats site runs as its own user
+    // with no write access there, so every page it served died on `SQLite Error 14: unable to open
+    // database file` while the data behind it was perfectly fine. That is not a permission to grant: a
+    // reader of match history has no business holding a write bit next to a live Gpp.dll.
+    //
+    // VACUUM INTO settles it instead of working around it. The output is a fresh, fully checkpointed
+    // database in rollback-journal mode, and a reader opening a non-WAL file read-only needs no sidecar
+    // and so no write access anywhere. The copy is taken on the writing connection, inside the same task
+    // that just committed, so it is a consistent snapshot of a quiet moment rather than a race with the
+    // next round.
+    //
+    // VACUUM INTO refuses an existing target, so the copy lands beside the destination and is moved over
+    // it. The move is atomic within a filesystem, which is what stops the site reading a half-written
+    // file.
+    // [SOURCE: SQLite requires write access to create the -shm of a WAL database; measured on this server
+    // 2026-11-07 as the cause of the stats site's 500s.]
+    public static void Snapshot(SqliteConnection connection, string path)
+    {
+        string? directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+
+        string staging = path + ".tmp";
+        File.Delete(staging);
+
+        using var command = connection.CreateCommand();
+        // No parameter binding: VACUUM INTO takes a literal, so the quote is doubled by hand.
+        command.CommandText = $"VACUUM INTO '{path.Replace("'", "''")}.tmp'";
+        command.ExecuteNonQuery();
+
+        File.Move(staging, path, overwrite: true);
+    }
+
     // Written when the match goes live, so a match that never finishes still leaves a row saying it ran.
     public static void StartMatch(SqliteConnection connection, long matchId, string map, string team1,
         string team2, DateTime startedAt)

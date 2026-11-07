@@ -167,6 +167,13 @@ public partial class Gpp
         return Path.IsPathRooted(file) ? file : Path.Join(ModuleDirectory, file);
     }
 
+    private string SnapshotPath()
+    {
+        string file = Config.Match.StatsSnapshot;
+        if (string.IsNullOrWhiteSpace(file)) return "";
+        return Path.IsPathRooted(file) ? file : Path.Join(ModuleDirectory, file);
+    }
+
     private void RecordMatchStart()
     {
         if (!Config.Match.StatsEnabled) return;
@@ -204,6 +211,25 @@ public partial class Gpp
             StatsStore.EndMatch(connection, matchId, score1, score2, winner, endedAt, rows));
     }
 
+    // Taken on the writing connection the moment a write commits, so the stats site reads a plain
+    // non-WAL copy it needs no write access for - see StatsStore.Snapshot. A snapshot that fails must not
+    // cost the rows that were just written, so it carries its own catch rather than riding Write's.
+    private void Snapshot(SqliteConnection connection)
+    {
+        string path = SnapshotPath();
+        if (path.Length == 0) return;
+
+        try
+        {
+            StatsStore.Snapshot(connection, path);
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning("Wrote the stats, but could not snapshot them to {Path}, so the stats site "
+                + "is showing an older copy: {Message}", path, exception.Message);
+        }
+    }
+
     // A disk hitch inside a round is a visible stutter, so the write goes to a task. A pug is not worth
     // failing over stats either: a broken database (or a SQLite native library that will not load at all)
     // is one line in the log and the match carries on.
@@ -215,6 +241,7 @@ public partial class Gpp
             {
                 using var connection = StatsStore.Open(path);
                 work(connection);
+                Snapshot(connection);
             }
             catch (Exception exception)
             {
