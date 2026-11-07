@@ -1,6 +1,6 @@
 # GPP
 
-The pug plugin the server runs. Map vote, captains, draft, knife for sides, then the match — it does
+The pug plugin the server runs. Map vote, captains, draft, knife for sides, then the match - it does
 the organising so nobody has to type `mp_warmup_end` ever again.
 
 Two pages, depending on which one you are tonight:
@@ -15,7 +15,7 @@ The admin commands, which is five of them plus a handful for when a night goes s
 
 ---
 
-Everything on both pages is typed into normal chat. `.ready` and `!ready` do the same thing — the dot
+Everything on both pages is typed into normal chat. `.ready` and `!ready` do the same thing - the dot
 is what people use.
 
 The rest, if you are the curious sort: [every command and config key](https://github.com/Gamah/gamah-pug-plugin/blob/master/plugin/README.md),

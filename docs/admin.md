@@ -1,4 +1,4 @@
-# Running a pug — the admin page
+# Running a pug: the admin page
 
 *The players' page is [here](pug.md).*
 
@@ -9,7 +9,7 @@ only exist for working on the plugin, is in
 Admin means `@css/config` in CounterStrikeSharp's own `configs/admins.json`, checked against your
 SteamID. `css_admins_reload` applies an edit without a restart.
 
-Commands take `!` or `.` — `!pug start` and `.pug start` are the same thing. `.` is what people type.
+Commands take `!` or `.` - `!pug start` and `.pug start` are the same thing. `.` is what people type.
 
 ## The short version
 
@@ -34,7 +34,7 @@ If you only ever learn those five you can run a night.
 | `!pug draft` | The draft on its own, on the map the server is already on |
 | `!pug captains` | Reroll both captains at random. Only before a pick has been made |
 | `!pug captains <a> <b>` | Pin exactly those two. `!pug captains humans` picks the two people on a botted server |
-| `!pug match` | Start the match on the drafted teams — only needed with `auto_start_match` off |
+| `!pug match` | Start the match on the drafted teams - only needed with `auto_start_match` off |
 
 Add `force` as a second word (`!pug start force`) to skip the `min_players` check, skip the captain
 sign-up, and end a match that is already running first.
@@ -58,7 +58,7 @@ anywhere.
 
 ## People
 
-Numbers come from `.players`, and they are positional — 1..n down the list as printed, so they
+Numbers come from `.players`, and they are positional - 1..n down the list as printed, so they
 renumber when somebody leaves. Read the list, then act, rather than reusing a number from five minutes
 ago. (The draft pool is numbered separately and does not renumber; see the README.)
 
@@ -67,7 +67,7 @@ ago. (The draft pool is numbered separately and does not renumber; see the READM
 | `.players` | Who is here, numbered, privately to you. Works in every phase |
 | `.kick <player\|number> [reason]` | Kick them, **during a pug too**, and hold the door shut for the rest of it |
 | `.unkick [name\|steamid]` | Let one back in. With no argument, lists who is being held out |
-| `.spec <player\|number> [reason]` | Move somebody to spectator. For AFK people — they press M and they are back |
+| `.spec <player\|number> [reason]` | Move somebody to spectator. For AFK people - they press M and they are back |
 
 The difference between the two: `.kick` is remembered for the pug, `.spec` is remembered for nothing.
 
@@ -75,7 +75,7 @@ The block is a set of SteamIDs in memory and only bites while a pug is live. It 
 deploy, a map change or a server restart loses it, and once the pug is over they can walk back in. A
 real ban is not this plugin's job.
 
-The server is otherwise open — no whitelist, and anyone may join mid-match and pick a side.
+The server is otherwise open - no whitelist, and anyone may join mid-match and pick a side.
 
 ## The map
 
@@ -86,7 +86,7 @@ The server is otherwise open — no whitelist, and anyone may join mid-match and
 | `.yes` / `.no` | Answer somebody else's `.map` |
 | `.clear` | Close the list (or anything else the plugin has put on your screen) |
 
-An admin's `.map` waits for an admin `.yes` — your own does not count, so one admin alone needs a
+An admin's `.map` waits for an admin `.yes` - your own does not count, so one admin alone needs a
 second one, or nobody. With no admin connected at all the whole room votes and silence is a no.
 
 ## The server itself
@@ -113,4 +113,4 @@ people are arriving.
 
 Every command typed at GPP is one line in `addons/counterstrikesharp/logs/log-Gpp<date>.txt`: who
 typed it, what they typed, and the phase it was in. That is the file to read when somebody asks who
-kicked whom. Read that log, not the journal — journald splices the game's output mid-word.
+kicked whom. Read that log, not the journal - journald splices the game's output mid-word.
