@@ -124,7 +124,8 @@ public partial class Gpp
     {
         if (!Config.Hud) return;
         _readyHudMap = mapLabel;
-        _readyHudSecondsLeft = 300;
+        // Both ready phases run off this one key - after the draft and after the side choice.
+        _readyHudSecondsLeft = Math.Max(5, Config.Match.ReadySeconds);
         _readyHudTimer?.Kill();
         _readyHudTimer = AddTimer(1.0f, ReadyHudTick, TimerFlags.REPEAT);
         ReadyHudTick();
@@ -143,7 +144,7 @@ public partial class Gpp
     {
         if (--_readyHudSecondsLeft <= 0)
         {
-            // Five minutes of a panel nobody has acted on is a panel nobody is reading. The phase stays
+            // A panel nobody has acted on in ready_seconds is a panel nobody is reading. The phase stays
             // open - .ready still starts the match - but the overlay comes down rather than turning into
             // a repeating nag.
             AfterTick(() =>

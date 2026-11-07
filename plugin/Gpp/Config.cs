@@ -71,6 +71,11 @@ public class MatchSettings
     // is how a side gets picked by whoever has the fastest keyboard.
     [JsonPropertyName("side_choice_captain_only")] public bool SideChoiceCaptainOnly { get; set; } = true;
 
+    // Seconds the ready panel is held up, in both ready phases - after the draft, and after the side
+    // choice when ready_after_sides is on. The phase itself does not time out: .ready still starts the
+    // match after this, the overlay just stops being a panel nobody is reading.
+    [JsonPropertyName("ready_seconds")] public int ReadySeconds { get; set; } = 90;
+
     // A second ready check between the side choice and going live. Off by default: the ready phase before
     // the knife round is the one people expect, and a second one is another thing to wait for.
     [JsonPropertyName("ready_after_sides")] public bool ReadyAfterSides { get; set; } = false;

@@ -53,7 +53,9 @@ by [`../Gpp.Tests`](../Gpp.Tests) (`dotnet test`).
 | `.fent [player] [seconds]` / `!fent` | everyone / admin | Spin your own view for up to 30s. A target needs admin. Warmup only |
 | `.drug [player] [seconds]` / `!drug` | everyone / admin | Warp your own camera for up to 30s. A target needs admin. Warmup only |
 | `.narcan [player\|all]` / `!narcan` | everyone / admin | Clear `.fent` and `.drug` and put the view back. Yourself free; a target or `all` needs admin. Warmup only |
-| `.map <map>` / `!map` | admin / everyone | Change the map for practice. An admin's `.map` waits for an admin `.yes`; with no admin connected the whole room has to agree. Warmup only |
+| `.map <map\|number>` / `!map` | admin / everyone | Change the map for practice. An admin's `.map` waits for an admin `.yes`; with no admin connected the whole room has to agree. Warmup only |
+| `.map` | everyone | With no argument, the map list on a board to the left of the caller, numbered — `.map <number>` is what the numbers are for |
+| `.clear` | everyone | Close whatever this plugin has put on your own screen, which is the `.map` list |
 | `.sound [event]` / `!sound` | admin | Play a sound event off your own pawn, to hear whether the engine has it. Bare walks a list of candidates. This is what `slap_sound` is tuned with. Warmup only |
 | `.yes` / `.no` | admin / everyone | Answer the `.map` on offer |
 | `.smokes [on\|off]` / `!smokes` | everyone | Smoke practice for yourself: trails, smokes only, invulnerable, one popped smoke, and your throws come back. Warmup only |
@@ -162,6 +164,8 @@ load**. [`../examples/Gpp.json`](../examples/Gpp.json) is a filled-in one.
     warmup open, which is what keeps an idle server idle; a missing file falls back to a handful of
     built-in cvars and says so in the log
   - `side_choice_captain_only` (true) — only the winning side's captain answers the knife round
+  - `ready_seconds` (90) — how long the ready panel is held up, in **both** ready phases. The phase
+    itself does not time out: `.ready` still starts the match afterwards, the overlay just stops nagging
   - `ready_after_sides` (false) — a second ready check between the side choice and going live
   - `opening_pause_seconds` (90) — round one's Discord hold. See below
   - `post_match_seconds` (15) — `mp_match_restart_delay`, the engine's own end-of-match screen

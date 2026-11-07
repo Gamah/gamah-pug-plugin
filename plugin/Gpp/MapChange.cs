@@ -32,8 +32,12 @@ public partial class Gpp
 
     private bool MapRequestOpen => _mapTimer != null;
 
-    [ConsoleCommand("css_map", "Change the map during warmup")]
-    [CommandHelper(minArgs: 0, usage: "<map>")]
+    [ConsoleCommand("css_clear", "Close whatever the plugin has put on your own screen")]
+    public void OnClearCommand(CCSPlayerController? player, CommandInfo command) =>
+        AfterTick(() => ClearCommand(player));
+
+    [ConsoleCommand("css_map", "Change the map during warmup, or list the maps with no argument")]
+    [CommandHelper(minArgs: 0, usage: "[map|number]")]
     public void OnMapCommand(CCSPlayerController? player, CommandInfo command)
     {
         string arg = command.ArgCount > 1 ? command.ArgString.Trim() : "";
@@ -61,13 +65,15 @@ public partial class Gpp
             Tell(caller, $"{_mapRequest!.Label} is already on offer - .yes or .no.");
             return;
         }
+        // Nothing to go on is the ask for the list rather than an error: it is the one thing .map with no
+        // argument could usefully mean, and the number it hands back is what .map takes next.
         if (arg.Length == 0)
         {
-            Tell(caller, "Usage: .map <map> - !pug for the list, and !pug start runs its own map vote.");
+            MapListPanel(caller);
             return;
         }
 
-        var map = FindMap(caller, arg);
+        var map = PickMap(caller, arg);
         if (map == null) return;
         if (!map.IsWorkshop && Server.MapName.Equals(map.Name, StringComparison.OrdinalIgnoreCase))
         {
@@ -103,8 +109,84 @@ public partial class Gpp
             Prompt($"Changing the map for practice? {_mapSecondsLeft}s to confirm:", ".yes", "ADMIN");
         }
 
+        // The list has done its job - and the request panel is about to want the board.
+        CloseMapList(caller);
+
         _mapTimer = AddTimer(1.0f, MapRequestTick, TimerFlags.REPEAT);
         MapRequestPanel();
+    }
+
+    // --- the list ----------------------------------------------------------------------------------
+
+    // Whose screen is carrying the list, by slot. Only so .clear can say whether it closed anything, and
+    // so a pug starting takes it down with everything else.
+    private readonly HashSet<int> _mapListUp = [];
+
+    // A number first, then a name. The number is the position in the pool, which is the same list the
+    // panel printed and the same ordering .players uses - one way to read a number off a screen.
+    //
+    // A number is only a position while it is inside the pool: a workshop map's own name is digits, so
+    // "3330012345" falls through to the name match rather than resolving to nothing.
+    private MapEntry? PickMap(CCSPlayerController? caller, string arg)
+    {
+        var pool = Config.MapPool;
+        if (int.TryParse(arg.Trim(), out int pick) && pick >= 1 && pick <= pool.Count) return pool[pick - 1];
+        return FindMap(caller, arg);
+    }
+
+    private void MapListPanel(CCSPlayerController? caller)
+    {
+        var pool = Config.MapPool;
+        if (pool.Count == 0)
+        {
+            Tell(caller, "The map pool is empty - nothing to list.");
+            return;
+        }
+
+        // The console has no screen, and a server with the overlay off has no board to hang this on.
+        // Chat carries the same numbers in both cases.
+        if (caller == null || !caller.IsValid || !Config.Hud)
+        {
+            Tell(caller, "Maps - .map <number> or .map <name>:");
+            for (int index = 0; index < pool.Count; index++) Tell(caller, $"{index + 1} {pool[index].Label}");
+            return;
+        }
+
+        // Past what a board holds, the last cell says how many were left off rather than clipping the
+        // list silently. They are still reachable by name, and by number if somebody counts.
+        var cells = pool
+            .Take(Math.Min(pool.Count, WorldLayout.ListBoardCells))
+            .Select((map, index) => WorldLayout.PlainCell(index + 1, map.Label.ToUpperInvariant(),
+                WorldLayout.ListNameWidth))
+            .ToList();
+        if (pool.Count > WorldLayout.ListBoardCells)
+        {
+            cells[^1] = $"+{pool.Count - WorldLayout.ListBoardCells + 1} MORE";
+        }
+
+        // Left board, nothing in the middle: this is a list to read while standing in a warmup, not a
+        // question being put to the room, and the middle of the view is where somebody is shooting.
+        WorldShow(caller, "", WorldLayout.ListBoard("MAPS", cells, ".map <NUMBER>   .clear TO CLOSE"), null);
+        _mapListUp.Add(caller.Slot);
+        Tell(caller, $"The list is on your left - {Colorize("{lime}")}.map <number>{Colorize("{default}")}, "
+            + $"or {Colorize("{lime}")}.clear{Colorize("{default}")} to close it.");
+    }
+
+    // .clear, and everything else that has to take the list down. Says whether it closed anything, so
+    // .clear on a clear screen is an answer rather than silence.
+    internal bool CloseMapList(CCSPlayerController? caller)
+    {
+        if (caller == null || !caller.IsValid) return false;
+        if (!_mapListUp.Remove(caller.Slot)) return false;
+        HideWorldPanel(caller.Slot);
+        return true;
+    }
+
+    internal void ForgetMapLists() => _mapListUp.Clear();
+
+    private void ClearCommand(CCSPlayerController? caller)
+    {
+        Tell(caller, CloseMapList(caller) ? "Closed." : "Nothing of mine is on your screen.");
     }
 
     private bool AnyAdminHere() => HumanPlayers().Any(player => !player.IsBot && IsAdmin(player));

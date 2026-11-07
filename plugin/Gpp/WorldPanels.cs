@@ -81,13 +81,19 @@ public partial class Gpp
             string panel = WorldLayout.MainPanel(
                 MatchRules.CaptainPoolLine(volunteers.Count, mine),
                 [
-                    // Two lines, because one of them is thirty-seven characters of board for the state
-                    // nobody needs to read twice.
+                    // What the command is and what it gets you, spelled out rather than implied by a
+                    // count: this is the first screen of the night and "3 UP FOR CAPTAIN" means nothing
+                    // to somebody who has not worked out that captains are volunteers here.
+                    WorldLayout.Section.Of(
+                        mine ? ".captain  AGAIN TO TAKE IT BACK" : ".captain  TO BE A CAPTAIN",
+                        "TWO ARE DRAWN FROM WHOEVER DOES",
+                        "EVERYBODY ELSE GETS DRAFTED"),
                     WorldLayout.Section.Of(volunteers.Count == 0 ? "NOBODY YET" : "IN",
                         volunteers.Count == 0 ? "CAPTAINS WILL BE DRAWN AT RANDOM" : null),
                     WorldLayout.Section.List(WorldLayout.Grid(volunteers.Select(WorldLayout.Clip))),
                 ],
-                WorldLayout.Footer($"{_optInSecondsLeft}s"),
+                WorldLayout.Footer($"{_optInSecondsLeft}s",
+                    volunteers.Count == 0 ? "NOBODY IN = TWO AT RANDOM" : null),
                 _hudTicks);
             WorldShow(player, panel);
         }
@@ -147,7 +153,14 @@ public partial class Gpp
                 // what makes people type the wrong number. The count rides in the footer instead.
                 : WorldLayout.MainPanel("PICK A MAP - TYPE THE NUMBER IN CHAT",
                     [
-                        WorldLayout.Section.Of([poolAsk, .. PoolLines(pool)]),
+                        // The ask, then what it is for. The sign-up rides on this screen because it
+                        // shares the clock, which also means it is read in a hurry - so it says what
+                        // .captain does rather than leaving a count to imply it.
+                        WorldLayout.Section.Of([poolAsk,
+                            !_votePoolOpen ? null
+                                : inPool ? ".captain AGAIN TO TAKE IT BACK"
+                                : ".captain TO CAPTAIN - TWO ARE DRAWN",
+                            .. PoolLines(pool)]),
                         WorldLayout.Section.List(WorldLayout.Grid(ballot)),
                     ],
                     WorldLayout.Footer($"{_voteSecondsLeft}s", $"{_votes.Count}/{voters.Count} VOTED"),

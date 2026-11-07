@@ -52,6 +52,17 @@ internal static class WorldLayout
     // The number is the player's own from the pool, never their place in what is left of the list.
     internal static string Cell(int number, string name) => $"!{number,-2} {Clip(name)}";
 
+    // The same cell without the chat trigger on it, for a list whose number is typed as an argument
+    // rather than as a command: ".map 3", not "!3".
+    //
+    // The clip is a parameter because a side board is narrower than the room three twelve-character
+    // cells need: measured, three of those overrun the board by thirty units, and a board that outgrows
+    // its rule stops being furniture. Ten characters of map label is still the map.
+    internal const int ListNameWidth = 10;
+
+    internal static string PlainCell(int number, string name, int width = NameWidth) =>
+        $"{number,-2} {(name.Length <= width ? name : name[..width])}";
+
     internal static string Clip(string name) =>
         name.Length <= NameWidth ? name : name[..NameWidth];
 
@@ -335,6 +346,25 @@ internal static class WorldLayout
         string text = $"TEAM {label.ToUpperInvariant()}\n{Clip(captain)}\n\n" + string.Join('\n', slots);
         return Fixed(text, TeamBoardLines, TeamBoardWidth);
     }
+
+    // A side board of numbered choices for one person to read and type off: the .map list. A grid rather
+    // than a line each, because eighteen maps is more lines than a board has - the grid is the same three
+    // columns the ballot was judged on, and the width is the one every board uses.
+    internal static string ListBoard(string title, IEnumerable<string> cells, string? footer = null)
+    {
+        var rows = new List<string> { title, "" };
+        rows.AddRange(Grid(cells));
+        if (!string.IsNullOrEmpty(footer))
+        {
+            rows.Add("");
+            rows.Add(footer);
+        }
+        return Fixed(string.Join('\n', rows), TeamBoardLines, TeamBoardWidth);
+    }
+
+    // How many cells ListBoard can hold before it would clip: the title, the gap under it, the gap above
+    // the footer and the footer itself are four of the eleven lines a board has.
+    internal const int ListBoardCells = (TeamBoardLines - 1 - 4) * PerRow;
 
     // The same board during the Discord hold, where every name carries its own state and the captain is
     // not set apart from the rest: nothing is being drafted any more, so the armband has stopped being

@@ -175,6 +175,11 @@ public partial class Gpp
             case "narcan":
                 AfterTick(() => NarcanCommand(PlayerBySteamId(who), rest));
                 return HookResult.Continue;
+            // Takes down whatever this plugin has put on their own screen - which is the .map list, the
+            // only panel somebody puts up for themselves.
+            case "clear":
+                AfterTick(() => ClearCommand(PlayerBySteamId(who)));
+                return HookResult.Continue;
             case "players":
             case "who":
                 AfterTick(() => PlayersOrPool(PlayerBySteamId(who)));
@@ -812,6 +817,11 @@ public partial class Gpp
     internal int ClearFunEffects()
     {
         int live = ClearSmokePractice() + _fentTimers.Count + _drugTimers.Count + _slapTimers.Count;
+
+        // The .map list is one of ours on somebody's screen, and a phase change clears the panels out
+        // from under it - so the bookkeeping goes too, or .clear would claim to close a board that is
+        // not there any more.
+        ForgetMapLists();
         foreach (var id in _fentTimers.Keys.ToList()) StopFent(id);
         foreach (var id in _drugTimers.Keys.ToList()) StopDrug(id);
         foreach (var id in _slapTimers.Keys.ToList()) StopSlaps(id);

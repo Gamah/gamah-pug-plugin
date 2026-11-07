@@ -332,4 +332,30 @@ public class WorldLayoutTests
             Assert.Equal(WorldLayout.Rule(WorldLayout.BoardWidth), panel.Split('\n')[^1]);
         }
     }
+    // The .map list board: a pool bigger than the board holds must still be twelve lines wide of its
+    // rule and no wider, with the overflow named rather than clipped away.
+    [Theory]
+    [InlineData(1)]
+    [InlineData(18)]
+    [InlineData(WorldLayout.ListBoardCells)]
+    [InlineData(40)]
+    public void TheMapListBoardIsFurniture(int maps)
+    {
+        var cells = Enumerable.Range(1, Math.Min(maps, WorldLayout.ListBoardCells))
+            .Select(number => WorldLayout.PlainCell(number, "DE_WORKSHOPMAP", WorldLayout.ListNameWidth))
+            .ToList();
+        if (maps > WorldLayout.ListBoardCells)
+        {
+            cells[^1] = $"+{maps - WorldLayout.ListBoardCells + 1} MORE";
+        }
+
+        string board = WorldLayout.ListBoard("MAPS", cells, ".map <NUMBER>   .clear TO CLOSE");
+
+        Assert.Equal(WorldLayout.TeamBoardLines, WorldLayout.LineCount(board));
+        Assert.DoesNotContain("\n...", board);
+        Assert.Equal(HudMetrics.Width(WorldLayout.Rule(WorldLayout.TeamBoardWidth)), Widest(board));
+        // The footer is the last thing above the rule, so it is never the line that got dropped.
+        Assert.Contains(".map <NUMBER>", board);
+    }
+
 }

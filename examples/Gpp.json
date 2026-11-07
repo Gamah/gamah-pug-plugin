@@ -27,6 +27,7 @@
     "knife_cfg": "gpp/knife.cfg",
     "live_cfg": "gpp/live.cfg",
     "side_choice_captain_only": true,
+    "ready_seconds": 90,
     "ready_after_sides": false,
     "opening_pause_seconds": 90,
     "post_match_seconds": 15,
