@@ -1,5 +1,7 @@
 # How a pug runs — the player page
 
+*If you are running it rather than playing it, [this is your page](admin.md).*
+
 Teams get picked, you knife for sides, you play. The overlay tells you what it wants at every step;
 this is the same thing written down, so you can read it before you are standing in it.
 

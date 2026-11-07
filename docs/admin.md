@@ -1,7 +1,10 @@
 # Running a pug — the admin page
 
+*The players' page is [here](pug.md).*
+
 Everything an admin needs to run a night, and nothing else. The full list, including the commands that
-only exist for working on the plugin, is in [`../plugin/README.md`](../plugin/README.md).
+only exist for working on the plugin, is in
+[the README](https://github.com/Gamah/gamah-pug-plugin/blob/master/plugin/README.md).
 
 Admin means `@css/config` in CounterStrikeSharp's own `configs/admins.json`, checked against your
 SteamID. `css_admins_reload` applies an edit without a restart.

@@ -1,0 +1,8 @@
+title: GPP
+description: The pug plugin - how to run a pug, and how to play one
+theme: jekyll-theme-primer
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
