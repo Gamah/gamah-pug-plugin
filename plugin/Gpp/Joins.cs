@@ -117,11 +117,15 @@ public partial class Gpp
         _midMatchNudged.Remove(Id(player));
         _heldInSpectator.Remove(Id(player));
         player.ChangeTeam(side);
-        _owedASpawn.Add(Id(player));
-        HoldSpawnNotice(player);
-        Announce($"{player.PlayerName} YOU WILL SPAWN NEXT ROUND");
-        Logger.LogInformation("{Name} picked {Side} mid-match - on the team now, spawning next round.",
-            player.PlayerName, side == CsTeam.CounterTerrorist ? "CT" : "T");
+        bool thisRound = SpawnNowOrNextRound(player);
+        if (!thisRound)
+        {
+            HoldSpawnNotice(player);
+            Announce($"{player.PlayerName} YOU WILL SPAWN NEXT ROUND");
+        }
+        Logger.LogInformation("{Name} picked {Side} mid-match - on the team now, spawning {When}.",
+            player.PlayerName, side == CsTeam.CounterTerrorist ? "CT" : "T",
+            thisRound ? "into this round (freeze time)" : "next round");
         return HookResult.Stop;
     }
 
@@ -172,7 +176,7 @@ public partial class Gpp
         {
             var side = _team1.Contains(id) ? _team1Side : SideOf(2);
             player.ChangeTeam(side);
-            _owedASpawn.Add(id);
+            SpawnNowOrNextRound(player);
             player.PrintToChat(Prefix() + "Welcome back - you are on "
                 + $"{(side == CsTeam.CounterTerrorist ? "CT" : "T")} with your team.");
             Logger.LogInformation("{Name} came back mid-match - put back on {Side} with their team.",
@@ -196,8 +200,50 @@ public partial class Gpp
     // Taken a side mid-match and not spawned yet. A team change made by the plugin does not reliably put
     // somebody on the engine's round-start spawn list, so the promise made on their screen is kept here
     // instead of hoped for: at the next round start anyone in this set who is on a side and not alive is
-    // spawned, and the set empties either way.
+    // spawned, and the set empties either way. Freeze time is paid sooner - see SpawnNowOrNextRound.
     private readonly HashSet<ulong> _owedASpawn = [];
+
+    // Freeze time is *inside* a round, not in front of one: EventRoundStart has already fired and
+    // drained the set by the time anyone is frozen at a spawn point. So somebody who takes a side during
+    // freeze time is owed a spawn that nothing pays until the round after - they read "YOU WILL SPAWN
+    // NEXT ROUND" and then watched a whole round from the dead.
+    //
+    // Nobody has moved yet during freeze time, so there is nothing to protect: they are spawned into the
+    // round that is about to run. The debt is still recorded first and only cleared once the spawn has
+    // actually happened, because a team change made by the plugin does not reliably reach the engine's
+    // spawn list - if the immediate spawn does not take, the next round start still pays it.
+    private bool SpawnNowOrNextRound(CCSPlayerController player)
+    {
+        ulong id = Id(player);
+        _owedASpawn.Add(id);
+        if (!MatchRunning || !(GameRules()?.FreezePeriod ?? false)) return false;
+
+        AfterTick(() =>
+        {
+            var them = Utilities.GetPlayers().FirstOrDefault(p => p.IsValid && Id(p) == id);
+            if (them == null || them.Team is not (CsTeam.CounterTerrorist or CsTeam.Terrorist)) return;
+            if (them.PawnIsAlive)
+            {
+                _owedASpawn.Remove(id);
+                return;
+            }
+
+            try
+            {
+                them.Respawn();
+                _owedASpawn.Remove(id);
+                Logger.LogInformation("Spawned {Name} into this round: they picked a side during freeze "
+                    + "time, before anybody had moved.", them.PlayerName);
+            }
+            catch (Exception error)
+            {
+                // Left in _owedASpawn on purpose: the next round start is the fallback.
+                Logger.LogWarning("Could not spawn {Name} during freeze time, so they are owed the next "
+                    + "round instead: {Error}", them.PlayerName, error.Message);
+            }
+        });
+        return true;
+    }
 
     internal void SpawnWhoeverTookASideMidMatch()
     {

@@ -135,7 +135,8 @@ load**. [`../examples/Gpp.json`](../examples/Gpp.json) is a filled-in one.
   not wait for somebody
 - `spectate_mid_match_joins` (true) — somebody who connects into a live match lands in spectator and
   presses M to pick a side, rather than having one picked for them by `mp_force_pick_time`. Nothing is
-  blocked and nobody is kicked
+  blocked and nobody is kicked. Picking a side mid-round spawns them at the next round start; picking
+  during freeze time spawns them into the round about to run, because nobody has moved yet
 - `map_confirm_seconds` (10) — how long an admin has to `.yes` a `.map`. 0 turns `.map` off entirely
 - `map_vote_seconds` (90) — how long the players' own `.map` vote runs when no admin is connected. It
   needs everybody, and saying nothing is a no
