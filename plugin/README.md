@@ -37,7 +37,7 @@ by [`../Gpp.Tests`](../Gpp.Tests) (`dotnet test`).
 | `!<number>` | everyone | **The main one.** Votes for that map during a vote, makes that pick during a draft. Silent outside both |
 | `!vote <number\|map>` | everyone | Vote during a map vote. `!<number>` is shorter |
 | `!draft <number\|name>` | captain on the clock | Make a pick by name; no argument reprints the list |
-| `.players` / `.who` / `!players` | everyone | Who is here, numbered — the undrafted pool during a draft, the whole room in warmup. The number is what the toys below take |
+| `.players` / `.who` / `!players` | everyone | Who is here, numbered, in any phase — privately, to whoever asked. During a draft the undrafted pool comes first (`!1` picks off that one), then the room. The room's number is what the toys below and `.kick` take |
 | `.ready` / `.r` / `.gaben` / `!ready` | everyone | Ready up. Everybody on either team has to, unless `min_ready` says a number — and, during round one's Discord hold, says you are in your channel |
 | `.unready` / `.ur` / `.notready` | everyone | Take it back |
 | `.forceready` | admin | Ready everybody and start, whoever is missing |

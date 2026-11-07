@@ -59,23 +59,24 @@ public partial class Gpp
         number <= 0 ? null : HumanPlayers().FirstOrDefault(player => RosterNumber(player) == number);
 
     // The dot route and the console route both land here, so .players means the same thing whichever way
-    // it was typed: the pool while a draft is running, the numbered room otherwise.
+    // it was typed.
+    //
+    // During a draft that is two lists, and they are numbered differently on purpose: the pool is
+    // numbered 1..n by pick order, which is what !1 takes, and the room is numbered by the roster, which
+    // is what .kick takes. Printing one and calling it "the numbers" is how somebody kicks the wrong
+    // person, so both go out, each under what it is for.
     private void PlayersOrPool(CCSPlayerController? asker)
     {
-        if (_phase == PugPhase.Draft)
-        {
-            PrintAvailable(asker);
-            return;
-        }
+        if (_phase == PugPhase.Draft) PrintAvailable(asker);
         PlayersCommand(asker);
     }
 
     private void PlayersCommand(CCSPlayerController? asker)
     {
-        // The numbers only aim the warmup toys, so the list is fenced off with them: nothing new says a
-        // word while a match is live.
-        if (!WarmupToy(asker, out _)) return;
-
+        // No phase fence. The list used to be fenced off with the warmup toys, because the numbers only
+        // aimed those - which left .kick, the one command meant for a live pug, with nothing to read a
+        // number off exactly when it was needed. The reply goes to the asker alone, so a list during a
+        // live round is not a word to anybody else.
         var roster = NumberedRoster();
         if (roster.Count == 0)
         {
@@ -85,7 +86,12 @@ public partial class Gpp
 
         // Chat rather than a panel: it is a list somebody is about to read a number off and type, and a
         // panel is gone by the time they have finished typing. Scrollback is the right shape for it.
-        Tell(asker, $"{roster.Count} here - the number is what .fent, .drug, .slap and .kill take:");
+        // The toys are warmup-only, so promising them mid-match would be copy that lies about what the
+        // number does.
+        bool warmup = _phase == PugPhase.Idle && InWarmupPeriod() && !MatchRunning;
+        Tell(asker, warmup
+            ? $"{roster.Count} here - the number is what .fent, .drug, .slap, .kill and .kick take:"
+            : $"{roster.Count} here - the number is what .kick takes:");
         foreach (var player in roster)
         {
             Tell(asker, $"{Colorize("{lime}")}{RosterNumber(player)}{Colorize("{default}")} "
