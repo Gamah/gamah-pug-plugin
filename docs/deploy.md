@@ -55,5 +55,6 @@ Admin commands default to `@css/config`, read from **CounterStrikeSharp's own**
 
 - Metamod:Source
 - CounterStrikeSharp **with the runtime** (the `with-runtime` build)
-- GOTV enabled (`tv_enable 1`) if you want demos
+- GOTV enabled (`tv_enable 1`) **in `server.cfg`** if you want demos - it has to be set before the
+  map loads, and the plugin owns `tv_autorecord` itself (see [match.md](match.md))
 - that is all. No other pug plugin is involved; see [match.md](match.md).

@@ -78,7 +78,7 @@ public class MatchSettings
     // Seconds of held freeze time at the start of round one, while the side that lost the knife moves
     // into their Discord channel. 0 turns it off. The Discord bot moving people does not replace it: it
     // cannot move somebody who has not joined voice yet.
-    [JsonPropertyName("opening_pause_seconds")] public int OpeningPauseSeconds { get; set; } = 30;
+    [JsonPropertyName("opening_pause_seconds")] public int OpeningPauseSeconds { get; set; } = 90;
 
     // Seconds the engine's end-of-match screen is left up before the server is handed back to a held
     // warmup - mp_match_restart_delay, which is the engine's own clock for it. Nothing may be sent while
@@ -97,7 +97,7 @@ public class MatchSettings
 
     [JsonPropertyName("draw_vote")] public bool DrawVote { get; set; } = true;
 
-    [JsonPropertyName("draw_vote_seconds")] public int DrawVoteSeconds { get; set; } = 30;
+    [JsonPropertyName("draw_vote_seconds")] public int DrawVoteSeconds { get; set; } = 90;
 
     // Technical pauses a side may call per match. 0 is unlimited.
     [JsonPropertyName("max_tech_pauses")] public int MaxTechPauses { get; set; } = 0;
@@ -175,7 +175,7 @@ public class GppConfig : BasePluginConfig
     // own: !pug draft, which has no map vote to carry the sign-up. On !pug start the pool is open for the
     // map vote's vote_seconds instead, and this only has to be non-zero. 0 turns volunteering off and
     // captains are drawn at random; !pug start force skips it either way.
-    [JsonPropertyName("captain_opt_in_seconds")] public int CaptainOptInSeconds { get; set; } = 30;
+    [JsonPropertyName("captain_opt_in_seconds")] public int CaptainOptInSeconds { get; set; } = 90;
 
     // Captains knife 1v1 for first pick before the draft. Off: first pick goes to a coin flip.
     [JsonPropertyName("captain_knife")] public bool CaptainKnife { get; set; } = true;
@@ -195,7 +195,7 @@ public class GppConfig : BasePluginConfig
     [JsonPropertyName("map_confirm_seconds")] public int MapConfirmSeconds { get; set; } = 10;
 
     // How long the players' own .map vote stays open. It needs everybody, and no answer is a no.
-    [JsonPropertyName("map_vote_seconds")] public int MapVoteSeconds { get; set; } = 30;
+    [JsonPropertyName("map_vote_seconds")] public int MapVoteSeconds { get; set; } = 90;
 
     // The sound event .slap plays, emitted from the slapped player's pawn so the room hears where it
     // came from. CS2 has no slap sound; this is a hit. It is a config key rather than a constant because

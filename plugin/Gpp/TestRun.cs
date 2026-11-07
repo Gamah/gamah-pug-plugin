@@ -82,7 +82,7 @@ public partial class Gpp
 
     private void AskAboutSweeping()
     {
-        _testAskSecondsLeft = 30;
+        _testAskSecondsLeft = 90;
         _testAskTimer?.Kill();
         _testAskTimer = AddTimer(1.0f, TestAskTick, TimerFlags.REPEAT);
         TestAskPanel();

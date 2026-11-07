@@ -125,12 +125,14 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
 
         if (_botTarget == 0)
         {
-            // Never a bare bot_kick: the engine's GOTV client is a bot controller - it logs in as
-            // "SourceTV<0><BOT><Unassigned>" - so bot_kick takes SourceTV with it, and a demo being
-            // recorded loses its frame source and finalises as a header with no frames in it. Kicked by
-            // name instead, with the HLTV client left alone.
-            Server.ExecuteCommand("bot_quota 0;bot_join_after_player 1");
+            // The bots go by name before the quota drops, and that order is the point: lowering
+            // bot_quota while bots are on the server makes the engine trim the surplus itself, and it
+            // counts the GOTV client as one of them - "SourceTV<0><BOT><Unassigned>". Measured: quota 6
+            // with twelve bots present kicked SourceTV along with two of them, in the same second. A
+            // kicked SourceTV leaves a master that records nothing until the next level load.
+            // [SOURCE: measured on this server 2026-11-07]
             KickTestBots();
+            Server.ExecuteCommand("bot_quota 0;bot_join_after_player 1");
             Logger.LogInformation("count_bots: bots turned off.");
             return;
         }
@@ -139,13 +141,13 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         TopUpTestBots();
     }
 
-    // Every bot on the server except the GOTV client, by name. bot_kick with no argument would be one
-    // command instead of ten, and it is what kicked SourceTV off every map start.
+    // Every bot on the server except the GOTV client, by name, so that the quota never has a surplus to
+    // trim - see the comment above the call.
     //
     // IsHLTV is not enough on its own: a second after the map loads the GOTV client is still
     // STEAM_ID_PENDING and does not report itself as HLTV yet, so the name is checked as well. The engine
-    // names it "SourceTV" and it is the only bot nobody asked for.
-    // [SOURCE: measured on this server 2026-11-06]
+    // names it after tv_name, "SourceTV" by default.
+    // [SOURCE: measured on this server 2026-11-07]
     private void KickTestBots()
     {
         foreach (var bot in Utilities.GetPlayers()
@@ -197,6 +199,8 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         // caps are followed on does not fire again if the server was already in warmup before the change.
         _wasInWarmup = null;
         AddTimer(1.0f, ExecWarmupCfg);
+        // Whether this load was the one a pug armed, and either way autorecord goes back off.
+        DemoMapStarted();
 
         if (!_draftPendingMapChange) return;
         _draftPendingMapChange = false;

@@ -4,132 +4,218 @@ using CounterStrikeSharp.API.Modules.Cvars;
 
 namespace Gpp;
 
-// GOTV demo per match. Three things make this less obvious than "tv_record on go-live":
+// A GOTV demo per pug. The shape of this is dictated by one engine fact, measured rather than chosen:
 //
-//  - tv_record takes a path the engine resolves itself, and a relative one has landed in different places
-//    on different builds, so the argument is always an absolute quoted path.
-//  - going live runs mp_restartgame, and a recording started before that restart is thrown away with it.
-//    So the demo is armed and started at the first round start after the restart, with a fallback timer in
-//    case that round start never comes.
-//  - at the end of a match GOTV is still sending the last round. Stopping the recording immediately
-//    truncates it, so the stop waits out the broadcast delay (see FinishMatch, which stretches
-//    mp_match_restart_delay to cover the same window).
-//  - nothing is on disk until the recording stops. The engine writes the whole file at tv_stoprecord or
-//    at the level change, and prints nothing at all when tv_record is accepted.
+//   **A recording only captures frames if it starts at a level load.** Started at any other moment it
+//   runs, reports no error, and finalises as a ~110 KB header with "Recording time -0.0" in it. The
+//   engine says why itself: "CHLTVServerAsync::ExecuteDelayedCall StartAutoRecordingCall_t with start
+//   tick == 0". That is true of tv_record at any path, delay or tv_record_immediate setting, and of
+//   tv_autorecord toggled on mid-map. Every demo this server ever produced by tv_record on go-live was
+//   one of those headers.
 //
-// Two things silently produce a demo with no frames in it, and both have bitten this server: GOTV being
-// delayed (tv_delay, reset to 105 by every gamemode cfg) and SourceTV being kicked, which a bare
-// bot_kick does because the GOTV client is a bot controller - see KickTestBots.
+// So the plugin does not name or start the recording. The engine's tv_autorecord does both, at the level
+// load, and GPP only decides *which* level loads record:
 //
-// [SOURCE: a third-party pug plugin, MatchZy 0.9.1 DemoManagement.cs, read 2026-10-19]
+//   - a pug's map change arms it (tv_autorecord 1) just before the changelevel;
+//   - the load that follows starts the recording, and OnMapStart disarms it again, so an idle reload, a
+//     .map practice change or a CS2 update restart records nothing;
+//   - the end of the match stops it, which is what keeps a demo from running through the hours of warmup
+//     that follow a pug;
+//   - and then the file the engine wrote is moved to demo_path under GPP's own demo_name_format, which is
+//     what the stats site lists and links.
+//
+// The cost of the level-load rule is that the demo starts with the draft and the knife round rather than
+// at LIVE. The alternative was reloading the map at go-live - a loading screen for ten people at the
+// worst possible moment - and that was weighed and rejected.
+//
+// Two further measured details worth keeping:
+//   - the file does not exist until the recording stops, and the write is asynchronous
+//     ("HLTVServerAsync"), so the move waits for a new file whose size has settled.
+//   - tv_stoprecord does finalise an autorecord recording, with its frames. It does *not* stop one
+//     started by tv_record, which is another symptom of the same broken path.
+// [SOURCE: measured on this server 2026-11-07, CS2 PatchVersion 1.41.9.6/14196. Engine behaviour, not a
+// documented contract - re-check it after a CS2 update.]
 public partial class Gpp
 {
     private bool _recording;
     private string _demoFile = "";
 
-    // Set while a demo is armed but the restart has not happened yet.
-    private DateTime? _demoNotBefore;
-    private CounterStrikeSharp.API.Modules.Timers.Timer? _demoArmTimer;
+    // Armed between a pug's map change and the level load that starts the recording.
+    private bool _demoArmed;
 
-    private void StartDemoAfterRestart(float restartSeconds)
+    // The demos already in the engine's directory when the recording started. What is there afterwards
+    // and not in here is the file it just wrote.
+    private string[] _demosBefore = [];
+
+    private CounterStrikeSharp.API.Modules.Timers.Timer? _demoCollectTimer;
+
+    private string EngineDemoDirectory =>
+        Path.Join(Server.GameDirectory, "csgo", DemoFiles.EngineDirectory).Replace('\\', '/');
+
+    private string[] EngineDemos()
     {
-        if (!Config.Match.DemosEnabled) return;
-
-        // tv_record does nothing at all without GOTV, and the first anyone would know is an empty demo
-        // directory after a pug.
-        if (!(ConVar.Find("tv_enable")?.GetPrimitiveValue<bool>() ?? false))
-        {
-            Logger.LogWarning("demos are on but tv_enable is 0 - no demo will be recorded. Set tv_enable 1 "
-                + "in the server config (or turn demos off in Gpp.json).");
-            return;
-        }
-
-        _demoArmTimer?.Kill();
-        // The round start from mp_warmup_end comes right away; the one after the restart comes later.
-        _demoNotBefore = DateTime.UtcNow.AddSeconds(Math.Max(0, restartSeconds - 0.25));
-        _demoArmTimer = AddTimer(restartSeconds + 5.0f, () =>
-        {
-            _demoArmTimer = null;
-            if (_demoNotBefore == null) return;
-            Logger.LogInformation("No round start after the live restart - starting the demo now.");
-            _demoNotBefore = null;
-            if (_matchPhase == MatchPhase.Live) StartDemo();
-        });
-    }
-
-    // Called on every round start; does nothing unless a demo is armed and the restart is behind us.
-    private void StartPendingDemo()
-    {
-        if (_demoNotBefore == null || DateTime.UtcNow < _demoNotBefore) return;
-        _demoNotBefore = null;
-        _demoArmTimer?.Kill();
-        _demoArmTimer = null;
-        if (_matchPhase == MatchPhase.Live) StartDemo();
-    }
-
-    private void StartDemo()
-    {
-        if (_recording) return;
-
-        string relative = Path.Join(Config.Match.DemoPath.Trim('/'), DemoName() + ".dem");
-        string absolute = Path.Join(Server.GameDirectory, "csgo", relative).Replace('\\', '/');
-
         try
         {
-            string? directory = Path.GetDirectoryName(absolute);
-            if (directory != null) Directory.CreateDirectory(directory);
+            return Directory.Exists(EngineDemoDirectory)
+                ? Directory.GetFiles(EngineDemoDirectory, "*.dem")
+                : [];
         }
         catch (Exception exception)
         {
-            Logger.LogError("Could not create the demo directory for {Path}: {Message}", absolute, exception.Message);
+            Logger.LogWarning("Could not list {Directory}: {Message}", EngineDemoDirectory, exception.Message);
+            return [];
+        }
+    }
+
+    // Called just before a pug's changelevel. Everything that matters happens at the load that follows.
+    private void ArmDemoForMapChange()
+    {
+        _demoArmed = false;
+        if (!Config.Match.DemosEnabled) return;
+
+        if (!(ConVar.Find("tv_enable")?.GetPrimitiveValue<bool>() ?? false))
+        {
+            Logger.LogWarning("demos are on but tv_enable is 0 - no demo will be recorded. tv_enable 1 "
+                + "belongs in server.cfg, where it is read before the map loads (setting it live leaves "
+                + "GOTV on port 0 and recording nothing), or turn demos off in Gpp.json.");
             return;
         }
 
-        // Writing as it records costs a little performance and loses far less of the demo if the server
-        // goes down mid-match, which is the only way a pug's demo was ever lost here.
-        if (ConVar.Find("tv_record_immediate") != null) Server.ExecuteCommand("tv_record_immediate 1");
-        Server.ExecuteCommand($"tv_record \"{absolute}\"");
-        _recording = true;
-        _demoFile = absolute;
-        Logger.LogInformation("Recording demo {Path}", absolute);
+        _demosBefore = EngineDemos();
+        _demoArmed = true;
+        Server.ExecuteCommand("tv_autorecord 1");
+        Logger.LogInformation("Demo armed: tv_autorecord 1 for the map change.");
+    }
 
-        // The engine writes the file at tv_stoprecord or at the level change, never while recording, so
-        // the file not being there yet says nothing. What does kill a recording silently is a delayed
-        // GOTV master: it holds a single frame, the recorder captures none of them, and the demo
-        // finalises as a header with "Recording time -0.0". tv_delay is reset to 105 by every map's
-        // gamemode cfg, which is why the phase cfgs assert it back to 0 and why this warns rather than
-        // trusting them. [SOURCE: measured on this server 2026-11-06]
-        int delay = ConVar.Find("tv_delay")?.GetPrimitiveValue<int>() ?? 0;
-        if (delay > 0)
+    // Called from OnMapStart. Autorecord has to go back off - only a pug's own map change is ever meant
+    // to record - but *not yet*: the engine starts the recording from a delayed call
+    // ("CHLTVServerAsync::ExecuteDelayedCall StartAutoRecordingCall_t"), well after OnMapStart, and a 0
+    // written before that call fires cancels the recording instead of leaving it running. Measured: a
+    // whole bot pug recorded nothing with the 0 sent at map start, and the same sequence recorded 442 KB
+    // with the 0 sent half a minute later.
+    //
+    // So the disarm waits out the delayed call. The cost of the wait is that a second map load inside it
+    // would also record; nothing in the pug flow does that, and an extra demo is a cheaper failure than
+    // no demo at all.
+    // [SOURCE: measured on this server 2026-11-07]
+    private const float AutorecordDisarmSeconds = 30.0f;
+
+    private void DemoMapStarted()
+    {
+        bool armed = _demoArmed;
+        _demoArmed = false;
+
+        if (!armed)
         {
-            Logger.LogWarning("tv_delay is {Delay}, so GOTV is delayed and the demo will record no "
-                + "frames. tv_delay 0 belongs in the phase cfgs.", delay);
+            // Not a pug's load: make sure nothing is left armed from an abandoned one.
+            Server.ExecuteCommand("tv_autorecord 0");
+            return;
         }
+
+        _recording = true;
+        _demoFile = "";
+        Logger.LogInformation("Recording this map's demo; it will be stopped and named when the match ends.");
+        AddTimer(AutorecordDisarmSeconds, () => Server.ExecuteCommand("tv_autorecord 0"));
     }
 
     private void StopDemo(float delaySeconds)
     {
-        _demoNotBefore = null;
-        _demoArmTimer?.Kill();
-        _demoArmTimer = null;
+        _demoArmed = false;
         if (!_recording) return;
 
-        string file = _demoFile;
         if (delaySeconds <= 0)
         {
-            Server.ExecuteCommand("tv_stoprecord");
-            _recording = false;
-            Logger.LogInformation("Stopped recording {Path}", file);
+            FinishRecording();
             return;
         }
 
         AddTimer(delaySeconds, () =>
         {
-            if (!_recording) return;
-            Server.ExecuteCommand("tv_stoprecord");
-            _recording = false;
-            Logger.LogInformation("Stopped recording {Path}", file);
+            if (_recording) FinishRecording();
         });
+    }
+
+    private void FinishRecording()
+    {
+        _recording = false;
+        string name = DemoName();
+        Server.ExecuteCommand("tv_stoprecord;tv_autorecord 0");
+        Logger.LogInformation("Stopped recording; collecting the demo as {Name}.dem", name);
+        CollectDemo(name, attempt: 0, lastSize: -1);
+    }
+
+    // The engine writes the file after tv_stoprecord, asynchronously, so this waits for a file that is
+    // both new and no longer growing. Twenty tries at a second apiece: a long match's demo is tens of MB
+    // and lands well inside that.
+    private void CollectDemo(string name, int attempt, long lastSize)
+    {
+        _demoCollectTimer?.Kill();
+        _demoCollectTimer = AddTimer(1.0f, () =>
+        {
+            _demoCollectTimer = null;
+            string? written = DemoFiles.PickNew(_demosBefore, EngineDemos(), File.GetLastWriteTimeUtc);
+
+            if (written == null)
+            {
+                if (attempt < 20)
+                {
+                    CollectDemo(name, attempt + 1, lastSize);
+                    return;
+                }
+                Logger.LogWarning("The match ended but GOTV wrote no demo into {Directory}. A recording "
+                    + "that starts anywhere but a level load captures nothing - check that the pug's map "
+                    + "change happened and that tv_enable was 1 before it.", EngineDemoDirectory);
+                return;
+            }
+
+            long size = Size(written);
+            // Still being written: wait for the size to repeat before moving it.
+            if (size < 0 || size != lastSize)
+            {
+                if (attempt < 20)
+                {
+                    CollectDemo(name, attempt + 1, size);
+                    return;
+                }
+                Logger.LogWarning("{Path} is still growing after {Attempts}s - leaving it where it is.",
+                    written, attempt);
+                return;
+            }
+
+            MoveDemo(written, name, size);
+        });
+    }
+
+    private static long Size(string path)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            return info.Exists ? info.Length : -1;
+        }
+        catch
+        {
+            return -1;
+        }
+    }
+
+    private void MoveDemo(string written, string name, long size)
+    {
+        string target = Path.Join(Server.GameDirectory, "csgo", Config.Match.DemoPath.Trim('/'),
+            name + ".dem").Replace('\\', '/');
+        try
+        {
+            string? directory = Path.GetDirectoryName(target);
+            if (directory != null) Directory.CreateDirectory(directory);
+            File.Move(written, target, overwrite: true);
+            _demoFile = target;
+            Logger.LogInformation("Demo {Path} ({Size} bytes)", target, size);
+        }
+        catch (Exception exception)
+        {
+            _demoFile = written;
+            Logger.LogError("Could not move {From} to {To}: {Message}", written, target, exception.Message);
+        }
     }
 
     private string DemoName() => MatchRules.DemoFileName(Config.Match.DemoNameFormat, DateTime.Now,

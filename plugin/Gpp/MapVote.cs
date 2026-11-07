@@ -238,7 +238,10 @@ public partial class Gpp
 
         bool alreadyOnIt = !winner.IsWorkshop &&
                            Server.MapName.Equals(winner.Name, StringComparison.OrdinalIgnoreCase);
-        if (alreadyOnIt)
+        // The map is reloaded even when the vote keeps it, because a GOTV recording only captures frames
+        // if it starts at a level load - no load, no demo for this pug. With demos off the fast path
+        // stands: there is nothing to gain from a loading screen nobody asked for. See Demos.cs.
+        if (alreadyOnIt && !Config.Match.DemosEnabled)
         {
             Announce("Already on that map.");
             AddTimer(3.0f, () => StartDraft(force: true));
@@ -246,8 +249,14 @@ public partial class Gpp
         }
 
         _draftPendingMapChange = true;
-        Announce("Changing map - the knife starts as soon as both captains have loaded in.");
-        AddTimer(5.0f, () => ChangeMap(winner));
+        Announce(alreadyOnIt
+            ? "Reloading the map for the demo - the knife starts as soon as both captains have loaded in."
+            : "Changing map - the knife starts as soon as both captains have loaded in.");
+        AddTimer(5.0f, () =>
+        {
+            ArmDemoForMapChange();
+            ChangeMap(winner);
+        });
     }
 
     private static void ChangeMap(MapEntry map)

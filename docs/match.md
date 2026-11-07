@@ -81,11 +81,29 @@ the caller can take an unlanded pause back for free. Both sides have to `.unpaus
 technical pause past `tech_pause_seconds`, which either side can end. Halftime (`GamePhase` 4) and the
 post-game panel (5) refuse both commands: unpausing out of them does not come back.
 
-**Demos.** `tv_record` with an absolute quoted path, armed at go-live and started at the first round
-start *after* the restart, because a recording started before `mp_restartgame` goes with it. At the end
-of a match GOTV is still sending the last round, so when `tv_enable` is on `mp_match_restart_delay` is
-stretched to cover `tv_delay + 15` and the recording is stopped inside that window. No `tv_enable` means
-no demo, one line in the log, and no stretched intermission.
+**Demos.** Not `tv_record`: on this engine a recording only captures frames if it **started at a level
+load**. Started at any other moment it runs, reports nothing, and finalises as a ~110 KB header with
+`Recording time -0.0` in it - the engine's own explanation being `StartAutoRecordingCall_t with start
+tick == 0`. That is true of `tv_record` at any path, delay or `tv_record_immediate`, and of
+`tv_autorecord` toggled on mid-map.
+
+So the engine records and the plugin only chooses which loads it records on: a pug's map change arms
+`tv_autorecord 1` just before the `changelevel`, the load starts the recording, `OnMapStart` disarms it
+again so an idle reload or a `.map` change records nothing, and the end of the match stops it - which is
+what keeps a demo from running on through the warmup that follows. The file the engine wrote is then
+moved to `demo_path` under `demo_name_format`.
+
+The demo therefore opens on the draft and the knife round rather than on LIVE. The alternative was
+reloading the map at go-live, a loading screen for ten people at the worst possible moment, and it was
+weighed and rejected. Because of the same rule, a pug whose vote keeps the current map reloads it anyway
+when demos are on - there is no demo without a load.
+
+At the end of a match GOTV may still be sending the last round, so when `tv_delay` is non-zero
+`mp_match_restart_delay` is stretched to cover `tv_delay + 15` and the recording is stopped inside that
+window. No `tv_enable` means no demo and one line in the log; `tv_enable 1` has to be in `server.cfg`,
+where it is read before the map loads - set live it leaves SourceTV on port 0, recording nothing.
+[SOURCE: measured on this server 2026-11-07, CS2 1.41.9.6/14196 - engine behaviour, not a documented
+contract.]
 
 **Stats.** A SQLite file (`gpp.db`) with two tables: a match row written when the match goes live and
 completed when it ends, and a player row each for kills, deaths, assists, damage, headshots and MVPs.

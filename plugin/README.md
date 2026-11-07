@@ -117,7 +117,7 @@ load**. [`../examples/Gpp.json`](../examples/Gpp.json) is a filled-in one.
   aiming. `hud_float_gap` (0 = same as `hud_side_gap`) is how far
 - `force_spectate` (true) — everyone not yet drafted is held in spectator for the whole draft:
   `jointeam` is blocked and a sweep puts anyone sitting in the team-select menu back
-- `captain_opt_in_seconds` (30) — whether `!captain` is asked for, and the window `!pug draft` opens for
+- `captain_opt_in_seconds` (90) — whether `!captain` is asked for, and the window `!pug draft` opens for
   it. `!pug start` carries the sign-up on the map vote instead, for `vote_seconds`. Either way the two
   captains are drawn from whoever put their hand up; fewer than two volunteers and the rest of the draw
   is at random. 0 turns it off; `!pug start force` skips it
@@ -137,7 +137,7 @@ load**. [`../examples/Gpp.json`](../examples/Gpp.json) is a filled-in one.
   presses M to pick a side, rather than having one picked for them by `mp_force_pick_time`. Nothing is
   blocked and nobody is kicked
 - `map_confirm_seconds` (10) — how long an admin has to `.yes` a `.map`. 0 turns `.map` off entirely
-- `map_vote_seconds` (30) — how long the players' own `.map` vote runs when no admin is connected. It
+- `map_vote_seconds` (90) — how long the players' own `.map` vote runs when no admin is connected. It
   needs everybody, and saying nothing is a no
 - `slap_sound` (`Player.DamageKevlar`) — the sound event `.slap` plays, from the slapped player's pawn.
   Empty turns it off. A soundevent name is the kind of thing a CS2 update renames, and a wrong one is
@@ -160,15 +160,17 @@ load**. [`../examples/Gpp.json`](../examples/Gpp.json) is a filled-in one.
     built-in cvars and says so in the log
   - `side_choice_captain_only` (true) — only the winning side's captain answers the knife round
   - `ready_after_sides` (false) — a second ready check between the side choice and going live
-  - `opening_pause_seconds` (30) — round one's Discord hold. See below
+  - `opening_pause_seconds` (90) — round one's Discord hold. See below
   - `post_match_seconds` (15) — `mp_match_restart_delay`, the engine's own end-of-match screen
   - `pauses_enabled` (true), `max_tech_pauses` (0 = unlimited), `tech_pause_seconds` (0 = both sides
     always have to `.unpause`)
-  - `draw_vote` (true), `draw_vote_seconds` (30) — pause and ask the room whether a level match goes to
+  - `draw_vote` (true), `draw_vote_seconds` (90) — pause and ask the room whether a level match goes to
     overtime. See below
   - `demos_enabled`, `demo_path` (`gpp-demos`, relative to `csgo/`), `demo_name_format`
-    (`{TIME}_{MAP}_{TEAM1}_vs_{TEAM2}`). Needs `tv_enable 1`, or `tv_record` does nothing and the log
-    says so once
+    (`{TIME}_{MAP}_{TEAM1}_vs_{TEAM2}`). Needs `tv_enable 1` **in `server.cfg`**, or there is no demo and
+    the log says so once. With demos on, a pug reloads the map even when the vote keeps it: a recording
+    that does not start at a level load captures nothing. The demo opens on the draft, not on LIVE, and
+    stops when the match ends. See [../docs/match.md](../docs/match.md)
   - `stats_enabled` (true), `stats_database` (`gpp.db`, next to the plugin dll)
 - `discord` — optional, off while `base_url` is empty. See [../docs/discord.md](../docs/discord.md)
 
@@ -183,7 +185,7 @@ output goes to the server, with `Gpp.dll` **last** — writing it is the reload.
 
 ## Round one holds for Discord
 
-`opening_pause_seconds` (30) of held freeze time at the start of round one, with the side that **lost
+`opening_pause_seconds` (90) of held freeze time at the start of round one, with the side that **lost
 the knife** told in capitals to get into their voice channel — the winners picked the side they wanted
 and stay put. The Discord bot moving people does not replace this: it cannot move somebody who has not
 joined voice yet.
@@ -380,7 +382,7 @@ scrolls by character count, one character every three paints.
   draw - 12-11, and 15-14 and 18-17 for the overtimes after it, every score a single round can draw from,
   which `MatchRules.DrawNextRound` knows and is tested on. `mp_pause_match` holds that round's freeze
   time, the board asks `!1` to play it out or `!2` to call it a draw, and the pause lifts the moment
-  everyone connected has answered - the 30s is the backstop, not the gate. It is the plugin's pause, the
+  everyone connected has answered - the 90s is the backstop, not the gate. It is the plugin's pause, the
   same shape as the Discord hold: it ignores `pauses_enabled` and counts against nobody's technical
   pauses. Anyone in the server votes, because a pug has no roster the server itself believes in. The cvar
   is written on every vote rather than at the close, because the deciding round can end first. Nobody

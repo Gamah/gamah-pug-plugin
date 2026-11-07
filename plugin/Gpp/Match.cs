@@ -90,11 +90,8 @@ public partial class Gpp
             return HookResult.Continue;
         });
 
-        // The demo cannot start until after the restart that going live performs.
         RegisterEventHandler<EventRoundStart>((_, _) =>
         {
-            StartPendingDemo();
-
             // Whoever took a side mid-match and was promised the next round. The engine spawns a late
             // joiner it placed itself; one the plugin placed is not reliably on that list, and the player
             // sits dead through the round they were told they would play - which is the whole complaint
@@ -220,7 +217,27 @@ public partial class Gpp
         + "mp_team_intro_type none;sv_nomvp 0;"
         + "mp_warmup_pausetimer 0";
 
-    internal void ExecWarmupCfg() => ExecPhaseCfg(Config.Match.WarmupCfg, WarmupFallback, "Warmup");
+    internal void ExecWarmupCfg()
+    {
+        ExecPhaseCfg(Config.Match.WarmupCfg, WarmupFallback, "Warmup");
+        SweepStrayBots();
+    }
+
+    // The stray-bot sweep that used to be a bot_quota 0 line in warmup.cfg. It is here instead because
+    // the order matters and a cfg cannot express it: dropping the quota while bots are on the server
+    // makes the engine trim the surplus itself, and it counts the GOTV client as a bot, so the trim takes
+    // SourceTV with it and the pug's demo stops recording. Measured on this server: "execing
+    // gpp/warmup.cfg" followed by "SourceTV kicked by Console" in the same second, with ten bots in the
+    // room. Kicking by name first leaves the quota nothing to trim.
+    //
+    // A test run owns the quota itself (TopUpTestBots), so this keeps its hands off one.
+    // [SOURCE: measured on this server 2026-11-07]
+    private void SweepStrayBots()
+    {
+        if (BotsCountAsPlayers && _botTarget > 0) return;
+        KickTestBots();
+        Server.ExecuteCommand("bot_quota_mode normal;bot_quota 0;bot_join_after_player 1");
+    }
 
     // --- starting ---------------------------------------------------------------------------------
 
@@ -320,7 +337,7 @@ public partial class Gpp
     // A side choice that waits forever is a pug that waits forever: the winning captain can be loading,
     // arguing in voice, or - on a test server - a bot that will never type anything. Staying is the
     // choice that changes nothing, so it is the safe thing to do when nobody says otherwise.
-    private const int SideChoiceSeconds = 30;
+    private const int SideChoiceSeconds = 90;
 
     internal int _sideSecondsLeft;
 
@@ -468,7 +485,6 @@ public partial class Gpp
         Server.ExecuteCommand("mp_ignore_round_win_conditions 0;mp_restartgame 1;mp_warmup_end;"
             + "mp_match_end_restart false");
 
-        StartDemoAfterRestart(LiveRestartSeconds);
         ResetDrawVote();
         CaptureStatsBaseline();
         RecordMatchStart();
