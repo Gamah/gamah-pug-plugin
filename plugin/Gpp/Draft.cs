@@ -258,6 +258,9 @@ public partial class Gpp
         ulong duelWinner = _knifeWinner;
 
         ClearFunEffects();
+        // A draft is the start of a pug when there was no vote in front of it; after a vote this is a
+        // second call on an empty set and does nothing.
+        ForgetKicks();
         ResetDraft();
         _phase = PugPhase.Draft;
         _joinsOpenUntil = DateTime.UtcNow.AddSeconds(_joinWindowSeconds);

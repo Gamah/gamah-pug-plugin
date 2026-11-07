@@ -41,6 +41,8 @@ by [`../Gpp.Tests`](../Gpp.Tests) (`dotnet test`).
 | `.ready` / `.r` / `.gaben` / `!ready` | everyone | Ready up. Everybody on either team has to, unless `min_ready` says a number — and, during round one's Discord hold, says you are in your channel |
 | `.unready` / `.ur` / `.notready` | everyone | Take it back |
 | `.forceready` | admin | Ready everybody and start, whoever is missing |
+| `.kick <player\|number> [reason]` | admin | Kick somebody, **during a pug too**, and hold the door shut for the rest of it |
+| `.unkick [name\|steamid]` | admin | Let one of them back in, or with no argument list who is being held out |
 | `.stay` / `.switch` | the winning side's captain | Keep this side, or take the other one. `side_choice_captain_only` false lets their whole side answer |
 | `.pause` | players in the match | Pause from the end of the round. Both sides `.unpause` to resume |
 | `.tech` | players in the match | Technical pause — capped per side by `max_tech_pauses` |
@@ -280,6 +282,42 @@ warning if anything was still live by then: a phase change should have cleared i
 left means something went live without one. An invulnerable player left in
 a live match is the one failure here nobody would notice until it decided a round.
 
+## Kicking, and what the block is
+
+`.kick <player|number> [reason]` is admin-only, works in any phase, and is the one command here that
+reaches another player while a pug is running. The target is a roster number from `.players` or a name;
+everything after it is the reason, which goes in the log and in the line the room sees. A name with a
+space in it has to be the number instead - a `.kick` that guesses where a name ends kicks the wrong
+person.
+
+The door stays shut **for that pug only**: a set of SteamIDs in memory, checked when somebody authorizes
+or is put in the server, and emptied when the next pug starts. So between pugs a kicked player walks
+back in, which is the point - it is about the match being played, not about the person. `.unkick` lets
+one back in before then, and with no argument lists who is being held.
+
+It is not a ban, and nothing pretends otherwise: a hot reload (how this plugin is deployed), a map
+change or a server restart loses the set. A deploy mid-match already costs the match state, so the block
+is no weaker than what it stands next to. Kicked clients see the engine's "voted off" reason, because
+that is the closest thing in `NetworkDisconnectionReason` to what happened.
+
+## The command audit
+
+Every command typed at this plugin writes one line to its own log, before it is acted on:
+
+    cmd: asta<76561198...> ".kick 4 shooting the team" [Live/Match]
+
+Who, what they typed, and what the server was doing at the time. Unrecognised dot commands are logged
+too, because "who typed `.kcik` at somebody" is the question asked afterwards. `!foo` arrives twice -
+once at the `say` listener, once as `css_foo` - so both spellings normalise to `foo` and a repeat inside
+400ms is dropped; the rules are in `Audits` and under test.
+
+The console route is one command listener per `css_` command, found by reflecting over the plugin's own
+`[ConsoleCommand]` attributes at load, so a command added later is audited by having been registered.
+Nothing in the audit runs on a tick or a timer: it costs a dictionary lookup and a log line on the
+frames where somebody actually typed something. Read it in
+`addons/counterstrikesharp/logs/log-Gpp<date>.txt`, not the journal - journald splices the game's
+stdout mid-word.
+
 ## The warmup toys
 
 Every one of them takes `[target] [amount]`, and a bare one is aimed at whoever typed it: `.fent` spins
@@ -303,8 +341,9 @@ rules are in `ToyArgs` and under test, because "is a lone number a target or an 
 question two call sites would answer differently a month apart.
 
 Anybody may point one of these at themselves. Pointing one at somebody else is the admin flag, and that
-asymmetry is deliberate: the server has no kick path, so a toy any player could aim at any other player
-would be the first griefing lever on it.
+asymmetry is deliberate: a toy any player could aim at any other player would be the first griefing
+lever on the server. `.kick` is behind the same flag for the same reason, and is the only command that
+reaches somebody else while a pug is running.
 
 `.players` numbers the room in connection order, and the numbers are never reused — somebody leaving
 does not renumber anybody, so a number read off the list a moment ago still means the same person. A
@@ -357,8 +396,9 @@ scrolls by character count, one character every three paints.
 
 - **The last player in the pool is not picked, they are placed.** When one undrafted player is left
   they go to whoever is on the clock, which is also how the odd player in uneven teams is decided.
-- **The draft is not enforced once the match is live.** Nothing kicks a latecomer and nothing drags a
-  player back to their drafted side after go-live: the server is open on purpose. The ready phase does
+- **The draft is not enforced once the match is live.** Nothing kicks a latecomer *by itself* and nothing
+  drags a player back to their drafted side after go-live: the server is open on purpose, and `.kick` is
+  an admin deciding otherwise about one person. The ready phase does
   sweep drafted players back onto their side, so the match starts on the right teams.
 - **No round backups.** A match that is abandoned, crashed out or ended by accident cannot be restored
   mid-way; it is replayed from the start or not at all.

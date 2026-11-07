@@ -19,6 +19,8 @@
     <Compile Include="../Gpp/DemoFiles.cs" />
     <Compile Include="../Gpp/ToyArgs.cs" />
     <Compile Include="../Gpp/Smokes.cs" />
+    <Compile Include="../Gpp/Kicks.cs" />
+    <Compile Include="../Gpp/Audits.cs" />
     <Compile Include="../Gpp/StatsStore.cs" />
     <Compile Include="../Gpp/HudLayout.cs" />
     <Compile Include="../Gpp/HudMetrics.cs" />

@@ -53,6 +53,8 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         HookCaptainKnife();
         HookFunCommands();
         HookSmokePractice();
+        HookCommandAudit();
+        HookKick();
         StartWarmupWatch();
 
         // Whoever is already standing there - on a hot reload, which is how this plugin is deployed: into

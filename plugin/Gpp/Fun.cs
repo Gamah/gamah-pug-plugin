@@ -59,6 +59,12 @@ public partial class Gpp
         if (AlreadySaid(player, message)) return HookResult.Continue;
         if (message.Length < 2 || (message[0] != '.' && message[0] != '!')) return HookResult.Continue;
 
+        // One line in GPP's own log for anything typed as a command, dot or bang, before any of it is
+        // acted on - including the ones this listener does not recognise, because "who typed .kcik at
+        // somebody" is the question that gets asked afterwards. See Audit.cs.
+        // A letter or a digit after the prefix: "..." and "!!" in chat are punctuation, not commands.
+        if (char.IsLetterOrDigit(message[1])) Audit(player, message);
+
         // A bare number is the whole command during a vote or a draft: !3 votes for map 3, and !3 picks
         // player 3 when it is your turn. It goes through the say listener rather than a console command
         // because there is no css_3 to register - CSSharp turns !foo into css_foo, and nobody is going
@@ -106,6 +112,14 @@ public partial class Gpp
             case "notready":
             case "ur":
                 AfterTick(() => Unready(PlayerBySteamId(who)));
+                return HookResult.Continue;
+            // Admin only, and the only command here that works while a pug is running: the fence is in
+            // KickCommand, not out here, so the rcon route lands on the same one.
+            case "kick":
+                AfterTick(() => KickCommand(PlayerBySteamId(who), rest));
+                return HookResult.Continue;
+            case "unkick":
+                AfterTick(() => UnkickCommand(PlayerBySteamId(who), rest));
                 return HookResult.Continue;
             case "forceready":
             case "forcestart":

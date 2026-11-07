@@ -48,6 +48,7 @@ public partial class Gpp
         }
 
         ClearFunEffects();
+        ForgetKicks();
         ResetVote();
         ResetKnife();
         _phase = PugPhase.MapVote;
