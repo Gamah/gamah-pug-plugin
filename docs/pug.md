@@ -7,7 +7,7 @@ Admin page: [running a pug](admin.md).
 
 ## What happens
 
-1. **Map vote.** 45 seconds. Type `!1`, `!2`, `!3` for the map you want. Closes early once everyone
+1. **Map vote.** 90 seconds. Type `!1`, `!2`, `!3` for the map you want. Closes early once everyone
    has voted.
 2. **Captains.** `.captain` during the vote puts your hand up. Two get drawn from whoever did. Type it
    again to take it back.

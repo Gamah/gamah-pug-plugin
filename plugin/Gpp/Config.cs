@@ -154,7 +154,7 @@ public class GppConfig : BasePluginConfig
 
     // The map vote's clock, and the captain sign-up's: one window does both, so this is the whole
     // opening of a pug. It closes early the moment everybody has voted, captains volunteered or not.
-    [JsonPropertyName("vote_seconds")] public int VoteSeconds { get; set; } = 45;
+    [JsonPropertyName("vote_seconds")] public int VoteSeconds { get; set; } = 90;
 
     // How many maps, drawn at random from the pool, go on the ballot. 0 puts the whole pool on it.
     [JsonPropertyName("ballot_size")] public int BallotSize { get; set; } = 5;

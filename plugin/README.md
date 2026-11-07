@@ -110,7 +110,7 @@ load**. [`../examples/Gpp.json`](../examples/Gpp.json) is a filled-in one.
   `display` renames one on the ballot
 - `players_per_team` (0 = size the teams from whoever is there, and leave nobody out)
 - `min_players` (2) — needed before `!pug start` runs. Two captains and nothing to draft is still a pug
-- `vote_seconds` (45) — the map vote, which is also the captain sign-up. Closes early the moment
+- `vote_seconds` (90) — the map vote, which is also the captain sign-up. Closes early the moment
   everybody has voted, captains volunteered or not. `ballot_size` (0 = the whole pool on the ballot), `pick_seconds` (30, 0 = no
   timeout)
 - `reconnect_wait_seconds` (90) — after a map change, how long the room waits for the two captains to
