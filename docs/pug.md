@@ -1,93 +1,64 @@
-# How a pug runs: the player page
+# Playing a pug
 
-*If you are running it rather than playing it, [this is your page](admin.md).*
+Everything is typed in chat. `.ready` and `!ready` are the same. A bare number answers whatever is on
+your screen.
 
-Teams get picked, you knife for sides, you play. The overlay tells you what it wants at every step;
-this is the same thing written down, so you can read it before you are standing in it.
+Admin page: [running a pug](admin.md).
 
-Type commands in chat. `.ready` and `!ready` are the same - `.` is what everyone uses. A bare number
-(`!3`) is the answer to whatever is on screen.
+## What happens
 
-## The flow
+1. **Map vote.** 45 seconds. Type `!1`, `!2`, `!3` for the map you want. Closes early once everyone
+   has voted.
+2. **Captains.** `.captain` during the vote puts your hand up. Two get drawn from whoever did. Type it
+   again to take it back.
+3. **Map changes.** Reconnect. The draft waits 90 seconds for the captains. Anyone who turns up while
+   picks remain joins the pool.
+4. **Captains knife.** 1v1 for first pick, 60 seconds.
+5. **Draft.** You are held in spectator until you are picked. Captains type `!4` to take player 4.
+   `.players` reprints the pool. `!draft <name>` picks by name.
+6. **Ready.** Type `.ready`. Everyone has to. `.unready` takes it back.
+7. **Knife round.** Winning captain types `.stay` or `.switch`.
+8. **Live.** 24 rounds, overtime if it is level. Round one holds for a bit so people can get into
+   Discord, so `.ready` again once you are in.
+9. **Done.** Scores written, end screen, back to warmup.
 
-**1. The map vote.** An admin runs `!pug start` and the ballot goes up for 45 seconds. Type `!1`,
-`!2`, `!3` for the map you want. It closes early once everybody has voted.
+Your draft number stays yours. Picks do not renumber anyone.
 
-**2. Captains, at the same time.** `.captain` while the vote is up puts your hand up. Two get drawn
-from whoever volunteered - fewer than two and the rest is at random, so *somebody* is captaining
-whether anyone offered or not. `.captain` again takes your hand back down.
-
-**3. The map changes** and you reconnect. The draft waits up to 90 seconds for the two captains to
-load; if one never comes back the armband goes to somebody who is actually here. Anyone who connects
-while picks remain joins the pool.
-
-**4. The captains knife.** A 1v1 for first pick, up to 60 seconds. Everybody else watches.
-
-**5. The draft.** Everyone undrafted is held in spectator - you cannot join a team, and the overlay
-shows the pool with a number against each name. When it is your turn as captain, `!4` picks player 4.
-`.players` reprints the pool, `!draft <name>` picks by name.
-
-Your number is yours for the whole draft. Picking `!3` does not renumber the people below them.
-
-**6. Ready up.** Teams are set, the warmup is held open, and the overlay counts 90 seconds while
-people land. Type `.ready` - everybody has to, so the panel is waiting on whoever has not. `.unready`
-takes it back. An admin can `.forceready` past somebody who has gone to make a sandwich.
-
-**7. The knife round.** One round, knives only, for which side you play. The winning side's captain
-then types `.stay` to keep it or `.switch` to take the other one.
-
-**8. LIVE.** 24 rounds, 15 second halftime, overtime if it needs it. The demo is recording and the
-stats are counting.
-
-**Round one holds for a moment** so everyone can get into the Discord channel. `.ready` again when
-you are in it, and the round starts when the room has.
-
-**9. It ends.** Scores and players are written, the engine shows its end-of-match screen for 15
-seconds, and the server goes back to a held warmup, ready for the next one.
-
-## What you can type
+## Commands
 
 | | |
 | --- | --- |
-| `!<number>` | Votes during a map vote, picks during a draft. The one command you actually need |
-| `.captain` | Put your hand up to captain, while the sign-up is open |
-| `.players` / `.who` | Who is here, numbered - privately to you. The draft pool, during a draft |
-| `.ready` / `.r` | Ready up. `.gaben` also works, for reasons |
-| `.unready` / `.ur` | Take it back |
-| `.stay` / `.switch` | Keep or swap sides after the knife round. The winning captain's call |
-| `.pause` | Pause from the end of the round. Both sides have to `.unpause` to come back |
-| `.tech` | A technical pause, for somebody whose game has fallen over |
-| `.unpause` | Ask to resume - your side asking is half of it |
-| `.clear` | Close whatever the plugin has put on your screen |
-| `!link-discord` | A code to tie your Steam account to Discord |
+| `!<number>` | Votes, or picks. The only one you need |
+| `.captain` | Volunteer to captain |
+| `.players` | Who is here, numbered, just to you |
+| `.ready` / `.r` | Ready up. `.gaben` works too |
+| `.unready` | Take it back |
+| `.stay` / `.switch` | Sides, after the knife round |
+| `.pause` | Pause at the end of the round |
+| `.tech` | Pause because someone crashed |
+| `.unpause` | Both sides have to ask |
+| `.clear` | Close anything on your screen |
+| `!link-discord` | Code to link Steam to Discord |
 
 ## Warmup only
 
-Between pugs the server is yours to mess about on. None of this works once a pug is running.
-
 | | |
 | --- | --- |
-| `.smokes` | Smoke practice: grenade trails, smokes only, invulnerable, and your throws come back. `.smokes off` to stop |
-| `.map` | The map list, numbered, on a board beside you. `.map <number>` asks for that one |
+| `.smokes` | Trails, smokes only, invulnerable, nades come back. `.smokes off` to stop |
+| `.map` | Map list. `.map 4` asks for map 4 |
 | `.kill` | Yourself |
-| `.slap` | Fling yourself about. No damage |
-| `.fent` / `.drug` | Spin or warp your own view, up to 30 seconds |
-| `.narcan` | Undo `.fent` and `.drug` |
+| `.slap` | Fling yourself. No damage |
+| `.fent` / `.drug` | Spin or warp your view, 30 seconds max |
+| `.narcan` | Undo those |
 
-`.map` needs an admin to `.yes` it, or - with no admin connected - everybody to agree.
+`.map` needs an admin to `.yes` it. With no admin on, everyone has to agree.
 
-## Things that catch people out
+## Gotchas
 
-- **You cannot join a team during the draft.** That is deliberate: being in spectator is how the draft
-  knows you are undrafted. You get put on a side the moment you are picked.
-- **Nothing times out at the ready step.** The 90 second countdown is the overlay nagging; `.ready`
-  still starts the match long after it has run out.
-- **A bare `!1` outside a vote or a draft does nothing at all.** It is not a command that failed - mid
-  match it is just somebody talking.
-- **If the match is level at the end** you get asked whether to play overtime: `!1` for overtime, `!2`
-  for a draw. The match is paused while the room decides.
-- **Join mid-match and you land in spectator.** Press M and pick a side. Picking during freeze time
-  spawns you into the round about to run; mid-round you wait for the next one.
-- **An admin's `.kick` keeps you out for the rest of that pug.** It is not a ban - when the pug is
-  over you can walk back in.
-- **`.spec` is not a kick.** It parks AFK people in spectator; press M and you are back on a side.
+* You cannot join a team during the draft. Spectator is how it knows you are undrafted.
+* Nothing times out at ready. The countdown is just the overlay. `.ready` still starts it.
+* `!1` outside a vote or draft does nothing.
+* Level at the end asks the room: `!1` overtime, `!2` draw.
+* Join mid match and you land in spectator. Press M.
+* `.kick` keeps you out for that pug only, not forever.
+* `.spec` is not a kick. Press M and you are back.
