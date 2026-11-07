@@ -15,6 +15,10 @@ namespace Gpp;
 // screen changes, and sv_cheats stays off - the cheat-flagged practice helpers (sv_rethrow_last_grenade,
 // sv_kill_smokegrenade) would have meant turning cheats on for the whole public server, which hands every
 // connected client the client-side ones as well.
+// The trail is per-*client*, not per-grenade: a client with the cvars set draws the arc and the inset for
+// every grenade it can see, so several people practising at once all see each other's throws. There is no
+// owner filter to reach for - the drawing is the client's.
+//
 // [SOURCE: `find grenade_traj` on this server, CS2 1.41.9.2, read 2026-10-24. The cvars' flags are the
 //  documented part; that a per-client replication is enough to draw a trail for one player is read off the
 //  behaviour, not a contract - re-check after a CS2 update.]
@@ -28,9 +32,11 @@ public partial class Gpp
     // Who has it on, by the same id everything else here keys players on.
     private readonly HashSet<ulong> _smokePractice = [];
 
-    // The last smoke each of them popped, by entity index. Indices are reused, so nothing is trusted
-    // without checking the entity is still alive and still a smoke.
-    private readonly Dictionary<ulong, int> _poppedSmoke = [];
+    // The last smoke each of them popped: the entity index, and the thrower handle that was on it at the
+    // time. Indices are reused, so the index alone cannot say whether the smoke sitting at it now is the
+    // one we tracked - with several people practising it is as likely to be somebody else's. The handle
+    // carries a serial number, which is what tells those two apart.
+    private readonly Dictionary<ulong, (int Index, uint Thrower)> _poppedSmoke = [];
 
     private const string SmokeItem = "weapon_smokegrenade";
     private const string SmokeProjectile = "smokegrenade_projectile";
@@ -92,7 +98,10 @@ public partial class Gpp
             AfterTick(() =>
             {
                 CullPoppedSmoke(who, keep: popped);
-                _poppedSmoke[who] = popped;
+                // Read off the new cloud rather than off the player: by the time this one is culled they
+                // may be on a different pawn, and the handle that threw it will not be.
+                var fresh = Utilities.GetEntityFromIndex<CSmokeGrenadeProjectile>(popped);
+                _poppedSmoke[who] = (popped, fresh != null && fresh.IsValid ? fresh.Thrower.Raw : 0u);
 
                 var them = PlayerBySteamId(who);
                 if (them != null && them.IsValid) them.PrintToChat(Prefix() + Smokes.SmokePoppedLine(x, y, z));
@@ -137,10 +146,19 @@ public partial class Gpp
             if (Retired || player == null || !player.IsValid) return HookResult.Continue;
 
             ulong who = Id(player);
-            if (_poppedSmoke.TryGetValue(who, out int tracked) && tracked == @event.Entityid)
+            if (_poppedSmoke.TryGetValue(who, out var tracked) && tracked.Index == @event.Entityid)
             {
                 _poppedSmoke.Remove(who);
             }
+            return HookResult.Continue;
+        });
+
+        // A warmup restart takes every projectile with it and fires no expired event for any of them, so
+        // every tracked index is stale from here on - and a stale index is how this removes a cloud that
+        // belongs to somebody else.
+        RegisterEventHandler<EventRoundStart>((_, _) =>
+        {
+            _poppedSmoke.Clear();
             return HookResult.Continue;
         });
     }
@@ -208,7 +226,9 @@ public partial class Gpp
 
         if (!on)
         {
-            _smokePractice.Remove(who);
+            // The tracked index goes with it: left behind it outlives its cloud, and the engine hands that
+            // index to the next person's smoke.
+            ForgetSmokePractice(who);
             ShowSmokeTrails(player, 0);
             TakeDamageAgain(player);
             player.PrintToChat(Prefix() + "Smoke practice off. Buy what you like again - warmup money is "
@@ -306,14 +326,16 @@ public partial class Gpp
     // Remove the cloud this player popped before the one that has just landed.
     private void CullPoppedSmoke(ulong who, int keep)
     {
-        if (!_poppedSmoke.TryGetValue(who, out int index)) return;
+        if (!_poppedSmoke.TryGetValue(who, out var last)) return;
         _poppedSmoke.Remove(who);
-        if (index == keep) return;
+        if (last.Index == keep || last.Thrower == 0) return;
 
-        var smoke = Utilities.GetEntityFromIndex<CSmokeGrenadeProjectile>(index);
+        var smoke = Utilities.GetEntityFromIndex<CSmokeGrenadeProjectile>(last.Index);
         // An index is reused the moment the engine wants it back, so a stale one can name an entity that
-        // is alive and is not a smoke at all. Both checks are load-bearing.
+        // is alive and is not a smoke at all. All three checks are load-bearing, and the last is the one
+        // that keeps this from removing a cloud somebody else is looking at.
         if (smoke == null || !smoke.IsValid || smoke.DesignerName != SmokeProjectile) return;
+        if (smoke.Thrower.Raw != last.Thrower) return;
         smoke.Remove();
     }
 
