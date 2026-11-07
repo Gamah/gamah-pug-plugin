@@ -37,7 +37,7 @@ by [`../Gpp.Tests`](../Gpp.Tests) (`dotnet test`).
 | `!<number>` | everyone | **The main one.** Votes for that map during a vote, makes that pick during a draft. Silent outside both |
 | `!vote <number\|map>` | everyone | Vote during a map vote. `!<number>` is shorter |
 | `!draft <number\|name>` | captain on the clock | Make a pick by name; no argument reprints the list |
-| `.players` / `.who` / `!players` | everyone | Who is here, numbered, in any phase — privately, to whoever asked. During a draft the undrafted pool comes first (`!1` picks off that one), then the room. The room's number is what the toys below and `.kick` take |
+| `.players` / `.who` / `!players` | everyone | Who is here, numbered 1..n, in any phase — privately, to whoever asked. During a draft it is the undrafted pool instead, which `!1` picks off. The number is what the toys below and `.kick` take |
 | `.ready` / `.r` / `.gaben` / `!ready` | everyone | Ready up. Everybody on either team has to, unless `min_ready` says a number — and, during round one's Discord hold, says you are in your channel |
 | `.unready` / `.ur` / `.notready` | everyone | Take it back |
 | `.forceready` | admin | Ready everybody and start, whoever is missing |
@@ -345,11 +345,14 @@ asymmetry is deliberate: a toy any player could aim at any other player would be
 lever on the server. `.kick` is behind the same flag for the same reason, and is the only command that
 reaches somebody else while a pug is running.
 
-`.players` numbers the room in connection order, and the numbers are never reused — somebody leaving
-does not renumber anybody, so a number read off the list a moment ago still means the same person. A
-number belongs to its SteamID for as long as the plugin is loaded, so a reconnect keeps it, and the
-counter only goes up. Which is also why the numbers get sparse over a long night. A number nobody holds
-resolves to nobody and is never fallen back to a name match.
+`.players` numbers the room **by position in the list it just printed** — 1..n, top to bottom, the same
+reading as the draft's pool. One numbering for the whole plugin is the point: a `.players` that printed
+one set and a `.kick` that took another is how somebody kicks the wrong person.
+
+The cost is the gap between reading and typing: somebody leaving renumbers everyone below them, so a
+number read a moment ago can land one player off. The ordering underneath is still connection order,
+kept per SteamID, so the list only moves where it has to and a reconnect comes back where it was. A
+number past the end of the list resolves to nobody and is never fallen back to a name match.
 
 `.narcan` takes it all back off: both timers stopped, the view levelled, the camera and the screen put
 back. It exists because `.fent` on yourself for thirty seconds is funny for about eight of them, and

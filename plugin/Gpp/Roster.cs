@@ -7,16 +7,17 @@ namespace Gpp;
 // half the room is a Cyrillic flourish and a trademark symbol, and nobody can type "✪ DobackSlaps™" into
 // a chat box to slap them.
 //
-// Two rules, and both of them are about the gap between reading the list and typing a number:
+// The number is the position in the list that was just printed: 1..n, top to bottom, the same reading as
+// the draft's pool. One numbering for the whole plugin was the call - two of them, with a .players that
+// printed one and a .kick that took the other, is how somebody kicks the wrong person.
 //
-//   - Numbers are handed out in connection order and never reused. Somebody leaving does not renumber
-//     the room, which is what would make ".fent 4" land on a player who was 5 a second ago.
-//   - A number belongs to a SteamID for as long as the plugin is loaded, so a reconnect keeps it. The
-//     counter only ever goes up; over a long night the numbers get sparse, which is the point.
+// The cost is paid in the gap between reading the list and typing a number: somebody leaving renumbers
+// everyone below them, so a number read a moment ago can land one player off. The ordering underneath is
+// still connection order, kept per SteamID and never reshuffled, so the list only changes where it has
+// to - and a reconnect comes back where they were rather than at the bottom.
 //
-// A number that nobody here holds is an error, not a near miss. It is never fallen back to a name match:
-// the whole reason the number exists is that it is unambiguous, and guessing would hand the slap to a
-// bystander.
+// A number nobody holds is an error, not a near miss. It is never fallen back to a name match: the whole
+// reason the number exists is that it is unambiguous, and guessing would hand the slap to a bystander.
 public partial class Gpp
 {
     private readonly Dictionary<ulong, int> _rosterNumbers = [];
@@ -40,34 +41,43 @@ public partial class Gpp
         }
     }
 
-    internal int RosterNumber(CCSPlayerController player)
+    // Not shown to anybody: this is the sort key, which is what keeps the list in connection order and
+    // stops it reshuffling under somebody who is reading it.
+    private int JoinOrder(CCSPlayerController player)
     {
         NumberPlayer(Id(player));
         return _rosterNumbers[Id(player)];
     }
 
-    // Everyone here, in the order the numbers were handed out.
+    // Everyone here, in the order they arrived. The position in this list is the number, so this is the
+    // one place the ordering is decided - the list that is printed and the list a number is resolved
+    // against are the same call.
     private List<CCSPlayerController> NumberedRoster()
     {
         NumberEveryone();
-        return HumanPlayers().OrderBy(RosterNumber).ToList();
+        return HumanPlayers().OrderBy(JoinOrder).ToList();
     }
 
-    // The player holding this number, or null. Only the people actually connected can be hit: a number
-    // whose holder has gone home resolves to nobody rather than to whoever inherited the slot.
-    private CCSPlayerController? PlayerByNumber(int number) =>
-        number <= 0 ? null : HumanPlayers().FirstOrDefault(player => RosterNumber(player) == number);
+    // The player at this position, or null. Off the end is nobody rather than the last person in the
+    // room: a mistyped number must not hit a bystander.
+    private CCSPlayerController? PlayerByNumber(int number)
+    {
+        var roster = NumberedRoster();
+        return number >= 1 && number <= roster.Count ? roster[number - 1] : null;
+    }
 
     // The dot route and the console route both land here, so .players means the same thing whichever way
     // it was typed.
     //
-    // During a draft that is two lists, and they are numbered differently on purpose: the pool is
-    // numbered 1..n by pick order, which is what !1 takes, and the room is numbered by the roster, which
-    // is what .kick takes. Printing one and calling it "the numbers" is how somebody kicks the wrong
-    // person, so both go out, each under what it is for.
+    // A draft is the pool and nothing else, the way it has always been: the list in front of the captains
+    // is the one they are picking off, and a second list under it is a second set of numbers to get wrong.
     private void PlayersOrPool(CCSPlayerController? asker)
     {
-        if (_phase == PugPhase.Draft) PrintAvailable(asker);
+        if (_phase == PugPhase.Draft)
+        {
+            PrintAvailable(asker);
+            return;
+        }
         PlayersCommand(asker);
     }
 
@@ -92,9 +102,11 @@ public partial class Gpp
         Tell(asker, warmup
             ? $"{roster.Count} here - the number is what .fent, .drug, .slap, .kill and .kick take:"
             : $"{roster.Count} here - the number is what .kick takes:");
-        foreach (var player in roster)
+        // The position in this list is the number, and PlayerByNumber reads it off the same ordering.
+        for (int index = 0; index < roster.Count; index++)
         {
-            Tell(asker, $"{Colorize("{lime}")}{RosterNumber(player)}{Colorize("{default}")} "
+            var player = roster[index];
+            Tell(asker, $"{Colorize("{lime}")}{index + 1}{Colorize("{default}")} "
                 + $"{player.PlayerName}{(player.IsBot ? " (bot)" : "")}");
         }
     }
