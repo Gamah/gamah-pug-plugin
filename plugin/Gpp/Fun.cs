@@ -118,6 +118,11 @@ public partial class Gpp
             case "kick":
                 AfterTick(() => KickCommand(PlayerBySteamId(who), rest));
                 return HookResult.Continue;
+            // The gentle half of .kick: admin only, any phase, and nothing is remembered - see Spec.cs.
+            case "spec":
+            case "spectate":
+                AfterTick(() => SpecCommand(PlayerBySteamId(who), rest));
+                return HookResult.Continue;
             case "unkick":
                 AfterTick(() => UnkickCommand(PlayerBySteamId(who), rest));
                 return HookResult.Continue;

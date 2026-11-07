@@ -43,6 +43,7 @@ by [`../Gpp.Tests`](../Gpp.Tests) (`dotnet test`).
 | `.forceready` | admin | Ready everybody and start, whoever is missing |
 | `.kick <player\|number> [reason]` | admin | Kick somebody, **during a pug too**, and hold the door shut for the rest of it |
 | `.unkick [name\|steamid]` | admin | Let one of them back in, or with no argument list who is being held out |
+| `.spec <player\|number> [reason]` | admin | Move somebody to spectator, in any phase. Nothing is remembered: they press M and they are back. For AFK people |
 | `.stay` / `.switch` | the winning side's captain | Keep this side, or take the other one. `side_choice_captain_only` false lets their whole side answer |
 | `.pause` | players in the match | Pause from the end of the round. Both sides `.unpause` to resume |
 | `.tech` | players in the match | Technical pause — capped per side by `max_tech_pauses` |
@@ -303,6 +304,16 @@ It is not a ban, and nothing pretends otherwise: a hot reload (how this plugin i
 change or a server restart loses the set. A deploy mid-match already costs the match state, so the block
 is no weaker than what it stands next to. Kicked clients see the engine's "voted off" reason, because
 that is the closest thing in `NetworkDisconnectionReason` to what happened.
+
+`.spec` is the gentle half of the same idea and the opposite of a block: no set, nothing to release,
+nothing watching the door. Somebody AFK in a live round is a man their team does not have, so moving them
+to spectator is the server agreeing with what is already true - and pressing M puts them back on a side.
+A team change takes their pawn with it, which in a live round is that round played a man down; the log
+says so when they were alive at the time.
+
+It does not use the pug's own held-spectator set, which the phases sweep and release - a `.spec` undone
+by the next phase change would be a different command. It is the same one-off nudge somebody gets for
+walking in mid-match.
 
 ## The command audit
 
