@@ -1,14 +1,19 @@
 # GPP — the plugin
 
-CounterStrikeSharp plugin for 10-man nights: whole-server map vote, captain sign-up, a captain knife for
-first pick, a draft with everyone held in spectator, then the match itself — ready up, knife for sides,
-go live, pauses, a demo and a stats row. [`../docs/match.md`](../docs/match.md) is the match engine.
+CounterStrikeSharp plugin for pug nights, whatever size they turn out to be: whole-server map vote,
+captain sign-up, a captain knife for first pick, a draft with everyone held in spectator, then the
+match itself — ready up, knife for sides, go live, pauses, a demo and a stats row. [`../docs/match.md`](../docs/match.md) is the match engine.
 
 Built against CounterStrikeSharp API 1.0.376 (net10.0). The engine-free parts — the ready threshold,
 pause limits, side swaps, knife scoring, demo naming, the board geometry and the stats SQL — are covered
 by [`../Gpp.Tests`](../Gpp.Tests) (`dotnet test`).
 
 ## Commands
+
+Two short pages, for handing to people rather than reading as a reference:
+[`../docs/admin.md`](../docs/admin.md) is what an admin needs to run a night, and
+[`../docs/pug.md`](../docs/pug.md) is the flow and the commands for everyone else. The table below is
+all of it, debug commands included.
 
 | Command | Who | What |
 | --- | --- | --- |

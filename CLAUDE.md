@@ -1,6 +1,7 @@
 # gamah-pug-plugin
 
-The 10-man pug flow for a CS2 server, as one CounterStrikeSharp plugin, plus an optional Discord bot.
+The pug flow for a CS2 server - five a side on a normal night, as many as turn up on another - as one
+CounterStrikeSharp plugin, plus an optional Discord bot.
 
     plugin/Gpp/        the plugin (C#, net10.0, CounterStrikeSharp 1.0.376)
     plugin/Gpp.Tests/  the engine-free rules and the stats SQL, under xunit
