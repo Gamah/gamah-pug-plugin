@@ -1,8 +1,11 @@
+using System.Drawing;
 using Microsoft.Extensions.Logging;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
 using CounterStrikeSharp.API.Modules.Commands;
+using CounterStrikeSharp.API.Modules.Timers;
+using CounterStrikeSharp.API.Modules.Utils;
 
 namespace Gpp;
 
@@ -103,6 +106,8 @@ public partial class Gpp
                 var fresh = Utilities.GetEntityFromIndex<CSmokeGrenadeProjectile>(popped);
                 _poppedSmoke[who] = (popped, fresh != null && fresh.IsValid ? fresh.Thrower.Raw : 0u);
 
+                MarkPop(who, x, y, z);
+
                 var them = PlayerBySteamId(who);
                 if (them != null && them.IsValid) them.PrintToChat(Prefix() + Smokes.SmokePoppedLine(x, y, z));
             });
@@ -159,6 +164,7 @@ public partial class Gpp
         RegisterEventHandler<EventRoundStart>((_, _) =>
         {
             _poppedSmoke.Clear();
+            ClearPopMarkers();
             return HookResult.Continue;
         });
     }
@@ -351,6 +357,7 @@ public partial class Gpp
         var practising = _smokePractice.ToList();
         _smokePractice.Clear();
         _poppedSmoke.Clear();
+        ClearPopMarkers();
 
         // The cvars and the damage flag go back for everybody, not only the names this instance knows:
         // a reload loses the set, and an invulnerable player nobody is tracking is the one failure here
@@ -375,6 +382,87 @@ public partial class Gpp
     {
         _smokePractice.Remove(who);
         _poppedSmoke.Remove(who);
+        RemovePopMarker(who);
+    }
+
+    // A pillar on the pop, for the thrower alone, for SmokeMarkerSeconds. One each, like the cloud: a new
+    // pop moves it. The beam is visible to nobody else because the transmit hook drops it from every
+    // other client's snapshot - attached only while a marker stands, since it runs per client per tick.
+    private readonly Dictionary<ulong, CBeam> _popMarkers = [];
+    private Listeners.CheckTransmit? _markerTransmit;
+
+    private const float MarkerHeight = 160f;
+
+    private void MarkPop(ulong who, float x, float y, float z)
+    {
+        RemovePopMarker(who);
+        if (Config.SmokeMarkerSeconds <= 0) return;
+
+        var beam = Utilities.CreateEntityByName<CBeam>("beam");
+        // A dead factory hands back a wrapper over a zero handle rather than null - see SpawnBoard.
+        if (beam == null || beam.Handle == IntPtr.Zero || !beam.IsValid)
+        {
+            Logger.LogError("beam would not spawn - no smoke pop marker.");
+            return;
+        }
+
+        beam.Render = Color.FromArgb(255, 0, 255, 0);
+        beam.Width = 3f;
+        beam.EndWidth = 3f;
+        beam.Teleport(new Vector(x, y, z), new QAngle(0, 0, 0), new Vector(0, 0, 0));
+        beam.EndPos.X = x;
+        beam.EndPos.Y = y;
+        beam.EndPos.Z = z + MarkerHeight;
+        beam.DispatchSpawn();
+
+        _popMarkers[who] = beam;
+        SyncMarkerTransmit();
+
+        AddTimer(Config.SmokeMarkerSeconds, () =>
+        {
+            // Only the beam this timer was for: a later pop has its own timer.
+            if (_popMarkers.TryGetValue(who, out var current) && ReferenceEquals(current, beam)) RemovePopMarker(who);
+        }, TimerFlags.STOP_ON_MAPCHANGE);
+    }
+
+    private void RemovePopMarker(ulong who)
+    {
+        if (!_popMarkers.Remove(who, out var beam)) return;
+        if (beam.IsValid) beam.Remove();
+        SyncMarkerTransmit();
+    }
+
+    private void ClearPopMarkers()
+    {
+        foreach (ulong who in _popMarkers.Keys.ToList()) RemovePopMarker(who);
+    }
+
+    private void SyncMarkerTransmit()
+    {
+        bool wanted = !Retired && _popMarkers.Count > 0;
+        if (wanted == (_markerTransmit != null)) return;
+
+        if (wanted)
+        {
+            _markerTransmit = PopMarkerTransmit;
+            RegisterListener(_markerTransmit);
+            return;
+        }
+        RemoveListener(_markerTransmit!);
+        _markerTransmit = null;
+    }
+
+    private void PopMarkerTransmit(CCheckTransmitInfoList infos)
+    {
+        foreach (var (info, receiver) in infos)
+        {
+            if (receiver == null) continue;
+            ulong viewer = Id(receiver);
+            foreach (var (owner, beam) in _popMarkers)
+            {
+                if (owner != viewer && beam.IsValid) info.TransmitEntities.Remove(beam);
+            }
+        }
     }
 
     [ConsoleCommand("css_smokes", "Smoke practice trails for yourself (warmup only)")]

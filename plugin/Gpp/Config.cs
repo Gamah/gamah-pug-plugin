@@ -252,7 +252,11 @@ public class GppConfig : BasePluginConfig
 
     // Seconds the engine draws a practising player's grenade trail for (.smokes). 0 turns the whole
     // feature off, command and all.
-    [JsonPropertyName("smoke_trail_seconds")] public int SmokeTrailSeconds { get; set; } = 8;
+    [JsonPropertyName("smoke_trail_seconds")] public int SmokeTrailSeconds { get; set; } = 20;
+
+    // Seconds a pillar stands where a practising player's smoke popped, drawn for them alone. The
+    // engine's own landing inset closes about as soon as the smoke pops. 0 draws none.
+    [JsonPropertyName("smoke_marker_seconds")] public int SmokeMarkerSeconds { get; set; } = 10;
 
     // Move a lone board off to the left, out of the middle of the screen. A single board is a notice
     // rather than a layout, and the middle is where the player is aiming.

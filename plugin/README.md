@@ -158,8 +158,10 @@ load**. [`../examples/Gpp.json`](../examples/Gpp.json) is a filled-in one.
 - `restart_warning_seconds` (30) — the countdown on `!pug restart`. The idle panel's `!restart` uses 10,
   since whoever picked it is standing there waiting
 - `warmup_money` (16000) — see below
-- `smoke_trail_seconds` (8) — how long `.smokes` draws a practising player's grenade trail for. 0 turns
+- `smoke_trail_seconds` (20) — how long `.smokes` draws a practising player's grenade trail for. 0 turns
   the feature off, command and all. See below
+- `smoke_marker_seconds` (10) — how long a pillar stands where a practising player's smoke popped. 0
+  draws none
 - `count_bots` (false) — bots count as players, so one person can walk the flow. `!pug test` turns it on
   for one session without touching the config; leave the key false for real pugs or a stray bot joins
   the draft
@@ -265,7 +267,9 @@ per-client replication is enough to draw one player a trail is read off the beha
 
 Each throw re-arms them with a smoke and prints, to them alone, where they threw from and the view
 angles they threw at — the half of a lineup that pixels cannot give you — and a second line with where
-it popped. One popped smoke each: when their next one lands, the previous cloud is removed. The cull
+it popped. The engine's landing inset closes about as soon as the smoke pops and no cvar holds it open,
+so a pillar stands on the pop for `smoke_marker_seconds`, kept off everyone else's screen by
+CheckTransmit. One popped smoke each: when their next one lands, the previous cloud is removed. The cull
 lands at detonation rather than at the throw, so a second grenade may fly while they are still looking
 at the first cloud. The cloud *is* the `smokegrenade_projectile` entity (the voxel field the client
 renders is networked from it), so `Remove()` on it takes the cloud with it; entity indices are reused,
