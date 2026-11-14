@@ -20,8 +20,9 @@ namespace Gpp;
 // connected client the client-side ones as well.
 // The trail is per-*client*, not per-grenade: a client with the cvars set draws the arc and the inset for
 // every grenade it can see. There is no owner filter on the drawing, so the filter is on what the client
-// gets: a practising player is not sent anybody else's smoke projectiles at all - no flight, no trail, no
-// inset, and no cloud, since the cloud is the same entity.
+// gets: a practising player is not sent anybody else's grenade projectiles at all - smokes, flashes, HEs,
+// molotovs, decoys - so there is no flight, trail or inset to switch to, and no cloud, since the cloud is
+// the same entity.
 //
 // [SOURCE: `find grenade_traj` on this server, CS2 1.41.9.2, read 2026-10-24. The cvars' flags are the
 //  documented part; that a per-client replication is enough to draw a trail for one player is read off the
@@ -47,14 +48,16 @@ public partial class Gpp
 
     private void HookSmokePractice()
     {
-        // Every live smoke projectile, so the transmit hook can hide the ones a practising viewer did not
-        // throw. Keyed by the native pointer, which is what OnEntityDeleted hands back.
+        // Every live grenade projectile, so the transmit hook can hide the ones a practising viewer did not
+        // throw - any type, because the inset follows whatever grenade the client last saw thrown. Every
+        // "*_projectile" in CS2 is a grenade. Keyed by the native pointer, which is what OnEntityDeleted
+        // hands back.
         RegisterListener<Listeners.OnEntitySpawned>(entity =>
         {
-            if (entity.DesignerName != SmokeProjectile) return;
-            _liveSmokes[entity.Handle] = new CSmokeGrenadeProjectile(entity.Handle);
+            if (!entity.DesignerName.EndsWith("_projectile", StringComparison.Ordinal)) return;
+            _liveGrenades[entity.Handle] = new CBaseGrenade(entity.Handle);
         });
-        RegisterListener<Listeners.OnEntityDeleted>(entity => _liveSmokes.Remove(entity.Handle));
+        RegisterListener<Listeners.OnEntityDeleted>(entity => _liveGrenades.Remove(entity.Handle));
 
         RegisterEventHandler<EventGrenadeThrown>((@event, _) =>
         {
@@ -404,7 +407,7 @@ public partial class Gpp
     // runs per client per tick.
     private readonly Dictionary<ulong, CBeam> _popMarkers = [];
     private Listeners.CheckTransmit? _markerTransmit;
-    private readonly Dictionary<nint, CSmokeGrenadeProjectile> _liveSmokes = [];
+    private readonly Dictionary<nint, CBaseGrenade> _liveGrenades = [];
 
     private const float MarkerHeight = 160f;
 
@@ -478,13 +481,13 @@ public partial class Gpp
                 if (owner != viewer && beam.IsValid) info.TransmitEntities.Remove(beam);
             }
 
-            // Somebody else's smoke, to somebody practising: not sent. Thrower is the pawn handle, and
-            // a smoke whose thrower is gone is nobody's to keep.
+            // Somebody else's grenade, to somebody practising: not sent. Thrower is the pawn handle, and
+            // a grenade whose thrower is gone is nobody's to keep.
             if (!_smokePractice.Contains(viewer)) continue;
             uint mine = receiver.PlayerPawn.Raw;
-            foreach (var smoke in _liveSmokes.Values)
+            foreach (var grenade in _liveGrenades.Values)
             {
-                if (smoke.Thrower.Raw != mine) info.TransmitEntities.Remove(smoke);
+                if (grenade.Thrower.Raw != mine) info.TransmitEntities.Remove(grenade);
             }
         }
     }
