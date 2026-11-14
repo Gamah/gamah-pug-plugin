@@ -19,8 +19,9 @@ namespace Gpp;
 // sv_kill_smokegrenade) would have meant turning cheats on for the whole public server, which hands every
 // connected client the client-side ones as well.
 // The trail is per-*client*, not per-grenade: a client with the cvars set draws the arc and the inset for
-// every grenade it can see, so several people practising at once all see each other's throws. There is no
-// owner filter to reach for - the drawing is the client's.
+// every grenade it can see. There is no owner filter on the drawing, so the filter is on what the client
+// gets: a practising player is not sent anybody else's smoke projectiles at all - no flight, no trail, no
+// inset, and no cloud, since the cloud is the same entity.
 //
 // [SOURCE: `find grenade_traj` on this server, CS2 1.41.9.2, read 2026-10-24. The cvars' flags are the
 //  documented part; that a per-client replication is enough to draw a trail for one player is read off the
@@ -46,6 +47,15 @@ public partial class Gpp
 
     private void HookSmokePractice()
     {
+        // Every live smoke projectile, so the transmit hook can hide the ones a practising viewer did not
+        // throw. Keyed by the native pointer, which is what OnEntityDeleted hands back.
+        RegisterListener<Listeners.OnEntitySpawned>(entity =>
+        {
+            if (entity.DesignerName != SmokeProjectile) return;
+            _liveSmokes[entity.Handle] = new CSmokeGrenadeProjectile(entity.Handle);
+        });
+        RegisterListener<Listeners.OnEntityDeleted>(entity => _liveSmokes.Remove(entity.Handle));
+
         RegisterEventHandler<EventGrenadeThrown>((@event, _) =>
         {
             var player = @event.Userid;
@@ -243,6 +253,7 @@ public partial class Gpp
         }
 
         _smokePractice.Add(who);
+        SyncMarkerTransmit();
         ShowSmokeTrails(player, Config.SmokeTrailSeconds);
         MakeInvulnerable(player);
         StripToSmokes(player);
@@ -375,6 +386,7 @@ public partial class Gpp
             var player = PlayerBySteamId(who);
             if (player != null && player.IsValid) player.PrintToChat(Prefix() + "Smoke practice off.");
         }
+        SyncMarkerTransmit();
         return were;
     }
 
@@ -383,13 +395,16 @@ public partial class Gpp
         _smokePractice.Remove(who);
         _poppedSmoke.Remove(who);
         RemovePopMarker(who);
+        SyncMarkerTransmit();
     }
 
     // A pillar on the pop, for the thrower alone, for SmokeMarkerSeconds. One each, like the cloud: a new
     // pop moves it. The beam is visible to nobody else because the transmit hook drops it from every
-    // other client's snapshot - attached only while a marker stands, since it runs per client per tick.
+    // other client's snapshot - attached only while a marker stands or somebody is practising, since it
+    // runs per client per tick.
     private readonly Dictionary<ulong, CBeam> _popMarkers = [];
     private Listeners.CheckTransmit? _markerTransmit;
+    private readonly Dictionary<nint, CSmokeGrenadeProjectile> _liveSmokes = [];
 
     private const float MarkerHeight = 160f;
 
@@ -439,7 +454,7 @@ public partial class Gpp
 
     private void SyncMarkerTransmit()
     {
-        bool wanted = !Retired && _popMarkers.Count > 0;
+        bool wanted = !Retired && (_popMarkers.Count > 0 || _smokePractice.Count > 0);
         if (wanted == (_markerTransmit != null)) return;
 
         if (wanted)
@@ -461,6 +476,15 @@ public partial class Gpp
             foreach (var (owner, beam) in _popMarkers)
             {
                 if (owner != viewer && beam.IsValid) info.TransmitEntities.Remove(beam);
+            }
+
+            // Somebody else's smoke, to somebody practising: not sent. Thrower is the pawn handle, and
+            // a smoke whose thrower is gone is nobody's to keep.
+            if (!_smokePractice.Contains(viewer)) continue;
+            uint mine = receiver.PlayerPawn.Raw;
+            foreach (var smoke in _liveSmokes.Values)
+            {
+                if (smoke.Thrower.Raw != mine) info.TransmitEntities.Remove(smoke);
             }
         }
     }

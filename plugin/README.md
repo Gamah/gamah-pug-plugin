@@ -269,7 +269,9 @@ Each throw re-arms them with a smoke and prints, to them alone, where they threw
 angles they threw at — the half of a lineup that pixels cannot give you — and a second line with where
 it popped. The engine's landing inset closes about as soon as the smoke pops and no cvar holds it open,
 so a pillar stands on the pop for `smoke_marker_seconds`, kept off everyone else's screen by
-CheckTransmit. One popped smoke each: when their next one lands, the previous cloud is removed. The cull
+CheckTransmit. The same hook keeps everybody else's smokes off a practising player's screen: the
+engine draws the trail and inset for every grenade a client can see, so the client is not sent them -
+no flight, no trail, no cloud. One popped smoke each: when their next one lands, the previous cloud is removed. The cull
 lands at detonation rather than at the throw, so a second grenade may fly while they are still looking
 at the first cloud. The cloud *is* the `smokegrenade_projectile` entity (the voxel field the client
 renders is networked from it), so `Remove()` on it takes the cloud with it; entity indices are reused,
