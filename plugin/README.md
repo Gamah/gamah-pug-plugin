@@ -65,6 +65,7 @@ all of it, debug commands included.
 | `.sound [event]` / `!sound` | admin | Play a sound event off your own pawn, to hear whether the engine has it. Bare walks a list of candidates. This is what `slap_sound` is tuned with. Warmup only |
 | `.yes` / `.no` | admin / everyone | Answer the `.map` on offer |
 | `.smokes [on\|off]` / `!smokes` | everyone | Smoke practice for yourself: trails, smokes only, invulnerable, one popped smoke, and your throws come back. Warmup only |
+| `.noclip [on\|off]` / `!noclip` | everyone | Fly, while `.smokes` is on; ending practice ends it |
 
 `force` as a second argument (`!pug draft force`) skips the `min_players` check, and ends a match that
 is already running before starting.

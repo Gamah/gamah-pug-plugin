@@ -199,6 +199,9 @@ public partial class Gpp
             case "smokes":
                 AfterTick(() => SmokesCommand(PlayerBySteamId(who), rest));
                 return HookResult.Continue;
+            case "noclip":
+                AfterTick(() => NoclipCommand(PlayerBySteamId(who), rest));
+                return HookResult.Continue;
             default:
                 return HookResult.Continue;
         }

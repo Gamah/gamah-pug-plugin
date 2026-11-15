@@ -45,6 +45,9 @@ public partial class Gpp
     // carries a serial number, which is what tells those two apart.
     private readonly Dictionary<ulong, (int Index, uint Thrower)> _poppedSmoke = [];
 
+    // Practising players flying with .noclip.
+    private readonly HashSet<ulong> _noclip = [];
+
     // When each of them threw the smoke that has not popped yet, on the server clock.
     private readonly Dictionary<ulong, float> _smokeInFlight = [];
 
@@ -150,6 +153,7 @@ public partial class Gpp
                 MakeInvulnerable(them);
                 StripToSmokes(them);
                 ReArmSmoke(them);
+                if (_noclip.Contains(who)) SetNoclip(them, true);
             });
             return HookResult.Continue;
         });
@@ -254,6 +258,7 @@ public partial class Gpp
             ForgetSmokePractice(who);
             ShowSmokeTrails(player, 0);
             TakeDamageAgain(player);
+            SetNoclip(player, false);
             player.PrintToChat(Prefix() + "Smoke practice off. Buy what you like again - warmup money is "
                 + "back to being unlimited.");
             return;
@@ -266,7 +271,8 @@ public partial class Gpp
         StripToSmokes(player);
         ReArmSmoke(player);
         player.PrintToChat(Prefix() + $"Smoke practice on: {Config.SmokeTrailSeconds}s trail, smokes and "
-            + "nothing else, and nothing can hurt you. One in the air at a time; only your last popped smoke is kept.");
+            + "nothing else, and nothing can hurt you. One in the air at a time; only your last popped smoke is kept. "
+            + $"{Colorize("{lime}")}.noclip{Colorize("{default}")} to fly.");
         player.PrintToChat(Prefix() + $"{Colorize("{lime}")}.smokes off{Colorize("{default}")} when you are done.");
     }
 
@@ -380,6 +386,7 @@ public partial class Gpp
         _smokePractice.Clear();
         _poppedSmoke.Clear();
         _smokeInFlight.Clear();
+        _noclip.Clear();
         ClearPopMarkers();
 
         // The cvars and the damage flag go back for everybody, not only the names this instance knows:
@@ -390,6 +397,7 @@ public partial class Gpp
             if (player.IsBot) continue;
             ShowSmokeTrails(player, 0);
             TakeDamageAgain(player);
+            SetNoclip(player, false);
         }
 
         // Only the people who had it on are told, and only once.
@@ -407,6 +415,7 @@ public partial class Gpp
         _smokePractice.Remove(who);
         _poppedSmoke.Remove(who);
         _smokeInFlight.Remove(who);
+        _noclip.Remove(who);
         RemovePopMarker(who);
         SyncMarkerTransmit();
     }
@@ -500,6 +509,52 @@ public partial class Gpp
                 if (grenade.Thrower.Raw != mine) info.TransmitEntities.Remove(grenade);
             }
         }
+    }
+
+    // .noclip: fly, while smoke practice is on and only then - so everything that ends practice ends it.
+    // The engine's own noclip is a cheat command; this sets the pawn's move type instead.
+    private void NoclipCommand(CCSPlayerController? player, string arg)
+    {
+        if (player == null || !player.IsValid || player.IsBot) return;
+
+        ulong who = Id(player);
+        if (!_smokePractice.Contains(who))
+        {
+            player.PrintToChat(Prefix() + $"Only during smoke practice - "
+                + $"{Colorize("{lime}")}.smokes{Colorize("{default}")} first.");
+            return;
+        }
+        if (!player.PawnIsAlive) return;
+
+        bool on = Smokes.SmokesWanted(arg, alreadyOn: _noclip.Contains(who));
+        if (on) _noclip.Add(who);
+        else _noclip.Remove(who);
+        SetNoclip(player, on);
+        player.PrintToChat(Prefix() + (on ? "Noclip on." : "Noclip off."));
+    }
+
+    // Off only undoes a noclip: anything else the move type is (a draft freeze) is not this feature's.
+    private static void SetNoclip(CCSPlayerController player, bool on)
+    {
+        var pawn = player.PlayerPawn.Value;
+        if (pawn == null || !pawn.IsValid) return;
+        if (on)
+        {
+            SetMovement(pawn, MoveType_t.MOVETYPE_NOCLIP);
+            return;
+        }
+        if (pawn.MoveType == MoveType_t.MOVETYPE_NOCLIP || pawn.ActualMoveType == MoveType_t.MOVETYPE_NOCLIP)
+        {
+            SetMovement(pawn, MoveType_t.MOVETYPE_WALK);
+        }
+    }
+
+    [ConsoleCommand("css_noclip", "Fly while smoke practice is on (warmup only)")]
+    [CommandHelper(minArgs: 0, usage: "[on|off]")]
+    public void OnNoclipCommand(CCSPlayerController? player, CommandInfo command)
+    {
+        string arg = command.ArgCount > 1 ? command.ArgByIndex(1).ToLowerInvariant() : "";
+        AfterTick(() => NoclipCommand(player, arg));
     }
 
     [ConsoleCommand("css_smokes", "Smoke practice trails for yourself (warmup only)")]
