@@ -20,6 +20,12 @@ public static class Smokes
     public static string SmokeThrowLine(float x, float y, float z, float pitch, float yaw) =>
         $"Threw from {x:0.0} {y:0.0} {z:0.0}  looking {pitch:0.00} {yaw:0.00}";
 
+    // One smoke in the air at a time: no new one until the last has popped. A smoke that never pops - off
+    // the map, removed under them - would leave them empty-handed for good, so the hold gives out after
+    // maxFlight seconds. Times are the server's game clock.
+    public static bool MayReArm(float? thrownAt, float now, float maxFlight) =>
+        thrownAt == null || now - thrownAt.Value >= maxFlight;
+
     public static string SmokePoppedLine(float x, float y, float z) =>
         $"Popped at {x:0.0} {y:0.0} {z:0.0}";
 }

@@ -37,4 +37,12 @@ public class SmokesTests
     {
         Assert.Equal("Popped at 100.0 -500.5 64.0", Smokes.SmokePoppedLine(100f, -500.46f, 64f));
     }
+
+    [Fact]
+    public void NoSecondSmokeWhileOneIsInTheAir()
+    {
+        Assert.True(Smokes.MayReArm(null, 100f, 15f));
+        Assert.False(Smokes.MayReArm(98f, 100f, 15f));
+        Assert.True(Smokes.MayReArm(85f, 100f, 15f));
+    }
 }

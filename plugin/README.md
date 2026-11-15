@@ -265,16 +265,15 @@ and that hands every connected client the client-side cheats as well.
 [SOURCE: `find grenade_traj`, CS2 1.41.9.2, read 2026-10-24. The flags are documented; that a
 per-client replication is enough to draw one player a trail is read off the behaviour.]
 
-Each throw re-arms them with a smoke and prints, to them alone, where they threw from and the view
-angles they threw at — the half of a lineup that pixels cannot give you — and a second line with where
+One smoke in the air at a time: the next is handed over when the last one pops (or after 15s, for one
+that never does), because the inset follows whichever grenade was thrown last. Each throw prints, to them alone, where they threw
+from and the view angles they threw at — the half of a lineup that pixels cannot give you — and a second line with where
 it popped. The engine's landing inset closes about as soon as the smoke pops and no cvar holds it open,
 so a pillar stands on the pop for `smoke_marker_seconds`, kept off everyone else's screen by
 CheckTransmit. The same hook keeps everybody else's grenades, of every type, off a practising
 player's screen: the engine draws the trail and inset for every grenade a client can see, and the inset
 jumps to whichever was thrown last, so the client is not sent them - no flight, no trail, no cloud.
-One popped smoke each: when their next one lands, the previous cloud is removed. The cull
-lands at detonation rather than at the throw, so a second grenade may fly while they are still looking
-at the first cloud. The cloud *is* the `smokegrenade_projectile` entity (the voxel field the client
+One popped smoke each: when their next one lands, the previous cloud is removed. The cloud *is* the `smokegrenade_projectile` entity (the voxel field the client
 renders is networked from it), so `Remove()` on it takes the cloud with it; entity indices are reused,
 so the tracked one is checked for a live `smokegrenade_projectile` before anything is removed.
 

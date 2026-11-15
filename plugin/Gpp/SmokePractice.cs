@@ -28,9 +28,11 @@ namespace Gpp;
 //  documented part; that a per-client replication is enough to draw a trail for one player is read off the
 //  behaviour, not a contract - re-check after a CS2 update.]
 //
-// One popped smoke each: when a practising player's smoke pops, the last one they popped is removed. The
-// new grenade may fly while they are still looking at the previous cloud, which is the point - the cull
-// lands at detonation, not at the throw. The cloud is the smokegrenade_projectile entity itself (the voxel
+// One smoke in the air each: the next is handed over when the last one pops, not when it is thrown. The
+// landing inset follows whichever grenade the client saw thrown last, so a second throw mid-flight takes
+// the camera off the first.
+//
+// One popped smoke each: when a practising player's smoke pops, the last one they popped is removed. The cloud is the smokegrenade_projectile entity itself (the voxel
 // field the client renders is networked from it), so removing the entity takes the cloud with it.
 public partial class Gpp
 {
@@ -42,6 +44,12 @@ public partial class Gpp
     // one we tracked - with several people practising it is as likely to be somebody else's. The handle
     // carries a serial number, which is what tells those two apart.
     private readonly Dictionary<ulong, (int Index, uint Thrower)> _poppedSmoke = [];
+
+    // When each of them threw the smoke that has not popped yet, on the server clock.
+    private readonly Dictionary<ulong, float> _smokeInFlight = [];
+
+    // Longer than any smoke takes to come to rest and pop.
+    private const float MaxSmokeFlight = 15f;
 
     private const string SmokeItem = "weapon_smokegrenade";
     private const string SmokeProjectile = "smokegrenade_projectile";
@@ -80,22 +88,13 @@ public partial class Gpp
                 : Smokes.SmokeThrowLine(pawn.AbsOrigin.X, pawn.AbsOrigin.Y, pawn.AbsOrigin.Z,
                     pawn.V_angle.X, pawn.V_angle.Y);
 
+            _smokeInFlight[who] = Server.CurrentTime;
+
             AfterTick(() =>
             {
                 var them = PlayerBySteamId(who);
                 if (them == null || !them.IsValid) return;
                 if (line != null) them.PrintToChat(Prefix() + line);
-            });
-
-            // The re-arm waits a quarter of a second rather than taking the next frame: the thrown smoke
-            // leaves their inventory on the engine's own schedule, and a give while it is still listed
-            // reads as "they already have one" and hands them nothing at all. The warmup tick re-arms
-            // anyway, so this is the fast path rather than the only one.
-            AddTimer(0.25f, () =>
-            {
-                var them = PlayerBySteamId(who);
-                if (them == null || !them.IsValid || !_smokePractice.Contains(who)) return;
-                ReArmSmoke(them);
             });
             return HookResult.Continue;
         });
@@ -111,6 +110,8 @@ public partial class Gpp
             int popped = @event.Entityid;
             float x = @event.X, y = @event.Y, z = @event.Z;
 
+            _smokeInFlight.Remove(who);
+
             AfterTick(() =>
             {
                 CullPoppedSmoke(who, keep: popped);
@@ -122,7 +123,9 @@ public partial class Gpp
                 MarkPop(who, x, y, z);
 
                 var them = PlayerBySteamId(who);
-                if (them != null && them.IsValid) them.PrintToChat(Prefix() + Smokes.SmokePoppedLine(x, y, z));
+                if (them == null || !them.IsValid) return;
+                them.PrintToChat(Prefix() + Smokes.SmokePoppedLine(x, y, z));
+                ReArmSmoke(them);
             });
             return HookResult.Continue;
         });
@@ -177,14 +180,15 @@ public partial class Gpp
         RegisterEventHandler<EventRoundStart>((_, _) =>
         {
             _poppedSmoke.Clear();
+            _smokeInFlight.Clear();
             ClearPopMarkers();
             return HookResult.Continue;
         });
     }
 
-    // Called from the warmup tick, once a second. The throw hook re-arms within a quarter of a second
-    // when it fires; this is what makes an empty hand impossible whether it fires or not - a practising
-    // player with nothing to throw is the feature not working, and it is a cheap thing to assert.
+    // Called from the warmup tick, once a second. The pop re-arms on the next frame when it fires; this is
+    // what makes an empty hand impossible whether it fires or not - a practising player with nothing to
+    // throw once their smoke is down is the feature not working, and it is a cheap thing to assert.
     internal void TopUpPracticeSmokes()
     {
         if (_smokePractice.Count == 0) return;
@@ -262,7 +266,7 @@ public partial class Gpp
         StripToSmokes(player);
         ReArmSmoke(player);
         player.PrintToChat(Prefix() + $"Smoke practice on: {Config.SmokeTrailSeconds}s trail, smokes and "
-            + "nothing else, and nothing can hurt you. Only your last popped smoke is kept.");
+            + "nothing else, and nothing can hurt you. One in the air at a time; only your last popped smoke is kept.");
         player.PrintToChat(Prefix() + $"{Colorize("{lime}")}.smokes off{Colorize("{default}")} when you are done.");
     }
 
@@ -322,12 +326,16 @@ public partial class Gpp
         || designerName.Contains("knife", StringComparison.OrdinalIgnoreCase)
         || designerName.Contains("bayonet", StringComparison.OrdinalIgnoreCase);
 
-    // A smoke back in hand, and only when they have none. A give fires item_pickup, which is one of the
-    // two hooks holding the loadout lock - without this check that hook hands them another smoke, which
-    // fires another pickup, for as long as the server is up.
-    private static void ReArmSmoke(CCSPlayerController player)
+    // A smoke back in hand, and only when they have none and none is in the air. A give fires
+    // item_pickup, which is one of the two hooks holding the loadout lock - without the HoldsSmoke check
+    // that hook hands them another smoke, which fires another pickup, for as long as the server is up.
+    private void ReArmSmoke(CCSPlayerController player)
     {
         if (!player.PawnIsAlive || HoldsSmoke(player)) return;
+        ulong who = Id(player);
+        float? thrownAt = _smokeInFlight.TryGetValue(who, out float t) ? t : null;
+        if (!Smokes.MayReArm(thrownAt, Server.CurrentTime, MaxSmokeFlight)) return;
+        _smokeInFlight.Remove(who);
         player.GiveNamedItem(SmokeItem);
     }
 
@@ -371,6 +379,7 @@ public partial class Gpp
         var practising = _smokePractice.ToList();
         _smokePractice.Clear();
         _poppedSmoke.Clear();
+        _smokeInFlight.Clear();
         ClearPopMarkers();
 
         // The cvars and the damage flag go back for everybody, not only the names this instance knows:
@@ -397,6 +406,7 @@ public partial class Gpp
     {
         _smokePractice.Remove(who);
         _poppedSmoke.Remove(who);
+        _smokeInFlight.Remove(who);
         RemovePopMarker(who);
         SyncMarkerTransmit();
     }
