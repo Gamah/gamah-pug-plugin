@@ -134,6 +134,8 @@ public partial class Gpp
     // The phase is over: the panel comes down and the roster with it.
     private void StopReadyHud()
     {
+        _readyDeadline?.Kill();
+        _readyDeadline = null;
         TakeDownReadyPanel();
         _roster.Clear();
     }
@@ -149,16 +151,10 @@ public partial class Gpp
 
     private void ReadyHudTick()
     {
+        // The phase's own deadline (ReadyDeadline) moves the match on at the same moment.
         if (--_readyHudSecondsLeft <= 0)
         {
-            // A panel nobody has acted on in ready_seconds is a panel nobody is reading. The phase stays
-            // open - .ready still starts the match - but the overlay comes down rather than turning into
-            // a repeating nag.
-            AfterTick(() =>
-            {
-                TakeDownReadyPanel();
-                if (_matchPhase == MatchPhase.Ready) Prompt("Still waiting on readies.", ".ready", Everybody);
-            });
+            AfterTick(TakeDownReadyPanel);
             return;
         }
         ReadyHudPaint();

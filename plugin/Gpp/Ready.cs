@@ -24,10 +24,23 @@ public partial class Gpp
     private bool _gateActive;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _gateTimer;
 
+    // ready_seconds is a deadline, like every other panel's: when it runs out the match starts with
+    // whoever is ready rather than waiting on the last one. Killed with the roster in StopReadyHud, which
+    // every way out of the phase runs - not in StopReadyPhase, which each .ready calls.
+    private CounterStrikeSharp.API.Modules.Timers.Timer? _readyDeadline;
+
     private void StartReadyPhase()
     {
         _roster.Clear();
         _readied.Clear();
+        _readyDeadline?.Kill();
+        _readyDeadline = AddTimer(Math.Max(5, Config.Match.ReadySeconds), () =>
+        {
+            _readyDeadline = null;
+            if (Retired || _matchPhase != MatchPhase.Ready) return;
+            Announce("Time is up - starting.");
+            ForceReady();
+        });
         foreach (var steamId in _team1) _roster[steamId] = _team1Side;
         foreach (var steamId in _team2) _roster[steamId] = SideOf(2);
         if (_roster.Count == 0) return;

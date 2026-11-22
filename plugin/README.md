@@ -173,8 +173,8 @@ load**. [`../examples/Gpp.json`](../examples/Gpp.json) is a filled-in one.
     warmup open, which is what keeps an idle server idle; a missing file falls back to a handful of
     built-in cvars and says so in the log
   - `side_choice_captain_only` (true) — only the winning side's captain answers the knife round
-  - `ready_seconds` (90) — how long the ready panel is held up, in **both** ready phases. The phase
-    itself does not time out: `.ready` still starts the match afterwards, the overlay just stops nagging
+  - `ready_seconds` (90) — how long **each** ready phase lasts. When it runs out the match starts with
+    whoever is ready
   - `ready_after_sides` (false) — a second ready check between the side choice and going live
   - `opening_pause_seconds` (90) — round one's Discord hold. See below
   - `post_match_seconds` (15) — `mp_match_restart_delay`, the engine's own end-of-match screen
