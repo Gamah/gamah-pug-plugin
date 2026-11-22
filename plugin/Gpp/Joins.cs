@@ -88,23 +88,19 @@ public partial class Gpp
         });
     }
 
-    // A spectator picking a side in a live match. The engine queues that pick to the round boundary, so
+    // A spectator picking a side once the match has started (knife, side choice). The engine queues that pick to the round boundary, so
     // the side does not take for up to two minutes - and the mid-match nudge below reads the player as a
     // spectator in the meantime and parks them again, which cancels the pick outright. So the pick is
     // honoured here instead: on a team and alive this round, the same way the draft seats people.
     //
-    // A player already on a side asking for the other one is taken over too: left to the engine, a
-    // player the plugin had placed could not switch, and the engine logged no ChangeTeam() CTMDBG line
-    // for the attempt. Why it refuses is not known. ChangeTeam follows the gamemode rules, so an alive
-    // player dies in the switch, exactly as a jointeam would have them. [SOURCE: CS2 1.41.9.8,
-    // 2026-11-22, one report from a live pug]
-    //
-    // Everything else - a team change in warmup, the vote, a bot, picking the side you are on - is the
-    // engine's to handle.
+    // Only a spectator before the match goes live is taken over. Everything else - a team change in
+    // warmup, the vote, a bot - is the engine's to handle, and so is everything once it is live: see
+    // TeamsAreTheEngines.
     private HookResult JoinLiveMatchNow(CCSPlayerController? player, CommandInfo command)
     {
         if (player == null || !player.IsValid || player.IsBot || player.IsHLTV) return HookResult.Continue;
-        if (!MatchRunning || !Config.SpectateMidMatchJoins) return HookResult.Continue;
+        if (!MatchRunning || TeamsAreTheEngines || !Config.SpectateMidMatchJoins) return HookResult.Continue;
+        if (player.Team is CsTeam.CounterTerrorist or CsTeam.Terrorist) return HookResult.Continue;
 
         // jointeam <team>: 2 is T, 3 is CT. Anything else - spectator, the unassigned slot, a malformed
         // argument - is not a side, so it is left alone.
@@ -114,8 +110,7 @@ public partial class Gpp
             "3" => CsTeam.CounterTerrorist,
             _ => CsTeam.None,
         };
-        if (side == CsTeam.None || player.Team == side) return HookResult.Continue;
-        var from = player.Team;
+        if (side == CsTeam.None) return HookResult.Continue;
 
         // The team is taken here rather than left to the engine, which would hold the pick as pending and
         // let the nudge above cancel it. No respawn: they join the next round like anyone else, and are a
@@ -129,8 +124,8 @@ public partial class Gpp
             HoldSpawnNotice(player);
             Announce($"{player.PlayerName} YOU WILL SPAWN NEXT ROUND");
         }
-        Logger.LogInformation("{Name} picked {Side} mid-match (from {From}) - on the team now, spawning {When}.",
-            player.PlayerName, side == CsTeam.CounterTerrorist ? "CT" : "T", from,
+        Logger.LogInformation("{Name} picked {Side} mid-match - on the team now, spawning {When}.",
+            player.PlayerName, side == CsTeam.CounterTerrorist ? "CT" : "T",
             thisRound ? "into this round (freeze time)" : "next round");
         return HookResult.Stop;
     }
@@ -169,9 +164,14 @@ public partial class Gpp
     // So they land in spectator and choose for themselves. Nothing is blocked and nobody is kicked - the
     // server is open, and once a pug is live anyone may walk in and take a side. They just have to say
     // which one.
+    // From GoLive - the restart into round one's freeze time - to the end of the match, the plugin moves
+    // and spawns nobody: arrivals, side picks, switches and spawns are all the engine's. Before that the
+    // pug is still placing people, and the mid-match handling below covers the knife and the side choice.
+    private bool TeamsAreTheEngines => _matchPhase is MatchPhase.Live or MatchPhase.Over;
+
     private void HoldMidMatchArrival(CCSPlayerController player)
     {
-        if (!MatchRunning || !Config.SpectateMidMatchJoins) return;
+        if (!MatchRunning || TeamsAreTheEngines || !Config.SpectateMidMatchJoins) return;
         if (player.Team is CsTeam.CounterTerrorist or CsTeam.Terrorist) return;
 
         // Somebody who was drafted into this match has a right answer, and it is not a question: put them
@@ -233,6 +233,11 @@ public partial class Gpp
     internal void SpawnWhoeverTookASideMidMatch()
     {
         if (_owedASpawn.Count == 0) return;
+        if (TeamsAreTheEngines)
+        {
+            _owedASpawn.Clear();
+            return;
+        }
 
         var here = HumanPlayers().Select(Id).ToHashSet();
         foreach (ulong id in _owedASpawn.ToList())
@@ -254,7 +259,7 @@ public partial class Gpp
     // CCSPlayerController.Respawn, read 2026-11-22]
     private void PayOwedSpawn(ulong id, string when, int attemptsLeft)
     {
-        if (Retired || !_owedASpawn.Contains(id)) return;
+        if (Retired || TeamsAreTheEngines || !_owedASpawn.Contains(id)) return;
         var them = Utilities.GetPlayers().FirstOrDefault(p => p.IsValid && Id(p) == id);
         if (them == null || them.Team is not (CsTeam.CounterTerrorist or CsTeam.Terrorist))
         {
@@ -278,7 +283,7 @@ public partial class Gpp
 
         AddTimer(0.5f, () =>
         {
-            if (Retired || !_owedASpawn.Contains(id)) return;
+            if (Retired || TeamsAreTheEngines || !_owedASpawn.Contains(id)) return;
             var now = Utilities.GetPlayers().FirstOrDefault(p => p.IsValid && Id(p) == id);
             if (now == null) return;
             if (HasLiveBody(now))

@@ -136,12 +136,10 @@ The schema and its three statements are in `StatsStore.cs`, with no CounterStrik
   `mp_team_intro_type none`, and the plugin measures and logs how long the half actually lasted so the
   figure is a number rather than a theory. [SOURCE: cvar help text read off the engine, CS2 1.41.9.2,
   2026-10-30]
-- **The pug's phases do not cover a live match.** `_phase` is `Idle` from the handoff onwards, so once a
-  match is live nothing in the plugin is placing people - and the engine assigns a team to anyone who
-  sits in the team-select menu past `mp_force_pick_time`. That is how a player who reconnected mid-match
-  ended up on the side opposite the one they had played the first half on, without touching a key.
-  `spectate_mid_match_joins` puts them in spectator instead and leaves the choice to them; nothing is
-  blocked and nobody is kicked.
+- **The plugin places nobody once the match is live.** From `GoLive` - the restart into round one's
+  freeze time - to the end of the match, arrivals, side picks, switches and spawns are the engine's, and
+  the engine assigns a team to anyone who sits in the team-select menu past `mp_force_pick_time`.
+  `spectate_mid_match_joins` only covers the knife and the side choice.
 - Scores live on the `cs_team_manager` entities, per side (`CT` / `TERRORIST`), so reading a *team's*
   score means knowing which side it is on. The plugin tracks that in one field, flipped by `.switch` and
   by every half swap. The swap rounds - the half and every overtime half - are the one piece of
