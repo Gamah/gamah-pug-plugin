@@ -93,13 +93,18 @@ public partial class Gpp
     // spectator in the meantime and parks them again, which cancels the pick outright. So the pick is
     // honoured here instead: on a team and alive this round, the same way the draft seats people.
     //
-    // Only a spectator in a live match is taken over. Everything else - a team change in warmup, the
-    // vote, a bot - is the engine's to handle.
+    // A player already on a side asking for the other one is taken over too: left to the engine, a
+    // player the plugin had placed could not switch, and the engine logged no ChangeTeam() CTMDBG line
+    // for the attempt. Why it refuses is not known. ChangeTeam follows the gamemode rules, so an alive
+    // player dies in the switch, exactly as a jointeam would have them. [SOURCE: CS2 1.41.9.8,
+    // 2026-11-22, one report from a live pug]
+    //
+    // Everything else - a team change in warmup, the vote, a bot, picking the side you are on - is the
+    // engine's to handle.
     private HookResult JoinLiveMatchNow(CCSPlayerController? player, CommandInfo command)
     {
         if (player == null || !player.IsValid || player.IsBot || player.IsHLTV) return HookResult.Continue;
         if (!MatchRunning || !Config.SpectateMidMatchJoins) return HookResult.Continue;
-        if (player.Team is CsTeam.CounterTerrorist or CsTeam.Terrorist) return HookResult.Continue;
 
         // jointeam <team>: 2 is T, 3 is CT. Anything else - spectator, the unassigned slot, a malformed
         // argument - is not a side, so it is left alone.
@@ -109,7 +114,8 @@ public partial class Gpp
             "3" => CsTeam.CounterTerrorist,
             _ => CsTeam.None,
         };
-        if (side == CsTeam.None) return HookResult.Continue;
+        if (side == CsTeam.None || player.Team == side) return HookResult.Continue;
+        var from = player.Team;
 
         // The team is taken here rather than left to the engine, which would hold the pick as pending and
         // let the nudge above cancel it. No respawn: they join the next round like anyone else, and are a
@@ -123,8 +129,8 @@ public partial class Gpp
             HoldSpawnNotice(player);
             Announce($"{player.PlayerName} YOU WILL SPAWN NEXT ROUND");
         }
-        Logger.LogInformation("{Name} picked {Side} mid-match - on the team now, spawning {When}.",
-            player.PlayerName, side == CsTeam.CounterTerrorist ? "CT" : "T",
+        Logger.LogInformation("{Name} picked {Side} mid-match (from {From}) - on the team now, spawning {When}.",
+            player.PlayerName, side == CsTeam.CounterTerrorist ? "CT" : "T", from,
             thisRound ? "into this round (freeze time)" : "next round");
         return HookResult.Stop;
     }
@@ -218,59 +224,92 @@ public partial class Gpp
         _owedASpawn.Add(id);
         if (!MatchRunning || !(GameRules()?.FreezePeriod ?? false)) return false;
 
-        AfterTick(() =>
-        {
-            var them = Utilities.GetPlayers().FirstOrDefault(p => p.IsValid && Id(p) == id);
-            if (them == null || them.Team is not (CsTeam.CounterTerrorist or CsTeam.Terrorist)) return;
-            if (them.PawnIsAlive)
-            {
-                _owedASpawn.Remove(id);
-                return;
-            }
-
-            try
-            {
-                them.Respawn();
-                _owedASpawn.Remove(id);
-                Logger.LogInformation("Spawned {Name} into this round: they picked a side during freeze "
-                    + "time, before anybody had moved.", them.PlayerName);
-            }
-            catch (Exception error)
-            {
-                // Left in _owedASpawn on purpose: the next round start is the fallback.
-                Logger.LogWarning("Could not spawn {Name} during freeze time, so they are owed the next "
-                    + "round instead: {Error}", them.PlayerName, error.Message);
-            }
-        });
+        AfterTick(() => PayOwedSpawn(id, "into this round (freeze time)", 3));
         return true;
     }
 
+    // The round start pays whatever freeze time could not. A debt is only cleared by seeing the player
+    // alive, so one that no spawn will take is carried to every round start until the match ends.
     internal void SpawnWhoeverTookASideMidMatch()
     {
         if (_owedASpawn.Count == 0) return;
 
-        foreach (var player in HumanPlayers())
+        var here = HumanPlayers().Select(Id).ToHashSet();
+        foreach (ulong id in _owedASpawn.ToList())
         {
-            ulong id = Id(player);
-            if (!_owedASpawn.Remove(id)) continue;
-            if (player.Team is not (CsTeam.CounterTerrorist or CsTeam.Terrorist)) continue;
-            if (player.PawnIsAlive) continue;
+            // Gone: they do not come back owed a spawn.
+            if (!here.Contains(id))
+            {
+                _owedASpawn.Remove(id);
+                continue;
+            }
+            PayOwedSpawn(id, "at the round start", 3);
+        }
+    }
 
-            try
-            {
-                player.Respawn();
-                Logger.LogInformation("Spawned {Name} into the round they picked a side for - the engine "
-                    + "had not.", player.PlayerName);
-            }
-            catch (Exception error)
-            {
-                Logger.LogWarning("Could not spawn {Name} after their mid-match pick: {Error}",
-                    player.PlayerName, error.Message);
-            }
+    // Respawn() proves nothing by returning: CounterStrikeSharp's returns silently when the controller has
+    // no player pawn, and the controller's own PawnIsAlive flag can say alive over a body that is not. So
+    // the debt is cleared only by a pawn seen alive half a second later, retried a few times, and what
+    // the pawn looked like is logged when it never takes. [SOURCE: CounterStrikeSharp 1.0.378
+    // CCSPlayerController.Respawn, read 2026-11-22]
+    private void PayOwedSpawn(ulong id, string when, int attemptsLeft)
+    {
+        if (Retired || !_owedASpawn.Contains(id)) return;
+        var them = Utilities.GetPlayers().FirstOrDefault(p => p.IsValid && Id(p) == id);
+        if (them == null || them.Team is not (CsTeam.CounterTerrorist or CsTeam.Terrorist))
+        {
+            _owedASpawn.Remove(id);
+            return;
+        }
+        if (HasLiveBody(them))
+        {
+            _owedASpawn.Remove(id);
+            return;
         }
 
-        // Anyone left in the set is no longer here: they do not come back owed a spawn.
-        _owedASpawn.Clear();
+        try
+        {
+            them.Respawn();
+        }
+        catch (Exception error)
+        {
+            Logger.LogWarning("Respawn of {Name} threw: {Error}", them.PlayerName, error.Message);
+        }
+
+        AddTimer(0.5f, () =>
+        {
+            if (Retired || !_owedASpawn.Contains(id)) return;
+            var now = Utilities.GetPlayers().FirstOrDefault(p => p.IsValid && Id(p) == id);
+            if (now == null) return;
+            if (HasLiveBody(now))
+            {
+                _owedASpawn.Remove(id);
+                Logger.LogInformation("Spawned {Name} {When} after their mid-match pick.", now.PlayerName, when);
+                return;
+            }
+            if (attemptsLeft > 1)
+            {
+                PayOwedSpawn(id, when, attemptsLeft - 1);
+                return;
+            }
+
+            // Still owed, so the next round start tries again. A reconnect is what has fixed this by
+            // hand, and the controller keeps its side through one, so that is what they are told.
+            var pawn = now.PlayerPawn.Value;
+            Logger.LogWarning("Could not spawn {Name} {When}: team {Team}, PawnIsAlive {Flag}, player pawn "
+                + "{Pawn}, life state {Life}, health {Health}. Still owed; told to reconnect.",
+                now.PlayerName, when, now.Team, now.PawnIsAlive,
+                pawn == null ? "none" : pawn.IsValid ? "valid" : "invalid",
+                pawn is { IsValid: true } ? pawn.LifeState : -1, pawn is { IsValid: true } ? pawn.Health : -1);
+            now.PrintToChat(Prefix() + "The server could not spawn you. Type retry in the console - you "
+                + "come back on the same side.");
+        });
+    }
+
+    private static bool HasLiveBody(CCSPlayerController player)
+    {
+        var pawn = player.PlayerPawn.Value;
+        return pawn != null && pawn.IsValid && pawn.LifeState == (byte)LifeState_t.LIFE_ALIVE && pawn.Health > 0;
     }
 
     // Everyone the plugin itself has put in spectator. The pug moves people out of the way for the knife
