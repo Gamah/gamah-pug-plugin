@@ -131,12 +131,19 @@ public partial class Gpp
         ReadyHudTick();
     }
 
+    // The phase is over: the panel comes down and the roster with it.
     private void StopReadyHud()
+    {
+        TakeDownReadyPanel();
+        _roster.Clear();
+    }
+
+    // The panel only. The roster is what ReadyNeeded counts, so clearing it while the phase is still open
+    // makes the threshold 1 over a roster of nobody, and no .ready can ever reach it.
+    private void TakeDownReadyPanel()
     {
         _readyHudTimer?.Kill();
         _readyHudTimer = null;
-        // The ready roster is only here to drive this panel once the gate has stopped sweeping it.
-        _roster.Clear();
         Clear();
     }
 
@@ -149,7 +156,7 @@ public partial class Gpp
             // a repeating nag.
             AfterTick(() =>
             {
-                StopReadyHud();
+                TakeDownReadyPanel();
                 if (_matchPhase == MatchPhase.Ready) Prompt("Still waiting on readies.", ".ready", Everybody);
             });
             return;
