@@ -144,9 +144,14 @@ public partial class Gpp
             return;
         }
 
+        // A vote stands until the next one replaces it, for as long as the vote is up.
+        bool had = _votes.TryGetValue(Id(player), out int was);
         _votes[Id(player)] = index;
+        string map = $"{Colorize("{green}")}{_ballot[index].Label}{Colorize("{default}")}";
         // The overlay shows the tally live, so the room does not need a line per vote.
-        player.PrintToChat(Prefix() + $"Voted {Colorize("{green}")}{_ballot[index].Label}{Colorize("{default}")}.");
+        player.PrintToChat(Prefix() + (!had ? $"Voted {map} - another !<number> changes it."
+            : was == index ? $"Already voting {map}."
+            : $"Vote changed to {map}."));
     }
 
     private int ResolveBallotIndex(string arg)

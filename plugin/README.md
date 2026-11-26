@@ -39,7 +39,7 @@ all of it, debug commands included.
 | `!pug ruler <glyph> [n]` | admin | Print `n` copies of a glyph for measuring the font. See below |
 | `!pug discord 1\|3` | admin | Whether the Discord hold shows the two team boards or just the one panel |
 | `!reload` / `!restart` / `!skip` | everyone | The three answers to the idle-server panel. They do nothing when it is not up |
-| `!<number>` | everyone | **The main one.** Votes for that map during a vote, makes that pick during a draft. Silent outside both |
+| `!<number>` | everyone | **The main one.** Votes for that map during a vote - another number changes the vote while it is up - and makes that pick during a draft. Silent outside both |
 | `!vote <number\|map>` | everyone | Vote during a map vote. `!<number>` is shorter |
 | `!draft <number\|name>` | captain on the clock | Make a pick by name; no argument reprints the list |
 | `.players` / `.who` / `!players` | everyone | Who is here, numbered 1..n, in any phase — privately, to whoever asked. During a draft it is the undrafted pool instead, which `!1` picks off. The number is what the toys below and `.kick` take |

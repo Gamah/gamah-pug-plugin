@@ -146,7 +146,7 @@ public partial class Gpp
                         WorldLayout.Section.Of(missing.Count == 0 ? null : "STILL VOTING:"),
                         WorldLayout.Section.List(WorldLayout.Grid(missing.Select(WorldLayout.Clip))),
                     ],
-                    WorldLayout.Footer($"{_voteSecondsLeft}s"),
+                    WorldLayout.Footer("!<NUMBER> CHANGES YOUR VOTE", $"{_voteSecondsLeft}s"),
                     _hudTicks)
                 // Somebody who has not voted gets the captain block and the ballot, and not a word about
                 // who else has voted - they cannot act on it, and a list of names next to the maps is
@@ -188,9 +188,10 @@ public partial class Gpp
 
     // Every map with its votes against it, in ballot order so a map does not move as the votes land -
     // somebody watching for their own vote to appear should not have to find the map again first.
+    // Numbered, because another !<number> while the vote is up changes the vote.
     private List<string> Tally(int[] tally) =>
         _ballot.Select((map, index) =>
-            $"{WorldLayout.Clip(map.Label)} {new string('*', Math.Min(tally[index], 5))}".TrimEnd()).ToList();
+            $"{WorldLayout.Cell(index + 1, map.Label)} {new string('*', Math.Min(tally[index], 5))}".TrimEnd()).ToList();
 
     // --- waiting for the room to come back after the map change -------------------------------------
 
