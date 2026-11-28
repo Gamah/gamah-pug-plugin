@@ -391,7 +391,7 @@ public partial class Gpp : BasePlugin, IPluginConfig<GppConfig>
         }
         if (IdlePromptUp)
         {
-            return $"Server was idle for {Describe(_idleWas)} - waiting for !reload, !restart or !skip.";
+            return $"Server was idle for {Describe(IdleWas)} - waiting for !reload, !restart or !skip.";
         }
 
         return _phase switch

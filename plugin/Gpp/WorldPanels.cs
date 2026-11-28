@@ -482,7 +482,7 @@ public partial class Gpp
         foreach (var player in HumanPlayers())
         {
             string panel = WorldLayout.MainPanel(
-                $"SERVER HAS BEEN IDLE FOR {Describe(_idleWas).ToUpperInvariant()}. PICK ONE:",
+                $"SERVER HAS BEEN IDLE FOR {Describe(IdleWas).ToUpperInvariant()}. PICK ONE:",
                 [
                     WorldLayout.Section.Of(
                         $"!RELOAD   LOAD {Server.MapName} AGAIN",

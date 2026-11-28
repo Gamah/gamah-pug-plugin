@@ -21,6 +21,10 @@ namespace Gpp;
 //
 // Anyone can pick. None of the three does anything unless the panel is up, so !restart is not a command
 // players have; it is one of three answers to a question the server asked.
+//
+// The question stands until it is answered. Whoever connects first often drops and reconnects within
+// seconds, so people leaving - even the room emptying - does not take it down, and does not reset how
+// long the server has been idle.
 public partial class Gpp
 {
     // When the server last had a real player on it, or null while it has one. Starts at "empty now", so a
@@ -33,8 +37,10 @@ public partial class Gpp
     private const int IdleCheckSeconds = 5;
     private int _idleCheckTicks;
 
-    // How long the server had been empty when somebody turned up, while the panel is asking about it.
-    private TimeSpan _idleWas;
+    // When the server went empty, while the panel is asking about it. The panel stays up through people
+    // leaving, so the figure it shows keeps counting rather than freezing at the first arrival.
+    private DateTime _idleSince;
+    private TimeSpan IdleWas => DateTime.UtcNow - _idleSince;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _idlePromptTimer;
 
     internal bool IdlePromptUp => _idlePromptTimer != null;
@@ -44,6 +50,12 @@ public partial class Gpp
         // A match means the server is occupied by definition. Clearing the stamp here is also what stops
         // a long match from reading as a long idle spell the moment it ends.
         if (MatchRunning)
+        {
+            _emptySince = null;
+            return;
+        }
+        // The question is already standing; an empty room under it is not a fresh idle spell.
+        if (IdlePromptUp)
         {
             _emptySince = null;
             return;
@@ -81,7 +93,7 @@ public partial class Gpp
 
     internal void OpenIdlePrompt(TimeSpan idle)
     {
-        _idleWas = idle;
+        _idleSince = DateTime.UtcNow - idle;
         Logger.LogInformation("Server was empty for {Hours:F1}h - offering reload/restart/skip.", idle.TotalHours);
         Announce($"Server has been idle for {Describe(idle)}, which makes the first round behave oddly.");
         Prompt("Fix it:", "!reload / !restart / !skip", Everybody);
@@ -98,23 +110,28 @@ public partial class Gpp
         Clear();
     }
 
-    // The panel stays up until one of the three is picked. The only thing that takes it down by itself is
-    // a pug starting, which answers the question a different way.
+    // The panel stays up until one of the three is picked. What takes it down by itself is a pug starting,
+    // which answers the question a different way, and a map load (OnMapStart), which is the fix.
     private void IdlePromptTick()
     {
-        if (_phase != PugPhase.Idle || MatchRunning || !InWarmupPeriod() || CaptainOptInOpen
-            || MapRequestOpen)
+        if (_phase != PugPhase.Idle || MatchRunning || !InWarmupPeriod() || CaptainOptInOpen)
         {
             AfterTick(CloseIdlePrompt);
             return;
         }
-        if (!HumanPlayers().Any(player => !player.IsBot))
-        {
-            // Everybody left again. The server is idling once more, so the question will be asked afresh.
-            AfterTick(CloseIdlePrompt);
-            return;
-        }
+        // A .map request has the screen while it is open; the question comes back if it is turned down.
+        if (MapRequestOpen) return;
         IdlePromptPanel();
+    }
+
+    // Somebody arriving while the question stands. The panel reaches them on the next repaint; this is
+    // the chat line the first arrival got.
+    private void TellIdlePrompt(CCSPlayerController player)
+    {
+        if (!IdlePromptUp) return;
+        player.PrintToChat(Prefix() + $"Server has been idle for {Describe(IdleWas)}, which makes the first "
+            + $"round behave oddly.  {Colorize("{lime}")}!reload / !restart / !skip{Colorize("{default}")} "
+            + $"{Colorize("{gold}")}({Everybody}){Colorize("{default}")}");
     }
 
     private void IdlePromptPanel()

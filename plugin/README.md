@@ -234,8 +234,9 @@ there is no timer on it — and **anyone** can pick, admin or not. The three com
 while the panel is not up, so `!restart` is not a command players have; it is one of three answers to a
 question the server asked. `!skip` leaves it until the next time the server has sat empty.
 
-The panel also comes down by itself if a pug starts (that answers the question another way) or if
-everybody leaves again, in which case the server is idling afresh and will ask the next person.
+People leaving does not take it down, even if the room empties: everyone on the server sees it, and
+anyone who connects while it is up gets the chat line too. It comes down by itself only if a pug starts
+(that answers the question another way) or the map loads, which is the fix.
 
 Occupancy is followed on the empty→occupied transition rather than from the connect hook, because those
 two race: by the time a connect is handled, the tick has already seen the player and forgotten how long

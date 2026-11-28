@@ -46,6 +46,7 @@ public partial class Gpp
             // Before anything else, and whatever phase it is: the number is handed out in connection
             // order, so it cannot be skipped on the phases that return early below.
             NumberPlayer(Id(player));
+            TellIdlePrompt(player);
 
             if (_phase is PugPhase.Idle or PugPhase.MapVote)
             {
